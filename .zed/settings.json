@@ -1,0 +1,7 @@
+{
+  "language_overrides": {
+    "Nix": {
+      "tab_size": 2
+    }
+  }
+}
