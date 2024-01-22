@@ -146,7 +146,6 @@ func parse(in string, rel string) (*Scrape, error) {
 
 	rem := in
 	for {
-		// TODO: error should be reported if this hasn't been invoked at least once
 		if rem, ext, err = chomp.Pair(href(rel), target())(rem); err != nil {
 			break
 		}
@@ -297,7 +296,6 @@ func (s *Scrape) String() string {
 	var buf strings.Builder
 	buf.WriteString("{")
 
-	// TODO: tidy this up
 	values := reflect.ValueOf(s)
 	types := values.Type()
 	for i := 0; i < values.NumField(); i++ {
