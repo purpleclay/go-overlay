@@ -11,3 +11,4 @@
 !flake.lock
 !flake.nix
 !.zed/
+!manifests/

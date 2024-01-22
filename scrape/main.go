@@ -296,7 +296,7 @@ func (s *Scrape) String() string {
 	var buf strings.Builder
 	buf.WriteString("{")
 
-	values := reflect.ValueOf(s)
+	values := reflect.ValueOf(*s)
 	types := values.Type()
 	for i := 0; i < values.NumField(); i++ {
 		v := values.Field(i)
