@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2023 Purple Clay
+Copyright (c) 2023 - 2024 Purple Clay
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -35,11 +35,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Scrape ...
+// Scrape contains the scraped output from the Go [Download] website, ready
+// for serialisation into a Nix attribute set. Any optional [Target] is
+// ignored.
+//
+// [Download]: https://go.dev/dl/
 type Scrape struct {
-	// Date ...
-	Date string `nix:"d"`
-	// Version ...
+	Date            string  `nix:"d"`
 	Version         string  `nix:"v"`
 	Darwinx86_64    *Target `nix:"_0,omitempty"`
 	DarwinARM64     *Target `nix:"_1,omitempty"`
@@ -82,48 +84,19 @@ type Scrape struct {
 	WindowsARMv6    *Target `nix:"_38,omitempty"`
 }
 
-// Target ...
+// Target contains the core details for Nix to download a copy
+// of Go for any supported OS-Arch combination
 type Target struct {
-	// SHA ...
 	SHA string `nix:"s"`
-	// URL ...
 	URL string `nix:"u"`
 }
 
-func execute(out io.Writer) error {
-	var rel string
-
-	cmd := &cobra.Command{
-		Use:           "go-scrape",
-		Short:         "Scrapes the Golang Website (https://go.dev/dl/) for a specified release and generates a Nix representation of the output",
-		Example:       "TODO",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			s, err := scrape(rel)
-			if err != nil {
-				return err
-			}
-
-			// TODO: print out to buffer (stdout) or file if one is provided
-			fmt.Println(marshal(*s))
-			return nil
-		},
-	}
-
-	f := cmd.Flags()
-	f.StringVarP(&rel, "release", "r", "latest", "the golang version to scrape from https://go.dev/dl/")
-
-	return cmd.Execute()
-}
-
-func scrape(rel string) (*Scrape, error) {
+func ScrapeGoDev(rel string) (*Scrape, error) {
+	var err error
 	if rel == "latest" {
-		ver, err := get("https://go.dev/VERSION?m=text")
-		if err != nil {
+		if rel, err = latestVersion(); err != nil {
 			return nil, err
 		}
-		_, rel, _ = chomp.Any("go.1234567890")(ver)
 	}
 
 	page, err := get("https://go.dev/dl/")
@@ -134,6 +107,15 @@ func scrape(rel string) (*Scrape, error) {
 	return parse(page, rel)
 }
 
+func latestVersion() (string, error) {
+	ver, err := get("https://go.dev/VERSION?m=text")
+	if err != nil {
+		return "", err
+	}
+	_, rel, _ := chomp.Any("go.1234567890")(ver)
+	return rel, nil
+}
+
 func get(url string) (string, error) {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -141,7 +123,7 @@ func get(url string) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		// TODO: report error
+		return "", fmt.Errorf("unexpected status code returned (%d) when querying %s", resp.StatusCode, url)
 	}
 
 	defer resp.Body.Close()
@@ -164,6 +146,7 @@ func parse(in string, rel string) (*Scrape, error) {
 
 	rem := in
 	for {
+		// TODO: error should be reported if this hasn't been invoked at least once
 		if rem, ext, err = chomp.Pair(href(rel), target())(rem); err != nil {
 			break
 		}
@@ -174,7 +157,6 @@ func parse(in string, rel string) (*Scrape, error) {
 
 		t := &Target{SHA: ext[5], URL: ext[0]}
 
-		// TODO: need to check this against the parsed output, to ensure structure has been built correctly
 		switch ext[2] + ext[3] {
 		case "macOSx86-64":
 			s.Darwinx86_64 = t
@@ -311,10 +293,11 @@ func tableCell(deliml, delimr string) chomp.Combinator[string] {
 	}
 }
 
-func marshal(s Scrape) (string, error) {
+func (s *Scrape) String() string {
 	var buf strings.Builder
 	buf.WriteString("{")
 
+	// TODO: tidy this up
 	values := reflect.ValueOf(s)
 	types := values.Type()
 	for i := 0; i < values.NumField(); i++ {
@@ -364,8 +347,104 @@ func marshal(s Scrape) (string, error) {
 	}
 
 	buf.WriteString("}")
+	return buf.String()
+}
 
-	return buf.String(), nil
+func DetectVersion(rel string) (string, error) {
+	page, err := get("https://go.dev/dl/")
+	if err != nil {
+		return "", err
+	}
+
+	return parseVersion(page, rel)
+}
+
+func parseVersion(in, rel string) (string, error) {
+	_, ext, err := href(rel)(in)
+	if err != nil {
+		return "", err
+	}
+
+	_, ver, err := chomp.Pair(chomp.Tag("/dl/"), chomp.Any("go.1234567890"))(ext)
+	if err != nil {
+		return "", err
+	}
+	return ver[1][:len(ver[1])-1], nil
+}
+
+func execute(out io.Writer) error {
+	var rel string
+	var path string
+
+	cmd := &cobra.Command{
+		Use: "go-scrape",
+		Short: `Scrapes the Golang website (https://go.dev/dl/) for a specified release and generates a Nix
+representation of the output`,
+		Example: `
+  # Scrape the latest available version of Golang from the website and
+  # write to stdout
+  $ go-scrape
+
+  # Scrape a specified version of Golang
+  $ go-scrape --release go1.20.13
+
+  # Scrape a specified version of Golang and write to a .nix file
+  $ go-scrape --release go1.20.13 --output go1-20-13.nix`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := ScrapeGoDev(rel)
+			if err != nil {
+				return err
+			}
+
+			if path != "" {
+				return os.WriteFile(path, []byte(s.String()), 0644)
+			}
+
+			fmt.Fprintf(out, s.String())
+			return nil
+		},
+	}
+
+	f := cmd.Flags()
+	f.StringVarP(&path, "output", "o", "", "the path to a nix file for writing scraped output")
+	f.StringVarP(&rel, "release", "r", "latest", "the golang version to scrape from https://go.dev/dl/")
+
+	cmdDetect := &cobra.Command{
+		Use: "detect",
+		Short: `Scrapes the Golang website (https://go.dev/dl/) to detect the latest version
+of a Golang release`,
+		Example: `
+  # Detect the latest version of Golang from the website
+  $ go-scrape detect
+
+  # Detect the latest patch version of a Golang release from the website
+  $ go-scrape detect go1.20`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.RangeArgs(0, 1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var ver string
+			var err error
+
+			if len(args) == 1 {
+				if ver, err = DetectVersion(args[0]); err != nil {
+					return err
+				}
+			} else {
+				if ver, err = latestVersion(); err != nil {
+					return err
+				}
+			}
+
+			fmt.Fprintf(out, ver)
+			return nil
+		},
+	}
+
+	cmd.AddCommand(cmdDetect)
+	return cmd.Execute()
 }
 
 func main() {
