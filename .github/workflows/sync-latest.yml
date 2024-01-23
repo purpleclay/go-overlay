@@ -53,12 +53,12 @@ jobs:
 
       - name: Check Manifest Exists
         run: |
-          dir="${{env.LATEST_VERSION}}"
-          dir=${dir%.}
+          version="${{env.LATEST_VERSION}}"
+          dir=${version%.}
           echo $dir
-          version="${{env.LATEST_VERSION/go/}}"
-          version="${version//./-}"
-          echo $version
+          nix="${version/go/}"
+          nix="${version//./-}"
+          echo $nix
 
       # TODO: check if the manifest already exists or not
       # go1.21.6
