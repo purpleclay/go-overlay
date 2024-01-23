@@ -49,11 +49,11 @@ jobs:
 
       - name: Print Latest Version
         run: |
-          echo "${{env.LATEST_VERSION}}"
+          echo "${{ env.LATEST_VERSION }}"
 
       - name: Check Manifest Exists
         run: |
-          version="${{env.LATEST_VERSION}}"
+          version="${{ env.LATEST_VERSION }}"
           nix_dir=${version%.*}
           nix_version="${version/go/}"
           nix_version="${nix_version//./-}"
@@ -64,7 +64,7 @@ jobs:
       - name: Generate Manifest
         if: ${{ env.MANIFEST_EXISTS != 'true' }}
         run: |
-          go run main.go --release ${{env.LATEST_VERSION}} --output "../${{env.NIX_FILE}}"
+          go run main.go --release ${{ env.LATEST_VERSION }} --output "../${{ env.NIX_FILE }}"
         working-directory: "./scrape"
 
       - name: Import GPG key
@@ -79,6 +79,6 @@ jobs:
       - name: Commit and Push Manifest
         if: ${{ env.MANIFEST_EXISTS != 'true' }}
         run: |
-          git add "${{env.NIX_FILE}}"
+          git add "${{ env.NIX_FILE }}"
           git commit -S -m "chore: "
           git push
