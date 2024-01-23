@@ -63,7 +63,7 @@ jobs:
         working-directory: "./manifests"
 
       - name: Generate Manifest
-        if: ${{ env.MANIFEST_EXISTS != 'true' }}
+        # if: ${{ env.MANIFEST_EXISTS != 'true' }}
         run: |
           go run main.go --release ${{env.LATEST_VERSION}} --output "../${{env.NIX_FILE}}"
           cat "../${{env.NIX_FILE}}"
