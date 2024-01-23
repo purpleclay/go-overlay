@@ -243,7 +243,7 @@ func parse(in string, rel string) (*Scrape, error) {
 func href(ver string) chomp.Combinator[string] {
 	return func(s string) (string, string, error) {
 		rem, ext, err := chomp.All(
-			chomp.Until(`<a class="download" href="/dl/`+ver),
+			chomp.Until(fmt.Sprintf(`<a class="download" href="/dl/%s.`, ver)),
 			chomp.Delimited(chomp.Tag(`<a class="download" href="`), chomp.Until(`"`), chomp.Tag(`"`)),
 			eol())(s)
 		if err != nil {
@@ -296,7 +296,7 @@ func (s *Scrape) String() string {
 	var buf strings.Builder
 	buf.WriteString("{")
 
-	values := reflect.ValueOf(s)
+	values := reflect.ValueOf(*s)
 	types := values.Type()
 	for i := 0; i < values.NumField(); i++ {
 		v := values.Field(i)

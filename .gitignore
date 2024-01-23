@@ -1,13 +1,26 @@
 # Ignore everything and selectively allow files
-/*
+*
 
 # Allow project files
 !.gitignore
 !README.md
 !LICENSE
 !CODE_OF_CONDUCT.md
-!.github/
-!scrape/
+!.zed/*
+!.github/**/*
+
+# Allow Nix files
 !flake.lock
 !flake.nix
-!.zed/
+!*.nix
+
+# Allow Go files
+!*.go
+!go.sum
+!go.mod
+!go.work
+!go.work.sum
+!*/testdata/*
+
+# Recurse through sub-directories applying the same patterns
+!*/
