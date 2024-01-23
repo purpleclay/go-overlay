@@ -57,14 +57,14 @@ jobs:
           nix_dir=${version%.*}
           nix_version="${version/go/}"
           nix_version="${nix_version//./-}"
-          echo ${nix_dir}
-          echo ${nix_version}
           echo "MANIFEST_EXISTS=$(test -f ${nix_dir}/${nix_version}.nix && echo "true")" >> $GITHUB_ENV
-          echo "NIX_FILE=manifests/${nix_dir}/${nix_version}.nix" >> $GITHUB_ENV
+          #echo "NIX_FILE=manifests/${nix_dir}/${nix_version}.nix" >> $GITHUB_ENV
+          echo "NIX_FILE=manifests/${nix_dir}/test.nix" >> $GITHUB_ENV
         working-directory: "./manifests"
 
       - name: Generate Manifest
         if: ${{ env.MANIFEST_EXISTS != 'true' }}
         run: |
           go run main.go --release ${{env.LATEST_VERSION}} --output "../${{env.NIX_FILE}}"
+          cat "../${{env.NIX_FILE}}"
         working-directory: "./scrape"
