@@ -49,4 +49,23 @@ jobs:
 
       - name: Print Latest Version
         run: |
-          echo "${{ env.LATEST_VERSION }}"
+          echo "${{env.LATEST_VERSION}}"
+
+      - name: Check Manifest Exists
+        run: |
+          # strip off final .* > go1.21 which is the directory name
+          # convert go1.21.6 into 1-21-6
+          dir="${{env.LATEST_VERSION%.}}"
+          echo $dir
+
+          version="${env.LATEST_VERSION/go/}"
+          version="${version//./-}"
+          echo $version
+
+      # TODO: check if the manifest already exists or not
+      # go1.21.6
+      # check for manifests/go1.21
+      # check for manifests/go1.21/1-21-6.nix
+      #
+      # TODO: generate should only run if needed (based on previous job)
+      # then generate go run main.go --release go1.21.6 --output manifests/go1.21/1-21-6.nix
