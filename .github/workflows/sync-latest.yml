@@ -54,16 +54,15 @@ jobs:
       - name: Check Manifest Exists
         run: |
           version="${{env.LATEST_VERSION}}"
-          dir=${version%.}
-          echo $dir
-          nix="${version/go/}"
-          nix="${nix//./-}"
-          echo $nix
+          nix_dir=${version%.}
+          nix_version="${version/go/}"
+          nix_version="${nix_version//./-}"
+          echo "MANIFEST_EXISTS=$(test -f manifests/${nix_dir}/${nix_version}.nix && echo "true")" >> $GITHUB_ENV
+          echo "NIX_FILE=manifests/${nix_dir}/${nix_version}.nix" >> $GITHUB_ENV
+        working-directory: "./manifests"
 
-      # TODO: check if the manifest already exists or not
-      # go1.21.6
-      # check for manifests/go1.21
-      # check for manifests/go1.21/1-21-6.nix
-      #
-      # TODO: generate should only run if needed (based on previous job)
-      # then generate go run main.go --release go1.21.6 --output manifests/go1.21/1-21-6.nix
+      - name: Generate Manifest
+        if: ${{ env.MANIFEST_EXISTS != 'true' }}
+        run: |
+          go run main.go --release ${{env.LATEST_VERSION}} --output "../${{env.NIX_FILE}}"
+        working-directory: "./scrape"
