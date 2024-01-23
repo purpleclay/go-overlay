@@ -54,7 +54,7 @@ jobs:
       - name: Check Manifest Exists
         run: |
           version="${{env.LATEST_VERSION}}"
-          nix_dir=${version%.}
+          nix_dir=${version%.*}
           nix_version="${version/go/}"
           nix_version="${nix_version//./-}"
           echo ${nix_dir}
