@@ -53,7 +53,8 @@ jobs:
 
       - name: Check Manifest Exists
         run: |
-          dir="${{env.LATEST_VERSION%.}}"
+          dir="${{env.LATEST_VERSION}}"
+          dir=${dir%.}
           echo $dir
           version="${{env.LATEST_VERSION/go/}}"
           version="${version//./-}"
