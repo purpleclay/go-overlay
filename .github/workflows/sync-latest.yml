@@ -57,7 +57,7 @@ jobs:
           dir=${version%.}
           echo $dir
           nix="${version/go/}"
-          nix="${version//./-}"
+          nix="${nix//./-}"
           echo $nix
 
       # TODO: check if the manifest already exists or not
