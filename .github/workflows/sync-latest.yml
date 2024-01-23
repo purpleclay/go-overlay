@@ -53,12 +53,9 @@ jobs:
 
       - name: Check Manifest Exists
         run: |
-          # strip off final .* > go1.21 which is the directory name
-          # convert go1.21.6 into 1-21-6
           dir="${{env.LATEST_VERSION%.}}"
           echo $dir
-
-          version="${env.LATEST_VERSION/go/}"
+          version="${{env.LATEST_VERSION/go/}}"
           version="${version//./-}"
           echo $version
 
