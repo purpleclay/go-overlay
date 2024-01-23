@@ -18,8 +18,32 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-blank_issues_enabled: false
-contact_links:
-  - name: Ask a question
-    url: https://github.com/purpleclay/go-overlay/discussions
-    about: Please ask and answer questions here with other members of the community
+name: sync-latest
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+  pull_request: # TODO: remove this later
+
+jobs:
+  sync-with-godev:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21.6"
+
+      - name: Detect Latest Release
+        id: detect
+        run: |
+          echo "LATEST_VERSION=$(go run main.go detect)" >> $GITHUB_ENV
+          echo $LATEST_VERSION
+        working-directory: scrape
