@@ -58,13 +58,27 @@ jobs:
           nix_version="${version/go/}"
           nix_version="${nix_version//./-}"
           echo "MANIFEST_EXISTS=$(test -f ${nix_dir}/${nix_version}.nix && echo "true")" >> $GITHUB_ENV
-          #echo "NIX_FILE=manifests/${nix_dir}/${nix_version}.nix" >> $GITHUB_ENV
-          echo "NIX_FILE=manifests/${nix_dir}/test.nix" >> $GITHUB_ENV
+          echo "NIX_FILE=manifests/${nix_dir}/${nix_version}.nix" >> $GITHUB_ENV
         working-directory: "./manifests"
 
       - name: Generate Manifest
-        # if: ${{ env.MANIFEST_EXISTS != 'true' }}
+        if: ${{ env.MANIFEST_EXISTS != 'true' }}
         run: |
           go run main.go --release ${{env.LATEST_VERSION}} --output "../${{env.NIX_FILE}}"
-          cat "../${{env.NIX_FILE}}"
         working-directory: "./scrape"
+
+      - name: Import GPG key
+        if: ${{ env.MANIFEST_EXISTS != 'true' }}
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
+      - name: Commit and Push Manifest
+        if: ${{ env.MANIFEST_EXISTS != 'true' }}
+        run: |
+          git add "${{env.NIX_FILE}}"
+          git commit -S -m "chore: "
+          git push
