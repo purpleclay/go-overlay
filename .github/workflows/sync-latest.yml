@@ -45,5 +45,5 @@ jobs:
         id: detect
         run: |
           echo "LATEST_VERSION=$(go run main.go detect)" >> $GITHUB_ENV
-          echo $LATEST_VERSION
-        working-directory: scrape
+          echo $GITHUB_ENV
+        working-directory: "./scrape"
