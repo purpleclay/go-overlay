@@ -57,7 +57,9 @@ jobs:
           nix_dir=${version%.}
           nix_version="${version/go/}"
           nix_version="${nix_version//./-}"
-          echo "MANIFEST_EXISTS=$(test -f manifests/${nix_dir}/${nix_version}.nix && echo "true")" >> $GITHUB_ENV
+          echo ${nix_dir}
+          echo ${nix_version}
+          echo "MANIFEST_EXISTS=$(test -f ${nix_dir}/${nix_version}.nix && echo "true")" >> $GITHUB_ENV
           echo "NIX_FILE=manifests/${nix_dir}/${nix_version}.nix" >> $GITHUB_ENV
         working-directory: "./manifests"
 
