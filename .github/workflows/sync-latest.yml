@@ -45,5 +45,8 @@ jobs:
         id: detect
         run: |
           echo "LATEST_VERSION=$(go run main.go detect)" >> $GITHUB_ENV
-          echo $GITHUB_ENV
         working-directory: "./scrape"
+
+      - name: Print Latest Version
+        run: |
+          echo "${{ env.LATEST_VERSION }}"
