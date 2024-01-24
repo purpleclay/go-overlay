@@ -79,5 +79,5 @@ jobs:
         if: ${{ env.MANIFEST_EXISTS != 'true' }}
         run: |
           git add "${{ env.NIX_FILE }}"
-          git commit -S -m "chore: "
+          git commit -S -m "chore: generated nix manifest for go release ${{ env.PREV_VERSION }}"
           git push
