@@ -48,7 +48,7 @@ jobs:
           minor=$(echo "$latest" | cut -d'.' -f2)
           minor=$((minor - 1))
 
-          echo "PREV_VERSION=$(go run main.go detect 'go${major}.${minor}')" >> $GITHUB_ENV
+          echo "PREV_VERSION=$(go run main.go detect go${major}.${minor})" >> $GITHUB_ENV
         working-directory: "./scrape"
 
       - name: Check Manifest Exists
