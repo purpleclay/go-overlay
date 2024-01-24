@@ -18,11 +18,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-name: sync-latest
+name: sync-prev
 on:
   schedule:
     - cron: "0 2 * * *"
   workflow_dispatch:
+  pull_request: # TODO: remove this
 
 jobs:
   sync-with-godev:
@@ -40,14 +41,19 @@ jobs:
         with:
           go-version: "1.21.6"
 
-      - name: Detect Latest Release
+      - name: Detect Prev Release
         run: |
-          echo "LATEST_VERSION=$(go run main.go detect)" >> $GITHUB_ENV
+          latest=$(go run main.go detect)
+          major=$(echo "$latest" | cut -d'.' -f1 | sed 's/go//')
+          minor=$(echo "$latest" | cut -d'.' -f2)
+          minor=$((minor - 1))
+
+          echo "PREV_VERSION=$(go run main.go detect 'go${major}.${minor}')" >> $GITHUB_ENV
         working-directory: "./scrape"
 
       - name: Check Manifest Exists
         run: |
-          version="${{ env.LATEST_VERSION }}"
+          version="${{ env.PREV_VERSION }}"
           nix_dir=${version%.*}
           nix_version="${version/go/}"
           nix_version="${nix_version//./-}"
@@ -58,7 +64,7 @@ jobs:
       - name: Generate Manifest
         if: ${{ env.MANIFEST_EXISTS != 'true' }}
         run: |
-          go run main.go --release ${{ env.LATEST_VERSION }} --output "../${{ env.NIX_FILE }}"
+          go run main.go --release ${{ env.PREV_VERSION }} --output "../${{ env.NIX_FILE }}"
         working-directory: "./scrape"
 
       - name: Import GPG key
