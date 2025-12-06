@@ -1,7 +1,6 @@
 # Ignore everything and selectively allow files
 *
 
-# Allow project files
 !.gitignore
 !README.md
 !LICENSE
@@ -9,12 +8,11 @@
 !.zed/*
 !.github/**/*
 
-# Allow Nix files
 !flake.lock
 !flake.nix
 !*.nix
+!.envrc
 
-# Allow Go files
 !*.go
 !go.sum
 !go.mod
