@@ -1,7 +1,21 @@
 {
-  "language_overrides": {
+  "languages": {
     "Nix": {
-      "tab_size": 2
+      "language_servers": ["nil", "!nixd"]
+    }
+  },
+  "lsp": {
+    "nil": {
+      "initialization_options": {
+        "formatting": {
+          "command": ["alejandra", "--quiet", "--"]
+        }
+      },
+      "settings": {
+        "diagnostics": {
+          "ignored": ["unused_binding"]
+        }
+      }
     }
   }
 }
