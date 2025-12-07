@@ -1,1 +1,56 @@
-{d="2024-01-22";v="go1.18.6";_0={s="05ef7855970fd9caf4e8d34fe73146cffcff740b80d00189d129302f13d22e6b";u="/dl/go1.18.6.darwin-amd64.tar.gz";};_1={s="bbe22ae2f9d284b0decd67baf82a8ec840f31ca312915af1afba8adfa764e23c";u="/dl/go1.18.6.darwin-arm64.tar.gz";};_2={s="52a8ec92dc1c192fbbfc3c9583ded388edf14ee8b687b034e3c1034024bf2970";u="/dl/go1.18.6.linux-386.tar.gz";};_3={s="bb05f179a773fed60c6a454a24141aaa7e71edfd0f2d465ad610a3b8f1dc7fe8";u="/dl/go1.18.6.linux-amd64.tar.gz";};_4={s="838ffa94158125f16e4aa667ee4f6b499ea57e3e35a7e2517ad357ea06714691";u="/dl/go1.18.6.linux-arm64.tar.gz";};_5={s="fca2a46dfdab541f63afaa04029c0d75e934e05464bf8c4f636c9d9856dfdaf2";u="/dl/go1.18.6.linux-armv6l.tar.gz";};_12={s="bcec49f08bb67ae2821ece8fecbc2ba678d54ce6f8cfaa572b86448aa09ca816";u="/dl/go1.18.6.linux-ppc64le.tar.gz";};_14={s="661af75e03cb8effcf90705dc0a12875efdb653ad8a0ca434905ef665189350a";u="/dl/go1.18.6.linux-s390x.tar.gz";};_17={s="a67db80be8e63dd15b90a6eb8d46af416d27884fc26484ef6cec7b4f50164415";u="/dl/go1.18.6.freebsd-386.tar.gz";};_18={s="e024b2e444fee5020063f80fd55083f43840d428e7c3569dbe7df94a6d133d62";u="/dl/go1.18.6.freebsd-amd64.tar.gz";};_35={s="5db56891b287c38154f05bfc1fbe04e774d5f55664937d1caae5973c98c43ca6";u="/dl/go1.18.6.windows-386.zip";};_36={s="480b7212ab1d152d5e3fc382ac34d3dd26bf637ae4537c35b4b554ede8a36b47";u="/dl/go1.18.6.windows-amd64.zip";};_37={s="688fc8b9c3e9bc26466987d0ffad98efacf8d88754c0ba17164a06e0d44a907d";u="/dl/go1.18.6.windows-arm64.zip";};}
+{
+  d = "2024-01-22";
+  v = "go1.18.6";
+  _0 = {
+    s = "05ef7855970fd9caf4e8d34fe73146cffcff740b80d00189d129302f13d22e6b";
+    u = "/dl/go1.18.6.darwin-amd64.tar.gz";
+  };
+  _1 = {
+    s = "bbe22ae2f9d284b0decd67baf82a8ec840f31ca312915af1afba8adfa764e23c";
+    u = "/dl/go1.18.6.darwin-arm64.tar.gz";
+  };
+  _2 = {
+    s = "52a8ec92dc1c192fbbfc3c9583ded388edf14ee8b687b034e3c1034024bf2970";
+    u = "/dl/go1.18.6.linux-386.tar.gz";
+  };
+  _3 = {
+    s = "bb05f179a773fed60c6a454a24141aaa7e71edfd0f2d465ad610a3b8f1dc7fe8";
+    u = "/dl/go1.18.6.linux-amd64.tar.gz";
+  };
+  _4 = {
+    s = "838ffa94158125f16e4aa667ee4f6b499ea57e3e35a7e2517ad357ea06714691";
+    u = "/dl/go1.18.6.linux-arm64.tar.gz";
+  };
+  _5 = {
+    s = "fca2a46dfdab541f63afaa04029c0d75e934e05464bf8c4f636c9d9856dfdaf2";
+    u = "/dl/go1.18.6.linux-armv6l.tar.gz";
+  };
+  _12 = {
+    s = "bcec49f08bb67ae2821ece8fecbc2ba678d54ce6f8cfaa572b86448aa09ca816";
+    u = "/dl/go1.18.6.linux-ppc64le.tar.gz";
+  };
+  _14 = {
+    s = "661af75e03cb8effcf90705dc0a12875efdb653ad8a0ca434905ef665189350a";
+    u = "/dl/go1.18.6.linux-s390x.tar.gz";
+  };
+  _17 = {
+    s = "a67db80be8e63dd15b90a6eb8d46af416d27884fc26484ef6cec7b4f50164415";
+    u = "/dl/go1.18.6.freebsd-386.tar.gz";
+  };
+  _18 = {
+    s = "e024b2e444fee5020063f80fd55083f43840d428e7c3569dbe7df94a6d133d62";
+    u = "/dl/go1.18.6.freebsd-amd64.tar.gz";
+  };
+  _35 = {
+    s = "5db56891b287c38154f05bfc1fbe04e774d5f55664937d1caae5973c98c43ca6";
+    u = "/dl/go1.18.6.windows-386.zip";
+  };
+  _36 = {
+    s = "480b7212ab1d152d5e3fc382ac34d3dd26bf637ae4537c35b4b554ede8a36b47";
+    u = "/dl/go1.18.6.windows-amd64.zip";
+  };
+  _37 = {
+    s = "688fc8b9c3e9bc26466987d0ffad98efacf8d88754c0ba17164a06e0d44a907d";
+    u = "/dl/go1.18.6.windows-arm64.zip";
+  };
+}

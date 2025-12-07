@@ -1,6 +1,6 @@
 module go-scrape
 
-go 1.21
+go 1.25.4
 
 require (
 	github.com/purpleclay/chomp v0.4.0

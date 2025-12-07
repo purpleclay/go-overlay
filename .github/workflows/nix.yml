@@ -1,0 +1,69 @@
+name: nix
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "*.nix"
+      - "**/*.nix"
+      - "go.mod"
+      - "flake.lock"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "*.nix"
+      - "**/*.nix"
+      - "go.mod"
+      - "flake.lock"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+jobs:
+  alejandra:
+    runs-on: ubuntu-24.04
+    if: github.actor != 'renovate[bot]'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.GH_CACHIX }}"
+          skipPush: true
+          useDaemon: false
+
+      - name: Run Alejandra
+        run: nix develop -c alejandra --check .
+  build:
+    runs-on: ${{ matrix.os }}
+    name: build / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.GH_CACHIX }}"
+          skipPush: false
+          useDaemon: false
+
+      - name: Build Nix Package
+        run: nix build

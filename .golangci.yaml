@@ -1,0 +1,46 @@
+version: "2"
+linters:
+  default: none
+  enable:
+    - err113
+    - errname
+    - forbidigo
+    - godox
+    - ireturn
+    - misspell
+    - musttag
+    - revive
+    - tagliatelle
+    - thelper
+    - unused
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: ioutil\.*
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+          toml: snake
+          yaml: snake
+        use-field-name: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofumpt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
