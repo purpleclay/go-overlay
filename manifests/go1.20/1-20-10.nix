@@ -1,1 +1,56 @@
-{d="2024-01-22";v="go1.20.10";_0={s="3644c278c5477e24feed1978f793dbde5e88da8d9f353898701cdb5b9b8a9d5b";u="/dl/go1.20.10.darwin-amd64.tar.gz";};_1={s="e946f0e732e76c1960412ea748d89c43112d2228568acac46bdeaf63de4894e4";u="/dl/go1.20.10.darwin-arm64.tar.gz";};_2={s="3c918225d22ef5731b63f0426e48614fc05d8da120fc23101639c81ab152e133";u="/dl/go1.20.10.linux-386.tar.gz";};_3={s="80d34f1fd74e382d86c2d6102e0e60d4318461a7c2f457ec1efc4042752d4248";u="/dl/go1.20.10.linux-amd64.tar.gz";};_4={s="fb3c7e15fc4413c5b81eb9f26dbd7cd4faedd5c720b30fa8e2ff77457f74cab6";u="/dl/go1.20.10.linux-arm64.tar.gz";};_5={s="a2229772434dee3dde1e974ef5ae7936160a05a1b82c57cc5c64660479aa98cb";u="/dl/go1.20.10.linux-armv6l.tar.gz";};_12={s="ebac6e713810174f9ffd7f48c17c373fbf359d50d8e6233b1dfbbdebd524fd1c";u="/dl/go1.20.10.linux-ppc64le.tar.gz";};_14={s="fa32588cbdd1e8adfd7e9f1b4ba3f7a8b424f60e90bf2cc4716650374eb459ae";u="/dl/go1.20.10.linux-s390x.tar.gz";};_17={s="ea1cf0ecb4f6e5a1b6986709c060f73a0b942db14f6eebf1e94d7792261f0e70";u="/dl/go1.20.10.freebsd-386.tar.gz";};_18={s="e337b8e645e37f52d04e5f91352b929e05fd74d960b2a1c8e78977e4777c4ffa";u="/dl/go1.20.10.freebsd-amd64.tar.gz";};_35={s="b4f0553de49558394a16bbc42514850e662aa0aef3abb973e4e626248e0fa7b6";u="/dl/go1.20.10.windows-386.zip";};_36={s="1e490d2b9adcafe1f6a5bf01021febed9b9d406db9120690736d3c93deb38a57";u="/dl/go1.20.10.windows-amd64.zip";};_37={s="22af2ed3c49da78f60388e6e07b58bfcf891d694102f4c1f52885d5eb34359a6";u="/dl/go1.20.10.windows-arm64.zip";};}
+{
+  d = "2024-01-22";
+  v = "go1.20.10";
+  _0 = {
+    s = "3644c278c5477e24feed1978f793dbde5e88da8d9f353898701cdb5b9b8a9d5b";
+    u = "/dl/go1.20.10.darwin-amd64.tar.gz";
+  };
+  _1 = {
+    s = "e946f0e732e76c1960412ea748d89c43112d2228568acac46bdeaf63de4894e4";
+    u = "/dl/go1.20.10.darwin-arm64.tar.gz";
+  };
+  _2 = {
+    s = "3c918225d22ef5731b63f0426e48614fc05d8da120fc23101639c81ab152e133";
+    u = "/dl/go1.20.10.linux-386.tar.gz";
+  };
+  _3 = {
+    s = "80d34f1fd74e382d86c2d6102e0e60d4318461a7c2f457ec1efc4042752d4248";
+    u = "/dl/go1.20.10.linux-amd64.tar.gz";
+  };
+  _4 = {
+    s = "fb3c7e15fc4413c5b81eb9f26dbd7cd4faedd5c720b30fa8e2ff77457f74cab6";
+    u = "/dl/go1.20.10.linux-arm64.tar.gz";
+  };
+  _5 = {
+    s = "a2229772434dee3dde1e974ef5ae7936160a05a1b82c57cc5c64660479aa98cb";
+    u = "/dl/go1.20.10.linux-armv6l.tar.gz";
+  };
+  _12 = {
+    s = "ebac6e713810174f9ffd7f48c17c373fbf359d50d8e6233b1dfbbdebd524fd1c";
+    u = "/dl/go1.20.10.linux-ppc64le.tar.gz";
+  };
+  _14 = {
+    s = "fa32588cbdd1e8adfd7e9f1b4ba3f7a8b424f60e90bf2cc4716650374eb459ae";
+    u = "/dl/go1.20.10.linux-s390x.tar.gz";
+  };
+  _17 = {
+    s = "ea1cf0ecb4f6e5a1b6986709c060f73a0b942db14f6eebf1e94d7792261f0e70";
+    u = "/dl/go1.20.10.freebsd-386.tar.gz";
+  };
+  _18 = {
+    s = "e337b8e645e37f52d04e5f91352b929e05fd74d960b2a1c8e78977e4777c4ffa";
+    u = "/dl/go1.20.10.freebsd-amd64.tar.gz";
+  };
+  _35 = {
+    s = "b4f0553de49558394a16bbc42514850e662aa0aef3abb973e4e626248e0fa7b6";
+    u = "/dl/go1.20.10.windows-386.zip";
+  };
+  _36 = {
+    s = "1e490d2b9adcafe1f6a5bf01021febed9b9d406db9120690736d3c93deb38a57";
+    u = "/dl/go1.20.10.windows-amd64.zip";
+  };
+  _37 = {
+    s = "22af2ed3c49da78f60388e6e07b58bfcf891d694102f4c1f52885d5eb34359a6";
+    u = "/dl/go1.20.10.windows-arm64.zip";
+  };
+}
