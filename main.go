@@ -1,98 +1,36 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"sort"
-	"strings"
 	"time"
 
-	"github.com/purpleclay/chomp"
 	"github.com/spf13/cobra"
 )
 
-// Mapping from Go's website OS+Arch naming to Nix system identifiers
-// Only include platforms that Nix actually supports
-var goToNixSystem = map[string]string{
-	"macOSx86-64":   "x86_64-darwin",
-	"macOSARM64":    "aarch64-darwin",
-	"Linuxx86-64":   "x86_64-linux",
-	"LinuxARM64":    "aarch64-linux",
-	"Linuxx86":      "i686-linux",
-	"LinuxARMv6":    "armv7l-linux",
-	"Linuxriscv64":  "riscv64-linux",
-	"Linuxppc64le":  "powerpc64le-linux",
-	"Linuxs390x":    "s390x-linux",
-	"Linuxloong64":  "loongarch64-linux",
-	"FreeBSDx86-64": "x86_64-freebsd",
-	"FreeBSDARM64":  "aarch64-freebsd",
-	"FreeBSDx86":    "i686-freebsd",
+const (
+	goDownloadURL = "https://go.dev/dl/"
+	goVersionURL  = "https://go.dev/VERSION?m=text"
+)
+
+var httpClient = &http.Client{
+	Timeout: 5 * time.Second,
 }
 
-// Target contains the core details for Nix to download a copy
-// of Go for any supported OS-Arch combination
-type Target struct {
-	SHA256 string
-	URL    string
-}
-
-// Scrape contains the scraped output from the Go [Download] website, ready
-// for serialisation into a Nix attribute set.
-//
-// [Download]: https://go.dev/dl/
-type Scrape struct {
-	Date    string
-	Version string
-	Targets map[string]*Target
-}
-
-func NewScrape(version string) *Scrape {
-	return &Scrape{
-		Date:    time.Now().Format(time.DateOnly),
-		Version: version,
-		Targets: make(map[string]*Target),
-	}
-}
-
-func ScrapeGoDev(rel string) (*Scrape, error) {
-	var err error
-	if rel == "latest" {
-		if rel, err = latestVersion(); err != nil {
-			return nil, err
-		}
-	}
-
-	page, err := get("https://go.dev/dl/")
-	if err != nil {
-		return nil, err
-	}
-
-	return parse(page, rel)
-}
-
-func latestVersion() (string, error) {
-	ver, err := get("https://go.dev/VERSION?m=text")
+func fetch(url string) (string, error) {
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return "", err
 	}
-	_, rel, _ := chomp.Any("go.1234567890")(ver)
-	return rel, nil
-}
-
-func get(url string) (string, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return "", err
-	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		//nolint:err113
-		return "", fmt.Errorf("unexpected status code returned (%d) when querying %s", resp.StatusCode, url)
+		return "", fmt.Errorf("unexpected status code returned (%d) when querying: %s", resp.StatusCode, url)
 	}
 
-	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -101,231 +39,48 @@ func get(url string) (string, error) {
 	return string(data), nil
 }
 
-func parse(in string, rel string) (*Scrape, error) {
-	s := NewScrape(rel)
-
-	var ext []string
-	var err error
-
-	rem := in
-	for {
-		if rem, ext, err = chomp.Pair(href(rel), target())(rem); err != nil {
-			break
-		}
-
-		// ext[0] = URL path (e.g., "/dl/go1.22.4.linux-amd64.tar.gz")
-		// ext[1] = Kind (Archive, Installer, Source)
-		// ext[2] = OS
-		// ext[3] = Arch
-		// ext[4] = Size
-		// ext[5] = SHA256
-
-		if ext[1] != "Archive" {
-			continue
-		}
-
-		goKey := ext[2] + ext[3]
-		nixSystem, ok := goToNixSystem[goKey]
-		if !ok {
-			continue
-		}
-
-		s.Targets[nixSystem] = &Target{
-			SHA256: ext[5],
-			URL:    "https://go.dev" + ext[0],
-		}
-	}
-
-	return s, nil
+func fetchDownloadPage() (string, error) {
+	return fetch(goDownloadURL)
 }
 
-func href(ver string) chomp.Combinator[string] {
-	return func(s string) (string, string, error) {
-		rem, ext, err := chomp.All(
-			chomp.Until(fmt.Sprintf(`<a class="download" href="/dl/%s.`, ver)),
-			chomp.Delimited(chomp.Tag(`<a class="download" href="`), chomp.Until(`"`), chomp.Tag(`"`)),
-			eol())(s)
-		if err != nil {
-			return rem, "", err
-		}
-
-		return rem, ext[1], nil
-	}
-}
-
-func eol() chomp.Combinator[string] {
-	return func(s string) (string, string, error) {
-		rem, _, err := chomp.Pair(chomp.Until("\n"), chomp.Crlf())(s)
-		if err != nil {
-			return rem, "", err
-		}
-
-		return rem, "", nil
-	}
-}
-
-func target() chomp.Combinator[[]string] {
-	return func(s string) (string, []string, error) {
-		return chomp.All(
-			chomp.Repeat(tableCell("<td>", "</td>"), 4),
-			chomp.S(tableCell("<td><tt>", "</tt></td>")),
-		)(s)
-	}
-}
-
-func tableCell(deliml, delimr string) chomp.Combinator[string] {
-	return func(s string) (string, string, error) {
-		rem, ext, err := chomp.Pair(
-			chomp.Any(" "),
-			chomp.Delimited(chomp.Tag(deliml), chomp.Until(delimr), chomp.Tag(delimr)))(s)
-		if err != nil {
-			return rem, "", err
-		}
-
-		rem, _, err = eol()(rem)
-		if err != nil {
-			return rem, "", err
-		}
-
-		return rem, ext[1], nil
-	}
-}
-
-func (s *Scrape) String() string {
-	var buf strings.Builder
-
-	// Extract version number without "go" prefix for the manifest
-	version := strings.TrimPrefix(s.Version, "go")
-
-	buf.WriteString("# Auto-generated by go-scrape - do not edit manually\n")
-	buf.WriteString("{\n")
-	buf.WriteString(fmt.Sprintf("  version = %q;\n", version))
-	buf.WriteString(fmt.Sprintf("  date = %q;\n", s.Date))
-	buf.WriteString("\n")
-
-	// Sort keys for deterministic output
-	systems := make([]string, 0, len(s.Targets))
-	for sys := range s.Targets {
-		systems = append(systems, sys)
-	}
-	sort.Strings(systems)
-
-	for _, sys := range systems {
-		t := s.Targets[sys]
-		// Nix attribute names with hyphens need to be quoted
-		buf.WriteString(fmt.Sprintf("  %q = {\n", sys))
-		buf.WriteString(fmt.Sprintf("    sha256 = %q;\n", t.SHA256))
-		buf.WriteString(fmt.Sprintf("    url = %q;\n", t.URL))
-		buf.WriteString("  };\n")
-		buf.WriteString("\n")
-	}
-
-	buf.WriteString("}\n")
-	return buf.String()
-}
-
-func (s *Scrape) Filename() string {
-	version := strings.TrimPrefix(s.Version, "go")
-	return version + ".nix"
-}
-
-func DetectVersion(rel string) (string, error) {
-	page, err := get("https://go.dev/dl/")
+func fetchLatestVersion() (string, error) {
+	data, err := fetch(goVersionURL)
 	if err != nil {
 		return "", err
 	}
 
-	return parseVersion(page, rel)
-}
-
-func parseVersion(in, rel string) (string, error) {
-	_, ext, err := href(rel)(in)
+	_, version, err := goVersion()(data)
 	if err != nil {
 		return "", err
 	}
-
-	_, ver, err := chomp.Pair(chomp.Tag("/dl/"), chomp.Any("go.1234567890"))(ext)
-	if err != nil {
-		return "", err
-	}
-	return ver[1][:len(ver[1])-1], nil
+	return version, nil
 }
+
+type contextKey string
+
+const pageDataKey contextKey = "pageData"
 
 func execute(out io.Writer) error {
-	var rel string
-	var path string
-
 	cmd := &cobra.Command{
 		Use:   "go-scrape",
-		Short: "Scrapes the Golang website (https://go.dev/dl/) and generates Nix manifests",
-		Long: `Scrapes the Golang website (https://go.dev/dl/) for a specified release and generates
-a Nix manifest file with SHA256 hashes for each platform.
-
-The output format is compatible with go-overlay and uses Nix system identifiers
-(e.g., x86_64-linux, aarch64-darwin) as keys.`,
-		Example: `  # Scrape the latest available version and write to stdout
-  $ go-scrape
-
-  # Scrape a specified version of Golang
-  $ go-scrape --release go1.20.13
-
-  # Scrape a specified version of Golang and write to a .nix file
-  $ go-scrape --release go1.20.13 --output go1-20-13.nix`,
+		Short: "Tools for scraping Go releases and generating Nix manifests",
+		Long: `go-scrape provides utilities for working with Go releases from https://go.dev/dl/
+including listing available versions, detecting latest releases, and generating
+Nix manifest files with SHA256 hashes for each platform.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			s, err := ScrapeGoDev(rel)
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			page, err := fetchDownloadPage()
 			if err != nil {
 				return err
 			}
-
-			if path != "" {
-				return os.WriteFile(path, []byte(s.String()), 0o644)
-			}
-
-			fmt.Fprintf(out, "%s", s.String())
+			ctx := context.WithValue(cmd.Context(), pageDataKey, page)
+			cmd.SetContext(ctx)
 			return nil
 		},
 	}
 
-	f := cmd.Flags()
-	f.StringVarP(&path, "output", "o", "", "the path to a nix file for writing scraped output")
-	f.StringVarP(&rel, "release", "r", "latest", "the golang version to scrape from https://go.dev/dl/")
-
-	cmdDetect := &cobra.Command{
-		Use:   "detect",
-		Short: "Detect the latest version of a Go release",
-		Long: `Scrapes the Golang website (https://go.dev/dl/) to detect the latest version
-of a Golang release. Optionally provide a version prefix to find the latest
-patch version of a specific release.`,
-		Example: `  # Detect the latest Go version
-  $ go-scrape detect
-
-  # Detect the latest patch version of Go 1.21
-  $ go-scrape detect go1.21`,
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		Args:          cobra.RangeArgs(0, 1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			var ver string
-			var err error
-
-			if len(args) == 1 {
-				if ver, err = DetectVersion(args[0]); err != nil {
-					return err
-				}
-			} else {
-				if ver, err = latestVersion(); err != nil {
-					return err
-				}
-			}
-
-			fmt.Fprintf(out, "%s", ver)
-			return nil
-		},
-	}
-
-	cmd.AddCommand(cmdDetect)
+	cmd.AddCommand(newGenerateCmd(out), newDetectCmd(out), newListCmd(out))
 	return cmd.Execute()
 }
 
