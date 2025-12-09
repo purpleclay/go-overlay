@@ -18,6 +18,21 @@ func goVersion() chomp.Combinator[string] {
 	}
 }
 
+func seekDownloadSection(ver string) chomp.Combinator[string] {
+	normalizedVersion := ver
+	if !strings.HasPrefix(normalizedVersion, "go") {
+		normalizedVersion = "go" + normalizedVersion
+	}
+
+	return func(s string) (string, string, error) {
+		rem, _, err := chomp.Until(fmt.Sprintf(`id="%s"`, normalizedVersion))(s)
+		if err != nil {
+			return rem, "", err
+		}
+		return rem, "", nil
+	}
+}
+
 func href(ver string) chomp.Combinator[string] {
 	normalizedVersion := ver
 	if !strings.HasPrefix(normalizedVersion, "go") {
