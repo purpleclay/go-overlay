@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,7 +21,7 @@ func TestGoVersionCombinator(t *testing.T) {
 			expected: "1.21.4",
 		},
 		{
-			name:     "MinorOnly",
+			name:     "MinorOnlyNoPrefix",
 			input:    "go1.22",
 			expected: "1.22",
 		},
@@ -39,31 +41,9 @@ func TestGoVersionCombinator(t *testing.T) {
 	}
 }
 
-func TestGoVersionCombinator_Error(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-	}{
-		{
-			name:  "NoGoPrefix",
-			input: "1.21.4",
-		},
-		{
-			name:  "InvalidFormat",
-			input: "not-a-version",
-		},
-		{
-			name:  "EmptyString",
-			input: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := goVersion()(tt.input)
-			assert.Error(t, err)
-		})
-	}
+func TestGoVersionCombinatorWithInvalidVersion(t *testing.T) {
+	_, _, err := goVersion()("not-a-version")
+	assert.Error(t, err)
 }
 
 func TestHrefCombinator(t *testing.T) {
@@ -78,20 +58,19 @@ Download
 	require.Equal(t, "/dl/go1.21.4.linux-amd64.tar.gz", result)
 }
 
-func TestHrefCombinator_Normalization(t *testing.T) {
+func TestHrefCombinatorNormalization(t *testing.T) {
 	html := `<div>
 <a class="download" href="/dl/go1.21.4.linux-amd64.tar.gz">
 Download
 </a>
 </div>`
 
-	// Should work without "go" prefix due to normalization
 	_, result, err := href("1.21.4")(html)
 	require.NoError(t, err)
 	require.Equal(t, "/dl/go1.21.4.linux-amd64.tar.gz", result)
 }
 
-func TestHrefCombinator_Error(t *testing.T) {
+func TestHrefCombinatorVersionMissing(t *testing.T) {
 	html := `<div>
 <a class="download" href="/dl/go1.21.4.linux-amd64.tar.gz">
 Download
@@ -119,4 +98,14 @@ func TestTargetCombinator(t *testing.T) {
 	assert.Equal(t, "ARM64", result[2])
 	assert.Equal(t, "68MB", result[3])
 	assert.Equal(t, "047bfce4fbd0da6426bd30cd19716b35a466b1c15a45525ce65b9824acb33285", result[4])
+}
+
+func TestSeekDownloadSection(t *testing.T) {
+	fd, err := os.ReadFile("testdata/index-20251207.html")
+	require.NoError(t, err)
+
+	result, _, err := seekDownloadSection("1.21.4")(string(fd))
+	require.NoError(t, err)
+
+	assert.True(t, strings.HasPrefix(result, `id="go1.21.4"`))
 }

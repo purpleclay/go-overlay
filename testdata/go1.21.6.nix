@@ -7,62 +7,50 @@
     sha256 = "31d6ecca09010ab351e51343a5af81d678902061fee871f912bdd5ef4d778850";
     url = "https://go.dev/dl/go1.21.6.darwin-amd64.tar.gz";
   };
-
   "aarch64-darwin" = {
     sha256 = "0ff541fb37c38e5e5c5bcecc8f4f43c5ffd5e3a6c33a5d3e4003ded66fcfb331";
     url = "https://go.dev/dl/go1.21.6.darwin-arm64.tar.gz";
   };
-
   "i686-freebsd" = {
     sha256 = "a1d1a149b34bf0f53965a237682c6da1140acabb131bf0e597240e4a140b0e5e";
     url = "https://go.dev/dl/go1.21.6.freebsd-386.tar.gz";
   };
-
   "x86_64-freebsd" = {
     sha256 = "de59e1217e4398b1522eed8dddabab2fa1b97aecbdca3af08e34832b4f0e3f81";
     url = "https://go.dev/dl/go1.21.6.freebsd-amd64.tar.gz";
   };
-
   "aarch64-freebsd" = {
     sha256 = "a35f3d529bb86a41709e659597670284c9f78c9f3928eebc78dd50a2f514bfdf";
     url = "https://go.dev/dl/go1.21.6.freebsd-arm64.tar.gz";
   };
-
   "i686-linux" = {
     sha256 = "05d09041b5a1193c14e4b2db3f7fcc649b236c567f5eb93305c537851b72dd95";
     url = "https://go.dev/dl/go1.21.6.linux-386.tar.gz";
   };
-
   "x86_64-linux" = {
     sha256 = "3f934f40ac360b9c01f616a9aa1796d227d8b0328bf64cb045c7b8c4ee9caea4";
     url = "https://go.dev/dl/go1.21.6.linux-amd64.tar.gz";
   };
-
   "aarch64-linux" = {
     sha256 = "e2e8aa88e1b5170a0d495d7d9c766af2b2b6c6925a8f8956d834ad6b4cacbd9a";
     url = "https://go.dev/dl/go1.21.6.linux-arm64.tar.gz";
   };
-
   "armv7l-linux" = {
     sha256 = "6a8eda6cc6a799ff25e74ce0c13fdc1a76c0983a0bb07c789a2a3454bf6ec9b2";
     url = "https://go.dev/dl/go1.21.6.linux-armv6l.tar.gz";
   };
-
   "loongarch64-linux" = {
     sha256 = "723f901211cf2addabe7b309f8ee378229a4fa1941382784c12f8b754801f959";
     url = "https://go.dev/dl/go1.21.6.linux-loong64.tar.gz";
   };
-
   "powerpc64le-linux" = {
     sha256 = "e872b1e9a3f2f08fd4554615a32ca9123a4ba877ab6d19d36abc3424f86bc07f";
     url = "https://go.dev/dl/go1.21.6.linux-ppc64le.tar.gz";
   };
-
   "riscv64-linux" = {
     sha256 = "86a2fe6597af4b37d98bca632f109034b624786a8d9c1504d340661355ed31f7";
     url = "https://go.dev/dl/go1.21.6.linux-riscv64.tar.gz";
   };
-
   "s390x-linux" = {
     sha256 = "92894d0f732d3379bc414ffdd617eaadad47e1d72610e10d69a1156db03fc052";
     url = "https://go.dev/dl/go1.21.6.linux-s390x.tar.gz";
