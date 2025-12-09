@@ -146,6 +146,9 @@ The output format is compatible with go-overlay and uses Nix system identifiers
   # Generate manifests for multiple versions
   $ go-scrape generate 1.20.13 1.21.6 1.22.0
 
+  # Generate manifests for all minor versions of a major version
+  $ go-scrape generate 1.23*
+
   # Generate manifests and write to directory
   $ go-scrape generate 1.21.6 --output ./manifests`,
 		SilenceUsage:  true,
@@ -156,13 +159,26 @@ The output format is compatible with go-overlay and uses Nix system identifiers
 				return fmt.Errorf("failed to retrieve page data from context")
 			}
 
-			versions := args
-			if len(versions) == 0 {
+			var versions []string
+			if len(args) == 0 {
 				latestVersion, err := detectVersion(page, "")
 				if err != nil {
 					return err
 				}
-				versions = []string{latestVersion}
+				versions = append(versions, latestVersion)
+			} else {
+				for _, arg := range args {
+					version := arg
+					if strings.HasSuffix(arg, "*") {
+						allVersions, err := listVersions(page, strings.TrimSuffix(version, "*"))
+						if err != nil {
+							return err
+						}
+						versions = append(versions, allVersions...)
+					} else {
+						versions = append(versions, version)
+					}
+				}
 			}
 
 			if outputDir != "" {
