@@ -1,0 +1,56 @@
+name: auto-update
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+
+jobs:
+  auto-update:
+    runs-on: ubuntu-24.04
+    name: auto-update
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.GH_CACHIX }}"
+          useDaemon: false
+
+      - name: Check GoDev Website
+        run: |
+          echo "LATEST_GO_VERSION=$(nix run . -- detect)" >> $GITHUB_ENV
+
+      - name: Check Manifest Exists
+        run: |
+          version="${{ env.LATEST_GO_VERSION }}"
+          echo "NIX_FILE=manifests/${version}.nix" >> $GITHUB_ENV
+          echo "MANIFEST_EXISTS=$(test -f manifests/${version}.nix && echo "true")" >> $GITHUB_ENV
+
+      - name: Generate Manifest
+        if: ${{ env.MANIFEST_EXISTS != 'true' }}
+        run: |
+          nix run . -- generate ${{ env.LATEST_GO_VERSION }} --output manifests
+
+      - name: Import GPG key
+        if: ${{ env.MANIFEST_EXISTS != 'true' }}
+        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec #v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          trust_level: 5
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
+      - name: Commit and Push Manifest
+        if: ${{ env.MANIFEST_EXISTS != 'true' }}
+        run: |
+          git add "${{ env.NIX_FILE }}"
+          git commit -m "chore: generated nix manifest for go release ${{ env.LATEST_GO_VERSION }}"
+          git push
