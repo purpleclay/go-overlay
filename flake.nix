@@ -27,17 +27,39 @@
     flake-utils,
     gomod2nix,
     git-hooks,
-  }:
-    flake-utils.lib.eachDefaultSystem (
+  }: let
+    overlay = final: prev: {
+      go-bin = import ./lib {
+        lib = final.lib;
+        pkgs = final;
+      };
+    };
+  in
+    {
+      overlays.default = overlay;
+      overlays.go-overlay = overlay;
+
+      lib = {
+        mkGoBin = pkgs:
+          import ./lib {
+            inherit (pkgs) lib;
+            inherit pkgs;
+          };
+      };
+    }
+    // flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [gomod2nix.overlays.default];
+          overlays = [
+            gomod2nix.overlays.default
+            overlay
+          ];
         };
 
-        buildInputs = with pkgs; [
+        devBuildInputs = with pkgs; [
           alejandra
-          go
+          go-bin.versions."1.25.4"
           gofumpt
           golangci-lint
           gomod2nix.packages.${system}.default
@@ -62,7 +84,7 @@
 
           devShells.default = mkShell {
             inherit (pre-commit-check) shellHook;
-            buildInputs = buildInputs ++ pre-commit-check.enabledPackages;
+            buildInputs = devBuildInputs ++ pre-commit-check.enabledPackages;
           };
 
           packages.default = pkgs.callPackage ./. {};
