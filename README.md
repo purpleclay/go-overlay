@@ -45,16 +45,36 @@ go version go1.25.5 linux/amd64
 
 ## Cheat Sheet
 
+Discover the common usage patterns for `go-bin`:
+
 - Always select the latest version of Go:
 
-```sh
+```nix
 go-bin.latest
 ```
 
 - Lock to a specific version of Go for pure reproducibility:
 
-```sh
+```nix
 go-bin.versions."1.17.2"
 go-bin.versions."1.21.4"
 go-bin.versions."1.25.4"
 ```
+
+- Select Go version based on `go.mod` (uses `toolchain` directive if present, otherwise latest patch of `go` directive):
+
+```nix
+go-bin.fromGoMod ./go.mod
+```
+
+- Select exact Go version from `go.mod` (no latest patch fallback, fails if version unavailable):
+
+```nix
+go-bin.fromGoModStrict ./go.mod
+```
+
+| go.mod                           | `fromGoMod`   | `fromGoModStrict` |
+| -------------------------------- | ------------- | ----------------- |
+| `go 1.21`                        | Latest 1.21.x | Error             |
+| `go 1.21.6`                      | 1.21.6        | 1.21.6            |
+| `go 1.21` + `toolchain go1.21.6` | 1.21.6        | 1.21.6            |

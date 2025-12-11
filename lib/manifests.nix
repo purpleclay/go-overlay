@@ -48,6 +48,14 @@
   # in descending order and then take the first element
   sortedVersions = lib.sort (a: b: compareVersions a b > 0) (builtins.attrNames manifests);
   latest = builtins.head sortedVersions;
+
+  # Get the latest patch version for a given minor version (e.g., "1.21" -> "1.21.13")
+  latestPatch = minorVersion: let
+    matching = builtins.filter (v: lib.hasPrefix "${minorVersion}." v) sortedVersions;
+  in
+    if matching == []
+    then null
+    else builtins.head matching;
 in {
-  inherit manifests latest;
+  inherit manifests latest latestPatch;
 }
