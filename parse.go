@@ -41,7 +41,7 @@ func href(ver string) chomp.Combinator[string] {
 
 	return func(s string) (string, string, error) {
 		rem, ext, err := chomp.All(
-			chomp.Until(fmt.Sprintf(`<a class="download" href="/dl/%s.`, normalizedVersion)),
+			chomp.Until(fmt.Sprintf(`<a class="download" href="/dl/%s`, normalizedVersion)),
 			chomp.Delimited(chomp.Tag(`<a class="download" href="`), chomp.Until(`"`), chomp.Tag(`"`)),
 			eol())(s)
 		if err != nil {

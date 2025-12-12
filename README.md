@@ -47,7 +47,7 @@ go version go1.25.5 linux/amd64
 
 Discover the common usage patterns for `go-bin`:
 
-- Always select the latest version of Go:
+- Always select the latest version of Go (_includes release candidates in selection_):
 
 ```nix
 go-bin.latest
