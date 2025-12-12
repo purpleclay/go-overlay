@@ -77,7 +77,7 @@ func (s *Scrape) String() string {
 }
 
 func (s *Scrape) Filename() string {
-	return strings.ReplaceAll(s.Version, ".", "-") + ".nix"
+	return s.Version + ".nix"
 }
 
 func parse(page string, version string, date time.Time) (*Scrape, error) {
