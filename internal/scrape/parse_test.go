@@ -1,7 +1,6 @@
-package main
+package scrape
 
 import (
-	"os"
 	"strings"
 	"testing"
 
@@ -34,7 +33,7 @@ func TestGoVersionCombinator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, actual, err := goVersion()(tt.input)
+			_, actual, err := GoVersion()(tt.input)
 			require.NoError(t, err)
 			require.Equal(t, tt.expected, actual)
 		})
@@ -42,7 +41,7 @@ func TestGoVersionCombinator(t *testing.T) {
 }
 
 func TestGoVersionCombinatorWithInvalidVersion(t *testing.T) {
-	_, _, err := goVersion()("not-a-version")
+	_, _, err := GoVersion()("not-a-version")
 	assert.Error(t, err)
 }
 
@@ -53,7 +52,7 @@ Download
 </a>
 </div>`
 
-	_, result, err := href("go1.21.4")(html)
+	_, result, err := Href("go1.21.4")(html)
 	require.NoError(t, err)
 	require.Equal(t, "/dl/go1.21.4.linux-amd64.tar.gz", result)
 }
@@ -65,7 +64,7 @@ Download
 </a>
 </div>`
 
-	_, result, err := href("1.21.4")(html)
+	_, result, err := Href("1.21.4")(html)
 	require.NoError(t, err)
 	require.Equal(t, "/dl/go1.21.4.linux-amd64.tar.gz", result)
 }
@@ -77,7 +76,7 @@ Download
 </a>
 </div>`
 
-	_, _, err := href("go9.99.99")(html)
+	_, _, err := Href("go9.99.99")(html)
 	assert.Error(t, err)
 }
 
@@ -89,7 +88,7 @@ func TestTargetCombinator(t *testing.T) {
   <td><tt>047bfce4fbd0da6426bd30cd19716b35a466b1c15a45525ce65b9824acb33285</tt></td>
 `
 
-	_, result, err := target()(tableRow)
+	_, result, err := Target()(tableRow)
 	require.NoError(t, err)
 
 	assert.Len(t, result, 5)
@@ -101,10 +100,16 @@ func TestTargetCombinator(t *testing.T) {
 }
 
 func TestSeekDownloadSection(t *testing.T) {
-	fd, err := os.ReadFile("testdata/index-20251207.html")
-	require.NoError(t, err)
+	downloadSection := `<div class="toggle" id="go1.21.4">
+		<div class="collapsed">
+			<h3 class="toggleButton" title="Click to show downloads for this version">
+    <span>go1.21.4</span>
+    <img class="toggleButton-img" src="/images/icons/arrow-down.svg" width="18" height="18" aria-hidden="true" />
+    <img class="toggleButton-img toggleButton-img-dark" src="/images/icons/arrow-down-dark.svg" width="18" height="18" aria-hidden="true" />
+    </h3>
+		</div>`
 
-	result, _, err := seekDownloadSection("1.21.4")(string(fd))
+	result, _, err := SeekDownloadSection("1.21.4")(downloadSection)
 	require.NoError(t, err)
 
 	assert.True(t, strings.HasPrefix(result, `id="go1.21.4"`))

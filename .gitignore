@@ -18,7 +18,7 @@
 !go.mod
 !go.work
 !go.work.sum
-!testdata/*
+!**/testdata/*
 !gomod2nix.toml
 !.golangci.yaml
 
