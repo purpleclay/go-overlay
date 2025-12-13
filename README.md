@@ -2,6 +2,28 @@
 
 Pure and reproducible nix overlay of binary distributed golang toolchains. Current oldest supported toolchain is 1.17, the latest version is always auto-updated through GitHub Actions.
 
+## Quick Start
+
+Try Go without installing anything permanently:
+
+- Run Go directly:
+  ```sh
+  $ nix run github:purpleclay/go-overlay -- version
+  go version go1.25.5 linux/amd64
+  ```
+- Enter a shell with Go available:
+  ```sh
+  $ nix shell github:purpleclay/go-overlay
+  $ go version
+  go version go1.25.5 linux/amd64
+  ```
+- Build the latest Go toolchain:
+  ```sh
+  $ nix build github:purpleclay/go-overlay
+  ./result/bin/go version
+  go version go1.25.5 linux/amd64
+  ```
+
 ## Installation
 
 ### Nix Flakes

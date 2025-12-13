@@ -4,14 +4,14 @@ on:
     branches:
       - main
     paths:
-      - "*.go"
-      - "go.mod"
+      - "scrape/*.go"
+      - "scrape/go.mod"
   pull_request:
     branches:
       - main
     paths:
-      - "*.go"
-      - "go.mod"
+      - "scrape/*.go"
+      - "scrape/go.mod"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,11 +45,11 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
         with:
-          go-version-file: go.mod
+          go-version-file: scrape/go.mod
           cache: true
 
       - name: Format Check
-        run: nix develop -c gofumpt -l .
+        run: nix develop -c gofumpt -l scrape/
 
   golangci-lint:
     runs-on: ubuntu-24.04
@@ -75,11 +75,11 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
         with:
-          go-version-file: go.mod
+          go-version-file: scrape/go.mod
           cache: true
 
       - name: Lint
-        run: nix develop -c golangci-lint run
+        run: nix develop -c golangci-lint run scrape/
 
   test:
     runs-on: ubuntu-24.04
@@ -104,11 +104,11 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
         with:
-          go-version-file: go.mod
+          go-version-file: scrape/go.mod
           cache: true
 
       - name: Run tests
-        run: nix develop -c go test ./...
+        run: nix develop -c go test ./scrape/...
 
   build:
     runs-on: ubuntu-24.04
@@ -133,8 +133,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6
         with:
-          go-version-file: go.mod
+          go-version-file: scrape/go.mod
           cache: true
 
       - name: Build
-        run: nix develop -c go build
+        run: nix develop -c go build ./scrape/...

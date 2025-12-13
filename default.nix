@@ -4,9 +4,9 @@ in
   buildGoApplication {
     pname = "go-scrape";
     inherit version;
-    pwd = ./.;
-    src = ./.;
-    modules = ./gomod2nix.toml;
+    pwd = ./scrape;
+    src = ./scrape;
+    modules = ./scrape/gomod2nix.toml;
     CGO_ENABLED = 0;
     doCheck = false;
   }
