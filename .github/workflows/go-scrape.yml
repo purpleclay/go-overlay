@@ -1,4 +1,4 @@
-name: ci
+name: go-scrape
 on:
   push:
     branches:

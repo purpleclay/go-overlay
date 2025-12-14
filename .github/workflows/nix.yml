@@ -6,16 +6,16 @@ on:
     paths:
       - "*.nix"
       - "**/*.nix"
-      - "go.mod"
       - "flake.lock"
+      - "gomod2nix.toml"
   pull_request:
     branches:
       - main
     paths:
       - "*.nix"
       - "**/*.nix"
-      - "go.mod"
       - "flake.lock"
+      - "gomod2nix.toml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -44,6 +44,7 @@ jobs:
 
       - name: Run Alejandra
         run: nix develop -c alejandra --check .
+
   build:
     runs-on: ${{ matrix.os }}
     name: build / ${{ matrix.os }}
@@ -65,5 +66,56 @@ jobs:
           skipPush: false
           useDaemon: false
 
-      - name: Build Nix Package
+      - name: Build Go Toolchain
         run: nix build
+
+  build-go-scrape:
+    runs-on: ${{ matrix.os }}
+    name: build-go-scrape / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.GH_CACHIX }}"
+          skipPush: false
+          useDaemon: false
+
+      - name: Build go-scrape
+        run: nix build .#go-scrape
+
+  integration:
+    runs-on: ${{ matrix.os }}
+    name: integration / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.GH_CACHIX }}"
+          skipPush: true
+          useDaemon: false
+
+      - name: Build integration test with buildGoModule
+        run: nix build .#integration-test
+
+      - name: Run integration test
+        run: ./result/bin/integration-test
