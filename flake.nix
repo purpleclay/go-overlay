@@ -87,11 +87,17 @@
             buildInputs = devBuildInputs ++ pre-commit-check.enabledPackages;
           };
 
-          packages.default = pkgs.callPackage ./. {};
+          packages.default = pkgs.go-bin.latest;
+          packages.go-scrape = pkgs.callPackage ./. {};
 
           apps.default = {
             type = "app";
-            program = "${self.packages.${system}.default}/bin/go-scrape";
+            program = "${self.packages.${system}.default}/bin/go";
+          };
+
+          apps.go-scrape = {
+            type = "app";
+            program = "${self.packages.${system}.go-scrape}/bin/go-scrape";
           };
         }
     );

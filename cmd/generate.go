@@ -1,8 +1,9 @@
-package main
+package cmd
 
 import (
 	"bytes"
 	"fmt"
+	"go-scrape/internal/scrape"
 	"html/template"
 	"io"
 	"os"
@@ -91,7 +92,7 @@ func parse(page string, version string, date time.Time) (*Scrape, error) {
 
 	rem := page
 	for {
-		if rem, ext, err = chomp.Pair(href(version), target())(rem); err != nil {
+		if rem, ext, err = chomp.Pair(scrape.Href(version), scrape.Target())(rem); err != nil {
 			break
 		}
 
@@ -189,7 +190,7 @@ The output format is compatible with go-overlay and uses Nix system identifiers
 
 			now := time.Now().UTC()
 			for _, ver := range versions {
-				downloadSection, _, err := seekDownloadSection(ver)(page)
+				downloadSection, _, err := scrape.SeekDownloadSection(ver)(page)
 				if err != nil {
 					return err
 				}

@@ -1,4 +1,4 @@
-package main
+package scrape
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"github.com/purpleclay/chomp"
 )
 
-func goVersion() chomp.Combinator[string] {
+func GoVersion() chomp.Combinator[string] {
 	return func(s string) (string, string, error) {
 		rem, rel, err := chomp.All(chomp.Tag("go"), chomp.Any(".1234567890rc"))(s)
 		if err != nil {
@@ -18,7 +18,7 @@ func goVersion() chomp.Combinator[string] {
 	}
 }
 
-func seekDownloadSection(ver string) chomp.Combinator[string] {
+func SeekDownloadSection(ver string) chomp.Combinator[string] {
 	normalizedVersion := ver
 	if !strings.HasPrefix(normalizedVersion, "go") {
 		normalizedVersion = "go" + normalizedVersion
@@ -33,7 +33,7 @@ func seekDownloadSection(ver string) chomp.Combinator[string] {
 	}
 }
 
-func href(ver string) chomp.Combinator[string] {
+func Href(ver string) chomp.Combinator[string] {
 	normalizedVersion := ver
 	if !strings.HasPrefix(normalizedVersion, "go") {
 		normalizedVersion = "go" + normalizedVersion
@@ -63,7 +63,7 @@ func eol() chomp.Combinator[string] {
 	}
 }
 
-func target() chomp.Combinator[[]string] {
+func Target() chomp.Combinator[[]string] {
 	return func(s string) (string, []string, error) {
 		return chomp.All(
 			chomp.Repeat(tableCell("<td>", "</td>"), 4),

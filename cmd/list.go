@@ -1,7 +1,8 @@
-package main
+package cmd
 
 import (
 	"fmt"
+	"go-scrape/internal/scrape"
 	"io"
 	"sort"
 	"strings"
@@ -18,12 +19,12 @@ func listVersions(page, prefix string) ([]string, error) {
 		var ver string
 		var err error
 
-		rem, out, err = href(prefix)(rem)
+		rem, out, err = scrape.Href(prefix)(rem)
 		if err != nil {
 			break
 		}
 
-		_, ver, err = goVersion()(strings.TrimPrefix(out, "/dl/"))
+		_, ver, err = scrape.GoVersion()(strings.TrimPrefix(out, "/dl/"))
 		if err != nil {
 			continue
 		}

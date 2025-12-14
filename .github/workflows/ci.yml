@@ -4,13 +4,13 @@ on:
     branches:
       - main
     paths:
-      - "*.go"
+      - "**.go"
       - "go.mod"
   pull_request:
     branches:
       - main
     paths:
-      - "*.go"
+      - "**.go"
       - "go.mod"
 
 concurrency:

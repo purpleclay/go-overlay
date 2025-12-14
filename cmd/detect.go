@@ -1,7 +1,8 @@
-package main
+package cmd
 
 import (
 	"fmt"
+	"go-scrape/internal/scrape"
 	"io"
 	"strings"
 
@@ -10,20 +11,20 @@ import (
 
 func detectVersion(page, ver string) (string, error) {
 	if ver == "" {
-		return fetchLatestVersion()
+		return scrape.FetchLatestVersion()
 	}
 
 	return parseVersion(page, ver)
 }
 
 func parseVersion(page, ver string) (string, error) {
-	_, ext, err := href(ver)(page)
+	_, ext, err := scrape.Href(ver)(page)
 	if err != nil {
 		return "", fmt.Errorf("version %s not found on https://go.dev/dl/", ver)
 	}
 
 	var rel string
-	_, rel, err = goVersion()(strings.TrimPrefix(ext, "/dl/"))
+	_, rel, err = scrape.GoVersion()(strings.TrimPrefix(ext, "/dl/"))
 	if err != nil {
 		return "", fmt.Errorf("failed to parse version from download link: %w", err)
 	}
