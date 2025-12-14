@@ -76,6 +76,15 @@
             };
           };
         };
+
+        # Generate versioned package names (e.g., "1.25.5" -> "go_1_25_5", "1.25rc3" -> "go_1_25rc3")
+        versionToPackageName = version:
+          "go_" + builtins.replaceStrings ["."] ["_"] version;
+
+        versionedPackages =
+          pkgs.lib.mapAttrs'
+          (version: drv: pkgs.lib.nameValuePair (versionToPackageName version) drv)
+          pkgs.go-bin.versions;
       in
         with pkgs; {
           checks = {
@@ -87,12 +96,17 @@
             buildInputs = devBuildInputs ++ pre-commit-check.enabledPackages;
           };
 
-          packages.default = pkgs.go-bin.latest;
-          packages.go-scrape = pkgs.callPackage ./. {};
-          packages.integration-test = import ./test/integration {
-            inherit pkgs;
-            go = pkgs.go-bin.versions."1.22.3";
-          };
+          packages =
+            versionedPackages
+            // {
+              default = pkgs.go-bin.latest;
+              go = pkgs.go-bin.latest;
+              go-scrape = pkgs.callPackage ./. {};
+              integration-test = import ./test/integration {
+                inherit pkgs;
+                go = pkgs.go-bin.versions."1.22.3";
+              };
+            };
 
           apps.default = {
             type = "app";

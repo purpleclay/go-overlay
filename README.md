@@ -6,12 +6,12 @@ Pure and reproducible nix overlay of binary distributed golang toolchains. Curre
 
 Try Go without installing anything permanently:
 
-- Run Go directly:
+- Run the latest Go toolchain directly:
   ```sh
   $ nix run github:purpleclay/go-overlay -- version
   go version go1.25.5 linux/amd64
   ```
-- Enter a shell with Go available:
+- Enter a shell with the latest Go toolchain available:
   ```sh
   $ nix shell github:purpleclay/go-overlay
   $ go version
@@ -22,6 +22,11 @@ Try Go without installing anything permanently:
   $ nix build github:purpleclay/go-overlay
   ./result/bin/go version
   go version go1.25.5 linux/amd64
+  ```
+- Select a specific version of Go through the exposed packages. A package takes on the format `go_<major>_<minor>_<patch>`:
+  ```sh
+  $ nix shell github:purpleclay/go-overlay#go_1_23_2 -- version
+  go version go1.23.2 linux/amd64
   ```
 
 ## Installation
