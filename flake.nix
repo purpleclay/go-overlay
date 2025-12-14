@@ -89,6 +89,10 @@
 
           packages.default = pkgs.go-bin.latest;
           packages.go-scrape = pkgs.callPackage ./. {};
+          packages.integration-test = import ./test/integration {
+            inherit pkgs;
+            go = pkgs.go-bin.versions."1.22.3";
+          };
 
           apps.default = {
             type = "app";

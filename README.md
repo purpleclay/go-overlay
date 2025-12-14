@@ -100,3 +100,29 @@ go-bin.fromGoModStrict ./go.mod
 | `go 1.21`                        | Latest 1.21.x | Error             |
 | `go 1.21.6`                      | 1.21.6        | 1.21.6            |
 | `go 1.21` + `toolchain go1.21.6` | 1.21.6        | 1.21.6            |
+
+## Using with buildGoModule
+
+To use go-overlay with nixpkgs' `buildGoModule`, you must use `.override` to replace the Go toolchain. Passing `go` as a build argument will **not work**, as it will default to nixpkgs' `go` package.
+
+```nix
+# default.nix
+{
+  pkgs,
+  go,
+}:
+(pkgs.buildGoModule.override {inherit go;}) {
+  pname = "my-app";
+  version = "1.0.0";
+  src = ./.;
+  vendorHash = "sha256-...";
+}
+```
+
+```nix
+# flake.nix
+packages.my-app = import ./. {
+  inherit pkgs;
+  go = pkgs.go-bin.versions."1.22.3";
+};
+```
