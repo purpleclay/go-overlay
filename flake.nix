@@ -101,7 +101,7 @@
             // {
               default = pkgs.go-bin.latest;
               go = pkgs.go-bin.latest;
-              go-scrape = pkgs.callPackage ./. {};
+              go-scrape = pkgs.callPackage ./package.nix {};
               integration-test = import ./test/integration {
                 inherit pkgs;
                 go = pkgs.go-bin.versions."1.22.3";
