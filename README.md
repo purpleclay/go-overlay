@@ -70,6 +70,72 @@ $ go version
 go version go1.25.5 linux/amd64
 ```
 
+### Traditional Nix (non-flake)
+
+For users not using flakes, go-overlay can be imported directly as an overlay.
+
+> [!TIP]
+> The examples below use `main.tar.gz` for simplicity, but for reproducible builds consider pinning to a specific commit:
+> ```nix
+> builtins.fetchTarball "https://github.com/purpleclay/go-overlay/archive/<commit-sha>.tar.gz"
+> ```
+
+**Option 1: Using fetchTarball**
+
+```nix
+let
+  go-overlay = import (builtins.fetchTarball
+    "https://github.com/purpleclay/go-overlay/archive/main.tar.gz");
+
+  pkgs = import <nixpkgs> {
+    overlays = [ go-overlay ];
+  };
+in
+pkgs.mkShell {
+  buildInputs = [ pkgs.go-bin.latest ];
+}
+```
+
+**Option 2: Add to overlays.nix**
+
+Add go-overlay to your user overlays in `~/.config/nixpkgs/overlays.nix`:
+
+```nix
+[
+  (import (builtins.fetchTarball
+    "https://github.com/purpleclay/go-overlay/archive/main.tar.gz"))
+]
+```
+
+Then use it in any Nix expression:
+
+```nix
+let
+  pkgs = import <nixpkgs> {};
+in
+pkgs.go-bin.latest
+```
+
+**Option 3: Using nix-channel**
+
+```sh
+$ nix-channel --add https://github.com/purpleclay/go-overlay/archive/main.tar.gz go-overlay
+$ nix-channel --update
+```
+
+Then import the channel as an overlay:
+
+```nix
+let
+  go-overlay = import <go-overlay>;
+
+  pkgs = import <nixpkgs> {
+    overlays = [ go-overlay ];
+  };
+in
+pkgs.go-bin.latest
+```
+
 ## Cheat Sheet
 
 Discover the common usage patterns for `go-bin`:

@@ -1,13 +1,8 @@
-{buildGoApplication}: let
-  version = "dev";
-in
-  buildGoApplication {
-    pname = "go-scrape";
-    inherit version;
-    pwd = ./.;
-    src = ./.;
-    modules = ./gomod2nix.toml;
-    subPackages = ["."];
-    CGO_ENABLED = 0;
-    doCheck = false;
-  }
+# Overlay for traditional (non-flake) Nix usage
+# This can be imported directly or added to nixpkgs overlays
+final: prev: {
+  go-bin = import ./lib {
+    lib = final.lib;
+    pkgs = final;
+  };
+}
