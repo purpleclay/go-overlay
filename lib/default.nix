@@ -71,9 +71,12 @@
     else if parsed.go != null
     then resolveVersion parsed.go false
     else throw "go-overlay: Could not parse Go version from ${toString path}";
+
+  # Check if an exact version is available
+  hasVersion = version: builtins.hasAttr version allVersions;
 in {
   latest = allVersions.${manifestsLib.latest};
   latestStable = allVersions.${manifestsLib.latestStable};
   versions = allVersions;
-  inherit fromGoMod fromGoModStrict;
+  inherit fromGoMod fromGoModStrict hasVersion;
 }

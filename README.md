@@ -160,6 +160,18 @@ go-bin.versions."1.21.4"
 go-bin.versions."1.25.4"
 ```
 
+- Check if a specific version is available before using it:
+
+```nix
+go-bin.hasVersion "1.21.4"  # true
+go-bin.hasVersion "1.99.0"  # false
+
+# Use in conditional expressions
+if go-bin.hasVersion "1.22.0"
+then go-bin.versions."1.22.0"
+else go-bin.latestStable
+```
+
 - Select Go version based on `go.mod` (uses `toolchain` directive if present, otherwise latest patch of `go` directive):
 
 ```nix
