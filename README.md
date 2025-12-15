@@ -172,6 +172,16 @@ then go-bin.versions."1.22.0"
 else go-bin.latestStable
 ```
 
+- Check if a version is deprecated (EOL) according to Go's [release policy](https://go.dev/doc/devel/release#policy):
+
+```nix
+# Go supports the current and previous minor versions
+# If latestStable is 1.25.x, then 1.25.x and 1.24.x are supported
+go-bin.isDeprecated "1.23.4"  # true (two versions behind)
+go-bin.isDeprecated "1.24.0"  # false (previous minor, supported)
+go-bin.isDeprecated "1.25.0"  # false (current minor, supported)
+```
+
 - Select Go version based on `go.mod` (uses `toolchain` directive if present, otherwise latest patch of `go` directive):
 
 ```nix

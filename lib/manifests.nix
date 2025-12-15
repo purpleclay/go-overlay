@@ -79,6 +79,19 @@
     if matching == []
     then null
     else builtins.head matching;
+
+  # Check if a version is deprecated according to Go's support policy.
+  # Go supports the current and previous minor versions (e.g., 1.23.x and 1.22.x).
+  # RCs are not considered deprecated (they are pre-release, not post-support).
+  isDeprecated = version: let
+    parsed = parseVersion version;
+    latestStableParsed = parseVersion latestStable;
+    # Go supports N and N-1 minor versions
+    minSupportedMinor = latestStableParsed.minor - 1;
+  in
+    parsed.major
+    < latestStableParsed.major
+    || (parsed.major == latestStableParsed.major && parsed.minor < minSupportedMinor);
 in {
-  inherit manifests latest latestStable latestPatch;
+  inherit manifests latest latestStable latestPatch isDeprecated;
 }
