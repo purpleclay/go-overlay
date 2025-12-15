@@ -74,9 +74,12 @@
 
   # Check if an exact version is available
   hasVersion = version: builtins.hasAttr version allVersions;
+
+  # Check if a version is deprecated (EOL) according to Go's support policy
+  isDeprecated = manifestsLib.isDeprecated;
 in {
   latest = allVersions.${manifestsLib.latest};
   latestStable = allVersions.${manifestsLib.latestStable};
   versions = allVersions;
-  inherit fromGoMod fromGoModStrict hasVersion;
+  inherit fromGoMod fromGoModStrict hasVersion isDeprecated;
 }
