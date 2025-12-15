@@ -18,8 +18,8 @@ func GoVersion() chomp.Combinator[string] {
 	}
 }
 
-func SeekDownloadSection(ver string) chomp.Combinator[string] {
-	normalizedVersion := ver
+func SeekDownloadSection(version string) chomp.Combinator[string] {
+	normalizedVersion := version
 	if !strings.HasPrefix(normalizedVersion, "go") {
 		normalizedVersion = "go" + normalizedVersion
 	}
@@ -33,15 +33,20 @@ func SeekDownloadSection(ver string) chomp.Combinator[string] {
 	}
 }
 
-func Href(ver string) chomp.Combinator[string] {
-	normalizedVersion := ver
+func Href(version string) chomp.Combinator[string] {
+	normalizedVersion := version
 	if !strings.HasPrefix(normalizedVersion, "go") {
 		normalizedVersion = "go" + normalizedVersion
 	}
 
+	hrefVersion := normalizedVersion
+	if !strings.Contains(normalizedVersion, "rc") && !strings.Contains(normalizedVersion, "beta") {
+		hrefVersion = normalizedVersion + "."
+	}
+
 	return func(s string) (string, string, error) {
 		rem, ext, err := chomp.All(
-			chomp.Until(fmt.Sprintf(`<a class="download" href="/dl/%s`, normalizedVersion)),
+			chomp.Until(fmt.Sprintf(`<a class="download" href="/dl/%s`, hrefVersion)),
 			chomp.Delimited(chomp.Tag(`<a class="download" href="`), chomp.Until(`"`), chomp.Tag(`"`)),
 			eol())(s)
 		if err != nil {

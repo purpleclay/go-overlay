@@ -35,6 +35,8 @@ jobs:
 
       - name: Generate Manifest
         if: ${{ env.MANIFEST_EXISTS != 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           nix run .#go-scrape -- generate ${{ env.LATEST_GO_VERSION }} --output manifests
 

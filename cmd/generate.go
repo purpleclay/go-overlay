@@ -2,16 +2,20 @@ package cmd
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
+	"go-scrape/internal/github"
 	"go-scrape/internal/scrape"
 	"html/template"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/purpleclay/chomp"
+	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
 )
 
@@ -188,18 +192,35 @@ The output format is compatible with go-overlay and uses Nix system identifiers
 				}
 			}
 
-			now := time.Now().UTC()
+			p := pool.NewWithResults[*Scrape]().WithMaxGoroutines(10).WithErrors()
+
 			for _, ver := range versions {
-				downloadSection, _, err := scrape.SeekDownloadSection(ver)(page)
-				if err != nil {
-					return err
-				}
+				p.Go(func() (*Scrape, error) {
+					downloadSection, _, err := scrape.SeekDownloadSection(ver)(page)
+					if err != nil {
+						return nil, fmt.Errorf("failed to find download section for %s: %w", ver, err)
+					}
 
-				s, err := parse(downloadSection, ver, now)
-				if err != nil {
-					return err
-				}
+					releaseDate, err := github.FetchReleaseDate(ver)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "warning: %s - using current date\n", err)
+						releaseDate = time.Now().UTC()
+					}
 
+					return parse(downloadSection, ver, releaseDate)
+				})
+			}
+
+			results, err := p.Wait()
+			if err != nil {
+				return err
+			}
+
+			slices.SortFunc(results, func(a, b *Scrape) int {
+				return cmp.Compare(a.Version, b.Version)
+			})
+
+			for _, s := range results {
 				if outputDir != "" {
 					filename := s.Filename()
 					path := filepath.Join(outputDir, filename)
