@@ -73,6 +73,7 @@
     else throw "go-overlay: Could not parse Go version from ${toString path}";
 in {
   latest = allVersions.${manifestsLib.latest};
+  latestStable = allVersions.${manifestsLib.latestStable};
   versions = allVersions;
   inherit fromGoMod fromGoModStrict;
 }

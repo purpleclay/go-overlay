@@ -146,6 +146,12 @@ Discover the common usage patterns for `go-bin`:
 go-bin.latest
 ```
 
+- Select the latest stable version of Go (_excludes release candidates_):
+
+```nix
+go-bin.latestStable
+```
+
 - Lock to a specific version of Go for pure reproducibility:
 
 ```nix
