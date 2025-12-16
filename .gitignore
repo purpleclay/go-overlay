@@ -12,6 +12,7 @@
 !flake.nix
 !*.nix
 !.envrc
+!test/fixtures/*
 
 !*.go
 !go.sum

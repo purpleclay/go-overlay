@@ -85,11 +85,15 @@
           pkgs.lib.mapAttrs'
           (version: drv: pkgs.lib.nameValuePair (versionToPackageName version) drv)
           pkgs.go-bin.versions;
+
+        libTests = import ./test {inherit pkgs;};
       in
         with pkgs; {
-          checks = {
-            inherit pre-commit-check;
-          };
+          checks =
+            {
+              inherit pre-commit-check;
+            }
+            // libTests;
 
           devShells.default = mkShell {
             inherit (pre-commit-check) shellHook;
@@ -111,11 +115,21 @@
           apps.default = {
             type = "app";
             program = "${self.packages.${system}.default}/bin/go";
+            meta = {
+              description = "The Go programming language";
+              homepage = "https://go.dev/";
+              license = lib.licenses.bsd3;
+            };
           };
 
           apps.go-scrape = {
             type = "app";
             program = "${self.packages.${system}.go-scrape}/bin/go-scrape";
+            meta = {
+              description = "A tool for scraping Go source code";
+              homepage = "https://github.com/golang/go-scrape";
+              license = licenses.mit;
+            };
           };
         }
     );
