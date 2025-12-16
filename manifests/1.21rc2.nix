@@ -37,10 +37,6 @@
   };
   "armv7l-linux" = {
     sha256 = "0f82199e49978db858a8ed2c6b8d842b9674fd577c4ab91cc4b6b11672375993";
-    url = "https://go.dev/dl/go1.21rc2.linux-arm.tar.gz";
-  };
-  "armv7l-linux" = {
-    sha256 = "0f82199e49978db858a8ed2c6b8d842b9674fd577c4ab91cc4b6b11672375993";
     url = "https://go.dev/dl/go1.21rc2.linux-armv6l.tar.gz";
   };
   "loongarch64-linux" = {
