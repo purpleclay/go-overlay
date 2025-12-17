@@ -5,14 +5,6 @@
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
 
-    gomod2nix = {
-      url = "github:nix-community/gomod2nix";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        flake-utils.follows = "flake-utils";
-      };
-    };
-
     git-hooks = {
       url = "github:cachix/git-hooks.nix";
       inputs = {
@@ -25,7 +17,6 @@
     self,
     nixpkgs,
     flake-utils,
-    gomod2nix,
     git-hooks,
   }: let
     overlay = final: prev: {
@@ -51,10 +42,7 @@
       system: let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [
-            gomod2nix.overlays.default
-            overlay
-          ];
+          overlays = [overlay];
         };
 
         devBuildInputs = with pkgs; [
@@ -62,7 +50,6 @@
           go-bin.versions."1.25.4"
           gofumpt
           golangci-lint
-          gomod2nix.packages.${system}.default
           nil
         ];
 
@@ -105,7 +92,10 @@
             // {
               default = pkgs.go-bin.latest;
               go = pkgs.go-bin.latest;
-              go-scrape = pkgs.callPackage ./package.nix {};
+              go-scrape = import ./package.nix {
+                inherit pkgs;
+                go = pkgs.go-bin.fromGoMod ./go.mod;
+              };
               integration-test = import ./test/integration {
                 inherit pkgs;
                 go = pkgs.go-bin.versions."1.22.3";

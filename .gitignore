@@ -20,7 +20,6 @@
 !go.work
 !go.work.sum
 !**/testdata/*
-!gomod2nix.toml
 !.golangci.yaml
 
 # Recurse through sub-directories applying the same patterns
