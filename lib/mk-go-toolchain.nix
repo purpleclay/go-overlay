@@ -34,8 +34,16 @@ in
 
       installPhase = ''
         runHook preInstall
-        mkdir -p $out
-        cp -r ./* $out/
+
+        # Install Go distribution to share/go (matching nixpkgs structure)
+        mkdir -p $out/share/go
+        cp -r ./* $out/share/go/
+
+        # Create bin directory with symlinks to the Go binaries
+        mkdir -p $out/bin
+        ln -s $out/share/go/bin/go $out/bin/go
+        ln -s $out/share/go/bin/gofmt $out/bin/gofmt
+
         runHook postInstall
       '';
 

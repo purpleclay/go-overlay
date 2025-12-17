@@ -18,6 +18,7 @@ Nix overlay for Go toolchains. Pure[^1], reproducible[^2], auto-updated[^3] bina
 - [Library Functions](#library-functions)
 - [Using with buildGoModule](#using-with-buildgomodule)
 - [Migrating from nixpkgs](#migrating-from-nixpkgs)
+- [Limitations](#limitations)
 - [Used by](#used-by)
 
 ## Why it exists?
@@ -328,6 +329,20 @@ Migrating from nixpkgs to go-overlay involves changing how Go versions are speci
   buildInputs = [ pkgs.go-bin.versions."1.24.5" ];
 }
 ```
+
+## Limitations
+
+### Incompatible with buildGoApplication (gomod2nix)
+
+go-overlay is **not compatible** with `buildGoApplication` from [gomod2nix](https://github.com/nix-community/gomod2nix).
+
+#### Why?
+
+Nixpkgs applies a [custom patch](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/compilers/go/go_no_vendor_checks-1.23.patch) to Go that adds support for the `GO_NO_VENDOR_CHECKS` environment variable. This patch allows `buildGoApplication` to skip vendor consistency checks when no `vendor/modules.txt` file is present. go-overlay uses pre-built binary distributions from [go.dev](https://go.dev/dl/), which do not include this patch. As a result, Go 1.14+ will fail with "inconsistent vendoring" errors when used with `buildGoApplication`.
+
+#### Workaround:
+
+Use `buildGoModule` instead of `buildGoApplication`. See [Using with buildGoModule](#using-with-buildgomodule) for details.
 
 ## Used By
 
