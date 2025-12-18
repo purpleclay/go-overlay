@@ -1,11 +1,11 @@
-package cmd
+package goscrape
 
 import (
 	"fmt"
-	"go-scrape/internal/scrape"
 	"io"
 	"strings"
 
+	"github.com/purpleclay/go-overlay/internal/scrape"
 	"github.com/spf13/cobra"
 )
 
