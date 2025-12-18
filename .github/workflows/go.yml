@@ -1,4 +1,4 @@
-name: go-scrape
+name: go
 on:
   push:
     branches:
@@ -137,4 +137,4 @@ jobs:
           cache: true
 
       - name: Build
-        run: nix develop -c go build
+        run: nix develop -c go build ./...

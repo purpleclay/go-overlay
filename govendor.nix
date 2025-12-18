@@ -3,11 +3,11 @@
   go,
 }:
 (pkgs.buildGoModule.override {inherit go;}) {
-  pname = "go-scrape";
+  pname = "go-vendor";
   version = "dev";
   src = ./.;
-  subPackages = ["."];
+  subPackages = ["cmd/govendor"];
   env.CGO_ENABLED = 0;
   doCheck = false;
-  vendorHash = "sha256-hgf8Oxb0gifbHKnlP/Yi258AGpdLe0HZm9lPieSCzlo=";
+  vendorHash = "sha256-ig8Hs5uZ4CEplU/6YNDNNfBKy9FKa/Zcvt5dzpiVwhM=";
 }

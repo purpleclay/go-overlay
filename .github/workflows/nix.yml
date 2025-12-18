@@ -93,9 +93,9 @@ jobs:
       - name: Build Go Toolchain
         run: nix build
 
-  build-go-scrape:
+  build-goscrape:
     runs-on: ${{ matrix.os }}
-    name: build-go-scrape / ${{ matrix.os }}
+    name: build-goscrape / ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-24.04, macos-15]
@@ -116,6 +116,30 @@ jobs:
 
       - name: Build go-scrape
         run: nix build .#go-scrape
+
+  build-govendor:
+    runs-on: ${{ matrix.os }}
+    name: build-govendor / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.GH_CACHIX }}"
+          skipPush: false
+          useDaemon: false
+
+      - name: Build go-vendor
+        run: nix build .#go-vendor
 
   integration:
     runs-on: ${{ matrix.os }}

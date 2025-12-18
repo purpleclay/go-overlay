@@ -1,11 +1,9 @@
-package cmd
+package goscrape
 
 import (
 	"bytes"
 	"cmp"
 	"fmt"
-	"go-scrape/internal/github"
-	"go-scrape/internal/scrape"
 	"html/template"
 	"io"
 	"os"
@@ -15,6 +13,8 @@ import (
 	"time"
 
 	"github.com/purpleclay/chomp"
+	"github.com/purpleclay/go-overlay/internal/github"
+	"github.com/purpleclay/go-overlay/internal/scrape"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
 )

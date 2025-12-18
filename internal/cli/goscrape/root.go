@@ -1,10 +1,10 @@
-package cmd
+package goscrape
 
 import (
 	"context"
-	"go-scrape/internal/scrape"
 	"io"
 
+	"github.com/purpleclay/go-overlay/internal/scrape"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +14,7 @@ const pageDataKey contextKey = "pageData"
 
 func Execute(out io.Writer) error {
 	cmd := &cobra.Command{
-		Use:   "go-scrape",
+		Use:   "goscrape",
 		Short: "Tools for scraping Go releases and generating Nix manifests",
 		Long: `go-scrape provides utilities for working with Go releases from https://go.dev/dl/
 including listing available versions, detecting latest releases, and generating
