@@ -73,6 +73,7 @@ func Execute(out io.Writer) error {
 	var (
 		recursive bool
 		depth     int
+		quiet     bool
 	)
 
 	cmd := &cobra.Command{
@@ -92,15 +93,21 @@ vendored dependencies without requiring nixpkgs' patched Go toolchain.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if recursive {
-				return scanAndVendor(out, depth)
+			w := out
+			if quiet {
+				w = io.Discard
 			}
-			return vendor(out, ".")
+
+			if recursive {
+				return scanAndVendor(w, depth)
+			}
+			return vendor(w, ".")
 		},
 	}
 
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "recursively scan for go.mod files")
 	cmd.Flags().IntVarP(&depth, "depth", "d", 0, "limit directory traversal depth (0 = unlimited, requires --recursive)")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "suppress output except errors")
 	return cmd.Execute()
 }
 
