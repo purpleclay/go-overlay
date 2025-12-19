@@ -3,7 +3,7 @@ module github.com/purpleclay/go-overlay
 go 1.25.4
 
 require (
-	github.com/BurntSushi/toml v1.5.0
+	github.com/BurntSushi/toml v1.6.0
 	github.com/nix-community/go-nix v0.0.0-20250101154619-4bdde671e0a1
 	github.com/purpleclay/chomp v0.4.0
 	github.com/sourcegraph/conc v0.3.0
