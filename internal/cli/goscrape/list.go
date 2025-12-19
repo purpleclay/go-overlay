@@ -49,13 +49,13 @@ func newListCmd(out io.Writer) *cobra.Command {
 Go versions. Optionally filter by a version prefix to show only versions
 matching a specific release line.`,
 		Example: `  # List all available Go versions
-  $ go-scrape list
+  $ goscrape list
 
   # List all Go 1.21.x versions
-  $ go-scrape list 1.21
+  $ goscrape list 1.21
 
   # List all Go 1.20.x versions
-  $ go-scrape list go1.20`,
+  $ goscrape list go1.20`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.RangeArgs(0, 1),

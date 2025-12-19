@@ -16,7 +16,7 @@ func Execute(out io.Writer) error {
 	cmd := &cobra.Command{
 		Use:   "goscrape",
 		Short: "Tools for scraping Go releases and generating Nix manifests",
-		Long: `go-scrape provides utilities for working with Go releases from https://go.dev/dl/
+		Long: `goscrape provides utilities for working with Go releases from https://go.dev/dl/
 including listing available versions, detecting latest releases, and generating
 Nix manifest files with SHA256 hashes for each platform.`,
 		SilenceUsage:  true,

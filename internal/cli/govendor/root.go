@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -26,6 +27,8 @@ const (
 	vendorFile = "govendor.toml"
 	goModFile  = "go.mod"
 )
+
+var errNoDependencies = fmt.Errorf("no dependencies")
 
 //nolint:tagliatelle
 type goModuleMetadata struct {
@@ -147,17 +150,27 @@ func scanAndVendor(out io.Writer, maxDepth int) error {
 	sort.Strings(modDirs)
 
 	var errs []error
+	var skipped int
 	for _, dir := range modDirs {
 		relDir, _ := filepath.Rel(root, dir)
 		if relDir == "" {
 			relDir = "."
 		}
 		if err := vendor(out, dir); err != nil {
+			if errors.Is(err, errNoDependencies) {
+				fmt.Fprintf(out, "skipping %s - no dependencies\n", relDir)
+				skipped++
+				continue
+			}
 			errs = append(errs, fmt.Errorf("%s: %w", relDir, err))
 		}
 	}
 
-	fmt.Fprintf(out, "found %d modules\n", len(modDirs))
+	if skipped > 0 {
+		fmt.Fprintf(out, "found %d modules (%d skipped)\n", len(modDirs), skipped)
+	} else {
+		fmt.Fprintf(out, "found %d modules\n", len(modDirs))
+	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("errors occurred: %v", errs)
@@ -176,6 +189,10 @@ func vendor(out io.Writer, dir string) error {
 	goMod, err := modfile.Parse(goModPath, data, nil)
 	if err != nil {
 		return err
+	}
+
+	if len(goMod.Require) == 0 {
+		return errNoDependencies
 	}
 
 	replacements := make(map[string]string)
