@@ -92,11 +92,11 @@
             // {
               default = pkgs.go-bin.latest;
               go = pkgs.go-bin.latest;
-              go-scrape = import ./goscrape.nix {
+              goscrape = import ./goscrape.nix {
                 inherit pkgs;
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
               };
-              go-vendor = import ./govendor.nix {
+              govendor = import ./govendor.nix {
                 inherit pkgs;
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
               };
@@ -116,9 +116,9 @@
             };
           };
 
-          apps.go-scrape = {
+          apps.goscrape = {
             type = "app";
-            program = "${self.packages.${system}.go-scrape}/bin/go-scrape";
+            program = "${self.packages.${system}.goscrape}/bin/goscrape";
             meta = {
               description = "A tool for scraping Go toolchains from https://go.dev/dl/";
               homepage = "https://github.com/golang/go-overlay";
@@ -127,9 +127,9 @@
             };
           };
 
-          apps.go-vendor = {
+          apps.govendor = {
             type = "app";
-            program = "${self.packages.${system}.go-vendor}/bin/go-vendor";
+            program = "${self.packages.${system}.govendor}/bin/govendor";
             meta = {
               description = "A tool for vendoring Go dependencies for a Go project";
               homepage = "https://github.com/golang/go-overlay";
