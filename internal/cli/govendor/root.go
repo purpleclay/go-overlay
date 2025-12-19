@@ -67,7 +67,10 @@ var skipDirs = map[string]bool{
 }
 
 func Execute(out io.Writer) error {
-	var recursive bool
+	var (
+		recursive bool
+		depth     int
+	)
 
 	cmd := &cobra.Command{
 		Use:   "go-vendor",
@@ -78,21 +81,27 @@ with go-overlay's buildGoApplication Nix function.
 The manifest includes module versions, NAR hashes, Go version requirements,
 and package lists. This metadata enables Nix to build Go applications using
 vendored dependencies without requiring nixpkgs' patched Go toolchain.`,
+		Example: `  # Generate vendor manifest for current go.mod
+  govendor
+
+  # Recursively scan for go.mod files, limiting depth to 2 directories
+  govendor --recursive --depth 2`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if recursive {
-				return scanAndVendor(out)
+				return scanAndVendor(out, depth)
 			}
 			return vendor(out, ".")
 		},
 	}
 
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "recursively scan for go.mod files")
+	cmd.Flags().IntVarP(&depth, "depth", "d", 0, "limit directory traversal depth (0 = unlimited, requires --recursive)")
 	return cmd.Execute()
 }
 
-func scanAndVendor(out io.Writer) error {
+func scanAndVendor(out io.Writer, maxDepth int) error {
 	root, err := os.Getwd()
 	if err != nil {
 		return err
@@ -102,7 +111,8 @@ func scanAndVendor(out io.Writer) error {
 	var mu sync.Mutex
 
 	conf := fastwalk.Config{
-		Follow: false,
+		Follow:   false,
+		MaxDepth: maxDepth,
 	}
 
 	err = fastwalk.Walk(&conf, root, func(path string, d fs.DirEntry, err error) error {
