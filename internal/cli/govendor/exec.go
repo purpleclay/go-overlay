@@ -26,7 +26,7 @@ func (DevNull) Close() error {
 	return nil
 }
 
-func exec(args []string) (string, error) {
+func exec(args []string, dir string) (string, error) {
 	cmd := strings.Join(args, " ")
 	p, err := syntax.NewParser().Parse(strings.NewReader(cmd), "")
 	if err != nil {
@@ -39,6 +39,7 @@ func exec(args []string) (string, error) {
 		interp.StdIO(os.Stdin, &stdout, os.Stderr),
 		interp.OpenHandler(openHandler),
 		interp.Env(expand.ListEnviron(os.Environ()...)),
+		interp.Dir(dir),
 	)
 	if err != nil {
 		return "", err

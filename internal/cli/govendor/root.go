@@ -7,12 +7,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/BurntSushi/toml"
+	"github.com/charlievieth/fastwalk"
 	"github.com/nix-community/go-nix/pkg/nar"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
@@ -21,6 +24,7 @@ import (
 
 const (
 	vendorFile = "govendor.toml"
+	goModFile  = "go.mod"
 )
 
 //nolint:tagliatelle
@@ -45,7 +49,26 @@ type goModule struct {
 	ReplacedPath string   `toml:"replaced,omitempty"`
 }
 
+var skipDirs = map[string]bool{
+	"__pycache__":  true,
+	".cache":       true,
+	".devenv":      true,
+	".direnv":      true,
+	".git":         true,
+	".terraform":   true,
+	".venv":        true,
+	"build":        true,
+	"dist":         true,
+	"node_modules": true,
+	"result":       true,
+	"target":       true,
+	"testdata":     true,
+	"vendor":       true,
+}
+
 func Execute(out io.Writer) error {
+	var recursive bool
+
 	cmd := &cobra.Command{
 		Use:   "go-vendor",
 		Short: "Generate a vendor manifest for building Go applications with Nix",
@@ -58,38 +81,91 @@ vendored dependencies without requiring nixpkgs' patched Go toolchain.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			manifest, err := vendor()
-			if err != nil {
-				return err
+			if recursive {
+				return scanAndVendor(out)
 			}
-
-			var buf bytes.Buffer
-			encoder := toml.NewEncoder(&buf)
-			if err := encoder.Encode(manifest); err != nil {
-				return err
-			}
-
-			if err := os.WriteFile(vendorFile, buf.Bytes(), 0o644); err != nil {
-				return err
-			}
-
-			fmt.Fprintf(out, "wrote %s with %d modules\n", vendorFile, len(manifest.Mod))
-			return nil
+			return vendor(out, ".")
 		},
 	}
 
+	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "recursively scan for go.mod files")
 	return cmd.Execute()
 }
 
-func vendor() (*vendorManifest, error) {
-	data, err := os.ReadFile("go.mod")
+func scanAndVendor(out io.Writer) error {
+	root, err := os.Getwd()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	goMod, err := modfile.Parse("go.mod", data, nil)
+	var modDirs []string
+	var mu sync.Mutex
+
+	conf := fastwalk.Config{
+		Follow: false,
+	}
+
+	err = fastwalk.Walk(&conf, root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() {
+			if skipDirs[d.Name()] {
+				return fastwalk.SkipDir
+			}
+			return nil
+		}
+
+		if d.Name() == goModFile {
+			mu.Lock()
+			modDirs = append(modDirs, filepath.Dir(path))
+			mu.Unlock()
+		}
+
+		return nil
+	})
 	if err != nil {
-		return nil, err
+		return err
+	}
+
+	if len(modDirs) == 0 {
+		fmt.Fprintln(out, "no go.mod files found")
+		return nil
+	}
+
+	sort.Strings(modDirs)
+
+	var errs []error
+	for _, dir := range modDirs {
+		relDir, _ := filepath.Rel(root, dir)
+		if relDir == "" {
+			relDir = "."
+		}
+		if err := vendor(out, dir); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", relDir, err))
+		}
+	}
+
+	fmt.Fprintf(out, "found %d modules\n", len(modDirs))
+
+	if len(errs) > 0 {
+		return fmt.Errorf("errors occurred: %v", errs)
+	}
+
+	return nil
+}
+
+func vendor(out io.Writer, dir string) error {
+	goModPath := filepath.Join(dir, goModFile)
+	data, err := os.ReadFile(goModPath)
+	if err != nil {
+		return err
+	}
+
+	goMod, err := modfile.Parse(goModPath, data, nil)
+	if err != nil {
+		return err
 	}
 
 	replacements := make(map[string]string)
@@ -97,33 +173,47 @@ func vendor() (*vendorManifest, error) {
 		replacements[repl.New.Path] = repl.Old.Path
 	}
 
-	pkgsByMod, err := packagesByModule(goMod.Module.Mod.Path)
+	pkgsByMod, err := packagesByModule(goMod.Module.Mod.Path, dir)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	downloads, err := downloadModules()
+	downloads, err := downloadModules(dir)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	goModules, err := resolveGoModules(downloads, pkgsByMod, replacements)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	mod := map[string]goModule{}
-	for _, goModule := range goModules {
-		mod[goModule.Path] = goModule
+	for _, m := range goModules {
+		mod[m.Path] = m
 	}
 
-	return &vendorManifest{
+	manifest := &vendorManifest{
 		Schema: 1,
 		Mod:    mod,
-	}, nil
+	}
+
+	var buf bytes.Buffer
+	encoder := toml.NewEncoder(&buf)
+	if err := encoder.Encode(manifest); err != nil {
+		return err
+	}
+
+	outputPath := filepath.Join(dir, vendorFile)
+	if err := os.WriteFile(outputPath, buf.Bytes(), 0o644); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(out, "wrote %s with %d modules\n", outputPath, len(manifest.Mod))
+	return nil
 }
 
-func packagesByModule(ownModule string) (map[string][]string, error) {
+func packagesByModule(ownModule, dir string) (map[string][]string, error) {
 	cmd := []string{
 		"go",
 		"list",
@@ -133,7 +223,7 @@ func packagesByModule(ownModule string) (map[string][]string, error) {
 		"./...",
 	}
 
-	out, err := exec(cmd)
+	out, err := exec(cmd, dir)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +249,7 @@ func packagesByModule(ownModule string) (map[string][]string, error) {
 	return pkgsByMod, nil
 }
 
-func downloadModules() ([]goModuleMetadata, error) {
+func downloadModules(dir string) ([]goModuleMetadata, error) {
 	cmd := []string{
 		"go",
 		"mod",
@@ -167,7 +257,7 @@ func downloadModules() ([]goModuleMetadata, error) {
 		"-json",
 	}
 
-	out, err := exec(cmd)
+	out, err := exec(cmd, dir)
 	if err != nil {
 		return nil, err
 	}
