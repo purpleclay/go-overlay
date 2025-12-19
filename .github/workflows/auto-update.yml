@@ -2,6 +2,7 @@ name: auto-update
 on:
   schedule:
     - cron: "0 */4 * * *"
+  workflow_dispatch:
 
 jobs:
   auto-update:
@@ -25,7 +26,7 @@ jobs:
 
       - name: Check GoDev Website
         run: |
-          echo "LATEST_GO_VERSION=$(nix run .#go-scrape -- detect)" >> $GITHUB_ENV
+          echo "LATEST_GO_VERSION=$(nix run .#goscrape -- detect)" >> $GITHUB_ENV
 
       - name: Check Manifest Exists
         run: |
@@ -38,7 +39,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          nix run .#go-scrape -- generate ${{ env.LATEST_GO_VERSION }} --output manifests
+          nix run .#goscrape -- generate ${{ env.LATEST_GO_VERSION }} --output manifests
 
       - name: Import GPG key
         if: ${{ env.MANIFEST_EXISTS != 'true' }}

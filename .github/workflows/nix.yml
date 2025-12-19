@@ -114,8 +114,8 @@ jobs:
           skipPush: false
           useDaemon: false
 
-      - name: Build go-scrape
-        run: nix build .#go-scrape
+      - name: Build goscrape
+        run: nix build .#goscrape
 
   build-govendor:
     runs-on: ${{ matrix.os }}
@@ -139,7 +139,7 @@ jobs:
           useDaemon: false
 
       - name: Build go-vendor
-        run: nix build .#go-vendor
+        run: nix build .#govendor
 
   integration:
     runs-on: ${{ matrix.os }}
