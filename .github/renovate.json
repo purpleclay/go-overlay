@@ -1,4 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>purpleclay/renovate-config"]
+  "extends": ["github>purpleclay/renovate-config"],
+  "packageRules": [
+    {
+      "matchFileNames": ["**/testdata/**", "**/test/**"],
+      "enabled": false
+    }
+  ]
 }
