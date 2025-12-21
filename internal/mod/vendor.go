@@ -2,18 +2,13 @@ package mod
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/sourcegraph/conc/pool"
-)
-
-var (
-	ErrNoModFile    = errors.New("no go.mod file found")
-	ErrVendorFailed = errors.New("one or more modules failed")
 )
 
 const (
@@ -34,6 +29,32 @@ const (
 
 func (s vendorStatus) IsSuccess() bool {
 	return s == statusOK || s == statusGenerated || s == statusSkipped
+}
+
+type NoModFilesFoundError struct {
+	Paths []string
+}
+
+func (e NoModFilesFoundError) Error() string {
+	var buf strings.Builder
+	for _, path := range e.Paths {
+		buf.WriteString(fmt.Sprintf("go.mod not found at path: %s\n", path))
+	}
+
+	return buf.String()
+}
+
+type VendorFailedError struct {
+	Paths []string
+}
+
+func (e VendorFailedError) Error() string {
+	var buf strings.Builder
+	for _, path := range e.Paths {
+		buf.WriteString(fmt.Sprintf("failed to vendor file: %s\n", path))
+	}
+
+	return buf.String()
 }
 
 type vendorResult struct {
@@ -104,6 +125,7 @@ func (v *Vendor) VendorFiles() error {
 	})
 
 	var failed bool
+	var failedFiles []string
 	for _, r := range results {
 		if r.message != "" {
 			fmt.Printf("%s: %s (%s)\n", r.path, r.status, r.message)
@@ -116,12 +138,13 @@ func (v *Vendor) VendorFiles() error {
 		}
 
 		if !r.status.IsSuccess() {
+			failedFiles = append(failedFiles, r.path)
 			failed = true
 		}
 	}
 
 	if failed {
-		return ErrVendorFailed
+		return VendorFailedError{Paths: failedFiles}
 	}
 
 	return nil
@@ -153,22 +176,25 @@ func (v *Vendor) findModFiles() ([]string, error) {
 		}
 
 		if len(modFiles) == 0 {
-			return nil, ErrNoModFile
+			return nil, NoModFilesFoundError{Paths: paths}
 		}
 
 		return modFiles, nil
 	}
 
 	var modFiles []string
+	var missingPaths []string
 	for _, path := range paths {
 		modPath := filepath.Join(path, goModFile)
 		if _, err := os.Stat(modPath); err != nil {
-			if os.IsNotExist(err) {
-				return nil, ErrNoModFile
-			}
-			return nil, err
+			missingPaths = append(missingPaths, path)
+		} else {
+			modFiles = append(modFiles, modPath)
 		}
-		modFiles = append(modFiles, modPath)
+	}
+
+	if len(missingPaths) > 0 {
+		return nil, NoModFilesFoundError{Paths: missingPaths}
 	}
 
 	return modFiles, nil
