@@ -1,9 +1,9 @@
 module testdata/simple
 
-go 1.22
+go 1.23
 
 require (
-	github.com/aymanbagabas/go-udiff v0.2.0
+	github.com/aymanbagabas/go-udiff v0.3.1
 	github.com/charmbracelet/x/ansi v0.6.0
 )
 
