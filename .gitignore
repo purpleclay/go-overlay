@@ -21,6 +21,7 @@
 !go.work.sum
 !**/testdata/*
 !.golangci.yaml
+!*.golden
 
 # Recurse through sub-directories applying the same patterns
 !*/

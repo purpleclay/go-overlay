@@ -1,4 +1,4 @@
-package govendor
+package mod
 
 import (
 	"bytes"
@@ -12,17 +12,17 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
-type DevNull struct{}
+type devNull struct{}
 
-func (DevNull) Read(_ []byte) (int, error) {
+func (devNull) Read(_ []byte) (int, error) {
 	return 0, io.EOF
 }
 
-func (DevNull) Write(p []byte) (int, error) {
+func (devNull) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (DevNull) Close() error {
+func (devNull) Close() error {
 	return nil
 }
 
@@ -54,7 +54,7 @@ func exec(args []string, dir string) (string, error) {
 
 func openHandler(ctx context.Context, path string, flag int, perm os.FileMode) (io.ReadWriteCloser, error) {
 	if path == "/dev/null" {
-		return DevNull{}, nil
+		return devNull{}, nil
 	}
 
 	return interp.DefaultOpenHandler()(ctx, path, flag, perm)

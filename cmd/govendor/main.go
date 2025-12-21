@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	if err := govendor.Execute(os.Stdout); err != nil {
+	if err := govendor.Execute(); err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}
