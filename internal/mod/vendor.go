@@ -12,10 +12,8 @@ import (
 )
 
 var (
-	ErrNoModFile       = errors.New("no go.mod file found")
-	ErrDriftDetected   = errors.New("drift detected")
-	ErrManifestMissing = errors.New("manifest missing")
-	ErrNoDependencies  = errors.New("no dependencies")
+	ErrNoModFile    = errors.New("no go.mod file found")
+	ErrVendorFailed = errors.New("one or more modules failed")
 )
 
 const (
@@ -34,10 +32,14 @@ const (
 	statusError     vendorStatus = "error"
 )
 
+func (s vendorStatus) IsSuccess() bool {
+	return s == statusOK || s == statusGenerated || s == statusSkipped
+}
+
 type vendorResult struct {
-	path   string
-	status vendorStatus
-	err    error
+	path    string
+	status  vendorStatus
+	message string
 }
 
 type vendorOptions struct {
@@ -101,32 +103,25 @@ func (v *Vendor) VendorFiles() error {
 		return results[i].path < results[j].path
 	})
 
-	var hasError, hasDrift, hasMissing bool
+	var failed bool
 	for _, r := range results {
-		fmt.Printf("%s: %s\n", r.path, r.status)
+		if r.message != "" {
+			fmt.Printf("%s: %s (%s)\n", r.path, r.status, r.message)
+		} else {
+			fmt.Printf("%s: %s\n", r.path, r.status)
+		}
 
 		if r.status == statusSkipped {
 			continue
 		}
 
-		switch r.status {
-		case statusError:
-			hasError = true
-		case statusDrift:
-			hasDrift = true
-		case statusMissing:
-			hasMissing = true
+		if !r.status.IsSuccess() {
+			failed = true
 		}
 	}
 
-	if hasError {
-		return errors.New("one or more modules failed to vendor")
-	}
-	if hasMissing {
-		return ErrManifestMissing
-	}
-	if hasDrift {
-		return ErrDriftDetected
+	if failed {
+		return ErrVendorFailed
 	}
 
 	return nil
@@ -179,18 +174,19 @@ func (v *Vendor) findModFiles() ([]string, error) {
 	return modFiles, nil
 }
 
-func (v *Vendor) processDir(dir string) vendorResult {
-	result := vendorResult{path: dir}
+func (v *Vendor) processDir(path string) vendorResult {
+	result := vendorResult{path: path}
 
-	goMod, err := ParseGoModFile(dir)
+	goMod, err := ParseGoModFile(path)
 	if err != nil {
 		result.status = statusError
-		result.err = err
+		result.message = err.Error()
 		return result
 	}
 
 	if !goMod.HasDependencies() {
 		result.status = statusSkipped
+		result.message = "no dependencies"
 		return result
 	}
 
@@ -200,7 +196,7 @@ func (v *Vendor) processDir(dir string) vendorResult {
 		existingHash, err := extractHash(existingData)
 		if err != nil {
 			result.status = statusError
-			result.err = err
+			result.message = err.Error()
 			return result
 		}
 
@@ -220,13 +216,13 @@ func (v *Vendor) processDir(dir string) vendorResult {
 		}
 	} else {
 		result.status = statusError
-		result.err = err
+		result.message = err.Error()
 		return result
 	}
 
 	if err := v.generateManifest(goMod); err != nil {
 		result.status = statusError
-		result.err = err
+		result.message = err.Error()
 		return result
 	}
 
