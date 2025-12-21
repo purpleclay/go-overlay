@@ -20,5 +20,5 @@ func TestScrape(t *testing.T) {
 	require.NoError(t, err)
 
 	manifest := s.String()
-	golden.Assert(t, manifest, "go1.21.6.nix")
+	golden.Assert(t, manifest, "go1.21.6.nix.golden")
 }
