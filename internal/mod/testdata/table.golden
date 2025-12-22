@@ -1,0 +1,11 @@
+╭──────────────────────────┬─────────────┬───────────────────────────────────────────────────╮
+│ GoMod File               │ Status      │ Message                                           │
+├──────────────────────────┼─────────────┼───────────────────────────────────────────────────┤
+│ path/to/drift/go.mod     │ ✗ drift     │ go.mod has changed, regenerate govendor.toml      │
+│ path/to/error/go.mod     │ ✗ error     │ vendor failed                                     │
+│ path/to/generated/go.mod │ ✓ generated │ generated govendor.toml with 10 dependencies      │
+│ path/to/missing/go.mod   │ ✗ missing   │ govendor.toml not found, run govendor to generate │
+│ path/to/notfound/go.mod  │ ✗ error     │ go.mod does not exist, check path                 │
+│ path/to/ok/go.mod        │ ✓ ok        │ govendor.toml is up to date                       │
+│ path/to/skipped/go.mod   │ ○ skipped   │ go.mod has no external dependencies               │
+╰──────────────────────────┴─────────────┴───────────────────────────────────────────────────╯
