@@ -34,12 +34,12 @@ type GoModFile struct {
 func ParseGoModFile(path string) (*GoModFile, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read go.mod: %w", err)
 	}
 
 	mf, err := modfile.Parse(path, content, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse go.mod: %w", err)
 	}
 
 	h := sha256.Sum256(content)

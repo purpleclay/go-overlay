@@ -2,6 +2,7 @@ package mod
 
 import (
 	"io/fs"
+	"strings"
 	"sync"
 
 	"github.com/charlievieth/fastwalk"
@@ -83,7 +84,7 @@ func (s *FileScanner) ScanFrom(dir string) ([]string, error) {
 
 		if d.Name() == goModFile {
 			mu.Lock()
-			paths = append(paths, path)
+			paths = append(paths, strings.TrimPrefix(path, "./"))
 			mu.Unlock()
 		}
 

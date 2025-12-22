@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/sourcegraph/conc/pool"
 )
@@ -15,53 +14,6 @@ const (
 	goModFile  = "go.mod"
 	vendorFile = "govendor.toml"
 )
-
-type vendorStatus string
-
-const (
-	statusOK        vendorStatus = "ok"
-	statusGenerated vendorStatus = "generated"
-	statusDrift     vendorStatus = "drift"
-	statusMissing   vendorStatus = "missing"
-	statusSkipped   vendorStatus = "skipped"
-	statusError     vendorStatus = "error"
-)
-
-func (s vendorStatus) IsSuccess() bool {
-	return s == statusOK || s == statusGenerated || s == statusSkipped
-}
-
-type NoModFilesFoundError struct {
-	Paths []string
-}
-
-func (e NoModFilesFoundError) Error() string {
-	var buf strings.Builder
-	for _, path := range e.Paths {
-		buf.WriteString(fmt.Sprintf("go.mod not found at path: %s\n", path))
-	}
-
-	return buf.String()
-}
-
-type VendorFailedError struct {
-	Paths []string
-}
-
-func (e VendorFailedError) Error() string {
-	var buf strings.Builder
-	for _, path := range e.Paths {
-		buf.WriteString(fmt.Sprintf("failed to vendor file: %s\n", path))
-	}
-
-	return buf.String()
-}
-
-type vendorResult struct {
-	path    string
-	status  vendorStatus
-	message string
-}
 
 type vendorOptions struct {
 	detectDrift bool
@@ -80,9 +32,7 @@ func WithDriftDetection() VendorOption {
 
 func WithPaths(paths ...string) VendorOption {
 	return func(opts *vendorOptions) {
-		for _, path := range paths {
-			opts.paths = append(opts.paths, path)
-		}
+		opts.paths = append(opts.paths, paths...)
 	}
 }
 
@@ -105,52 +55,36 @@ func NewVendor(opts ...VendorOption) *Vendor {
 	return v
 }
 
+var errVendorFailed = fmt.Errorf("vendor failed")
+
 func (v *Vendor) VendorFiles() error {
-	modFiles, err := v.findModFiles()
-	if err != nil {
-		return err
-	}
+	modFiles, missingResults := v.findModFiles()
 
 	p := pool.NewWithResults[vendorResult]()
 	for _, modFile := range modFiles {
 		p.Go(func() vendorResult {
-			return v.processDir(modFile)
+			return v.processModFile(modFile)
 		})
 	}
 
-	results := p.Wait()
+	results := append(missingResults, p.Wait()...)
 
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].path < results[j].path
 	})
 
-	var failed bool
-	var failedFiles []string
+	fmt.Println(renderResultsTable(results))
+
 	for _, r := range results {
-		if r.message != "" {
-			fmt.Printf("%s: %s (%s)\n", r.path, r.status, r.message)
-		} else {
-			fmt.Printf("%s: %s\n", r.path, r.status)
+		if r.status.IsFailure() {
+			return errVendorFailed
 		}
-
-		if r.status == statusSkipped {
-			continue
-		}
-
-		if !r.status.IsSuccess() {
-			failedFiles = append(failedFiles, r.path)
-			failed = true
-		}
-	}
-
-	if failed {
-		return VendorFailedError{Paths: failedFiles}
 	}
 
 	return nil
 }
 
-func (v *Vendor) findModFiles() ([]string, error) {
+func (v *Vendor) findModFiles() (modFiles []string, missing []vendorResult) {
 	paths := v.opts.paths
 	if len(paths) == 0 {
 		paths = []string{"."}
@@ -167,106 +101,91 @@ func (v *Vendor) findModFiles() ([]string, error) {
 
 		results, err := p.Wait()
 		if err != nil {
-			return nil, err
+			return nil, nil
 		}
 
-		var modFiles []string
 		for _, found := range results {
 			modFiles = append(modFiles, found...)
 		}
 
 		if len(modFiles) == 0 {
-			return nil, NoModFilesFoundError{Paths: paths}
+			for _, path := range paths {
+				missing = append(missing, resultNotFound(filepath.Join(path, goModFile)))
+			}
 		}
 
-		return modFiles, nil
+		return modFiles, missing
 	}
 
-	var modFiles []string
-	var missingPaths []string
 	for _, path := range paths {
 		modPath := filepath.Join(path, goModFile)
 		if _, err := os.Stat(modPath); err != nil {
-			missingPaths = append(missingPaths, path)
+			missing = append(missing, resultNotFound(modPath))
 		} else {
 			modFiles = append(modFiles, modPath)
 		}
 	}
 
-	if len(missingPaths) > 0 {
-		return nil, NoModFilesFoundError{Paths: missingPaths}
-	}
-
-	return modFiles, nil
+	return modFiles, missing
 }
 
-func (v *Vendor) processDir(path string) vendorResult {
-	result := vendorResult{path: path}
-
+func (v *Vendor) processModFile(path string) vendorResult {
 	goMod, err := ParseGoModFile(path)
 	if err != nil {
-		result.status = statusError
-		result.message = err.Error()
-		return result
+		return resultError(path, err)
 	}
 
 	if !goMod.HasDependencies() {
-		result.status = statusSkipped
-		result.message = "no dependencies"
-		return result
+		return resultSkipped(path)
 	}
 
 	vendorPath := filepath.Join(goMod.Dir(), vendorFile)
 	existingData, err := os.ReadFile(vendorPath)
-	if err == nil {
+
+	if os.IsNotExist(err) {
+		if v.opts.detectDrift {
+			return resultMissing(path)
+		}
+	} else if err != nil {
+		return resultError(path, err)
+	} else {
 		existingHash, err := extractHash(existingData)
 		if err != nil {
-			result.status = statusError
-			result.message = err.Error()
-			return result
+			return resultError(path, err)
 		}
 
 		if existingHash == goMod.Hash() {
-			result.status = statusOK
-			return result
+			return resultOK(path)
 		}
 
 		if v.opts.detectDrift {
-			result.status = statusDrift
-			return result
+			return resultDrift(path)
 		}
-	} else if os.IsNotExist(err) {
-		if v.opts.detectDrift {
-			result.status = statusMissing
-			return result
-		}
-	} else {
-		result.status = statusError
-		result.message = err.Error()
-		return result
 	}
 
-	if err := v.generateManifest(goMod); err != nil {
-		result.status = statusError
-		result.message = err.Error()
-		return result
+	depCount, err := v.generateManifest(goMod)
+	if err != nil {
+		return resultError(path, err)
 	}
 
-	result.status = statusGenerated
-	return result
+	return resultGenerated(path, depCount)
 }
 
-func (v *Vendor) generateManifest(goMod *GoModFile) error {
+func (v *Vendor) generateManifest(goMod *GoModFile) (int, error) {
 	manifest, err := newManifest(goMod)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	var buf bytes.Buffer
 	if _, err := manifest.WriteTo(&buf); err != nil {
-		return err
+		return 0, err
 	}
 
 	outputPath := filepath.Join(goMod.Dir(), vendorFile)
-	return os.WriteFile(outputPath, buf.Bytes(), 0o644)
+	if err := os.WriteFile(outputPath, buf.Bytes(), 0o644); err != nil {
+		return 0, err
+	}
+
+	return len(manifest.Mod), nil
 }
