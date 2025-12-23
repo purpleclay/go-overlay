@@ -11,6 +11,7 @@
 !flake.lock
 !flake.nix
 !*.nix
+!builder/fetch.sh
 !.envrc
 !test/fixtures/*
 

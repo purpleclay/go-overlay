@@ -4,7 +4,7 @@
 ![Nix](https://img.shields.io/badge/Nix-5277C3?logo=nixos&logoColor=white)
 ![Go](https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white)
 
-Nix overlay for Go toolchains. Pure[^1], reproducible[^2], auto-updated[^3] binaries for Go 1.17+. No installation needed.
+A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^3].
 
 [^1]: No side effects—builds depend only on declared inputs, not system state.
 
@@ -16,9 +16,10 @@ Nix overlay for Go toolchains. Pure[^1], reproducible[^2], auto-updated[^3] bina
 - [Quick Start](#quick-start)
 - [Installation](#installation)
 - [Library Functions](#library-functions)
+- [Builder Functions](#builder-functions)
+- [Building a Go Application](#building-a-go-application)
 - [Using with buildGoModule](#using-with-buildgomodule)
 - [Migrating from nixpkgs](#migrating-from-nixpkgs)
-- [Limitations](#limitations)
 - [Used by](#used-by)
 
 ## Why it exists?
@@ -29,6 +30,7 @@ Nix overlay for Go toolchains. Pure[^1], reproducible[^2], auto-updated[^3] bina
 | New release availability | Up to 4 hours after upstream | Days to weeks                  |
 | Multiple versions        | Single flake input           | Multiple nixpkgs pins required |
 | Release candidates       | Available                    | Not available                  |
+| Building applications    | No vendorHash required       | vendorHash must be computed    |
 
 > [!NOTE]
 > Older Go versions _are_ accessible in nixpkgs by pinning historical commits, but this requires managing multiple nixpkgs inputs and finding the correct commit for each version.
@@ -274,6 +276,139 @@ go-bin.fromGoModStrict ./go.mod
 | `go 1.21.6`                      | 1.21.6        | 1.21.6            |
 | `go 1.21` + `toolchain go1.21.6` | 1.21.6        | 1.21.6            |
 
+## Builder Functions
+
+go-overlay provides builder functions for Go applications using vendored dependencies. Unlike nixpkgs' `buildGoModule`, these work with unpatched Go binaries from [go.dev](https://go.dev/dl/) and don't require computing a `vendorHash`.
+
+### `buildGoApplication`
+
+Build a Go application using a `govendor.toml` manifest.
+
+**Use when:** You want reproducible Go builds without the `vendorHash` dance.
+
+```nix
+buildGoApplication {
+  pname = "my-app";
+  version = "1.0.0";
+  src = ./.;
+  go = pkgs.go-bin.latest;
+  subPackages = [ "cmd/my-app" ];
+}
+```
+
+| Option        | Default                  | Description                         |
+| :------------ | :----------------------- | :---------------------------------- |
+| `pname`       | required                 | Package name                        |
+| `version`     | required                 | Package version                     |
+| `src`         | required                 | Source directory                    |
+| `go`          | required                 | Go derivation from go-overlay       |
+| `modules`     | `src + "/govendor.toml"` | Path to govendor.toml manifest      |
+| `subPackages` | `["."]`                  | Packages to build (relative to src) |
+| `ldflags`     | `[]`                     | Linker flags                        |
+| `tags`        | `[]`                     | Build tags                          |
+| `CGO_ENABLED` | inherited from `go`      | Enable CGO                          |
+
+### `mkVendorEnv`
+
+Create a vendor directory with `modules.txt` from a parsed `govendor.toml` manifest. This is a lower-level function used internally by `buildGoApplication`.
+
+**Use when:** You need custom control over the vendor directory or build process.
+
+```nix
+mkVendorEnv {
+  go = pkgs.go-bin.latest;
+  manifest = builtins.fromTOML (builtins.readFile ./govendor.toml);
+}
+```
+
+| Option     | Default  | Description                              |
+| :--------- | :------- | :--------------------------------------- |
+| `go`       | required | Go derivation from go-overlay            |
+| `manifest` | required | Parsed govendor.toml (via fromTOML)      |
+
+The resulting derivation contains symlinks to each module at their import path and a `modules.txt` with package listings.
+
+## Building a Go Application
+
+### Step 1: Add govendor to Your Dev Shell
+
+Add `govendor` to your development shell to generate vendor manifests:
+
+```nix
+# flake.nix
+{
+  inputs.go-overlay.url = "github:purpleclay/go-overlay";
+
+  outputs = { self, nixpkgs, go-overlay, ... }:
+    let
+      pkgs = import nixpkgs {
+        system = "x86_64-linux";
+        overlays = [ go-overlay.overlays.default ];
+      };
+    in {
+      devShells.default = pkgs.mkShell {
+        buildInputs = [
+          pkgs.go-bin.fromGoMod ./go.mod
+          go-overlay.packages.${pkgs.system}.govendor
+        ];
+      };
+    };
+}
+```
+
+### Step 2: Generate a Vendor Manifest
+
+Run `govendor` to generate a `govendor.toml` manifest:
+
+```bash
+govendor
+```
+
+This creates a `govendor.toml` file with NAR hashes for all dependencies. Commit this file to your repository.
+
+> [!TIP]
+> Re-run `govendor` whenever your dependencies change. Use `govendor --check` in CI to detect manifest drift.
+
+### Step 3: Create a Package Definition
+
+Create a `default.nix` file to build your application:
+
+```nix
+# default.nix
+{
+  buildGoApplication,
+  go,
+}:
+buildGoApplication {
+  pname = "my-app";
+  version = "1.0.0";
+  src = ./.;
+  inherit go;
+  subPackages = [ "cmd/my-app" ];
+  ldflags = [ "-s" "-w" ];
+}
+```
+
+### Step 4: Build Your Application
+
+Add the package to your flake outputs:
+
+```nix
+# flake.nix
+{
+  packages.default = pkgs.callPackage ./default.nix {
+    inherit (pkgs) buildGoApplication;
+    go = pkgs.go-bin.fromGoMod ./go.mod;
+  };
+}
+```
+
+Build with:
+
+```bash
+nix build
+```
+
 ## Using with buildGoModule
 
 `buildGoModule` defaults to nixpkgs' Go toolchain. To use go-overlay, you must override it.
@@ -329,20 +464,6 @@ Migrating from nixpkgs to go-overlay involves changing how Go versions are speci
   buildInputs = [ pkgs.go-bin.versions."1.24.5" ];
 }
 ```
-
-## Limitations
-
-### Incompatible with buildGoApplication (gomod2nix)
-
-go-overlay is **not compatible** with `buildGoApplication` from [gomod2nix](https://github.com/nix-community/gomod2nix).
-
-#### Why?
-
-Nixpkgs applies a [custom patch](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/compilers/go/go_no_vendor_checks-1.23.patch) to Go that adds support for the `GO_NO_VENDOR_CHECKS` environment variable. This patch allows `buildGoApplication` to skip vendor consistency checks when no `vendor/modules.txt` file is present. go-overlay uses pre-built binary distributions from [go.dev](https://go.dev/dl/), which do not include this patch. As a result, Go 1.14+ will fail with "inconsistent vendoring" errors when used with `buildGoApplication`.
-
-#### Workaround:
-
-Use `buildGoModule` instead of `buildGoApplication`. See [Using with buildGoModule](#using-with-buildgomodule) for details.
 
 ## Used By
 
