@@ -5,4 +5,7 @@ final: prev: {
     lib = final.lib;
     pkgs = final;
   };
+
+  # Builder for Go applications using govendor.toml
+  inherit (final.callPackage ./builder {}) buildGoApplication mkVendorEnv;
 }
