@@ -23,6 +23,7 @@
 !**/testdata/*
 !.golangci.yaml
 !*.golden
+!govendor.toml
 
 # Recurse through sub-directories applying the same patterns
 !*/

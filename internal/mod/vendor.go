@@ -32,7 +32,12 @@ func WithDriftDetection() VendorOption {
 
 func WithPaths(paths ...string) VendorOption {
 	return func(opts *vendorOptions) {
-		opts.paths = append(opts.paths, paths...)
+		for _, path := range paths {
+			if base := filepath.Base(path); base == goModFile || base == vendorFile {
+				path = filepath.Dir(path)
+			}
+			opts.paths = append(opts.paths, path)
+		}
 	}
 }
 

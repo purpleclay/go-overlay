@@ -18,6 +18,7 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 - [Library Functions](#library-functions)
 - [Builder Functions](#builder-functions)
 - [Building a Go Application](#building-a-go-application)
+- [Detecting Drift with Git Hooks](#detecting-drift-with-git-hooks)
 - [Using with buildGoModule](#using-with-buildgomodule)
 - [Migrating from nixpkgs](#migrating-from-nixpkgs)
 - [Used by](#used-by)
@@ -367,7 +368,7 @@ govendor
 This creates a `govendor.toml` file with NAR hashes for all dependencies. Commit this file to your repository.
 
 > [!TIP]
-> Re-run `govendor` whenever your dependencies change. Use `govendor --check` in CI to detect manifest drift.
+> Re-run `govendor` whenever your dependencies change. Use `govendor --check` in CI to detect manifest drift, or set up a [git hook](#detecting-drift-with-git-hooks) to catch drift before committing.
 
 ### Step 3: Create a Package Definition
 
@@ -408,6 +409,65 @@ Build with:
 ```bash
 nix build
 ```
+
+## Detecting Drift with Git Hooks
+
+Use [cachix/git-hooks.nix](https://github.com/cachix/git-hooks.nix) to automatically check for manifest drift when `go.mod` changes:
+
+```nix
+# flake.nix
+{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    go-overlay.url = "github:purpleclay/go-overlay";
+    git-hooks.url = "github:cachix/git-hooks.nix";
+  };
+
+  outputs = { self, nixpkgs, go-overlay, git-hooks, ... }:
+    let
+      system = "x86_64-linux";
+      pkgs = import nixpkgs {
+        inherit system;
+        overlays = [ go-overlay.overlays.default ];
+      };
+
+      pre-commit-check = git-hooks.lib.${system}.run {
+        src = ./.;
+        hooks = {
+          govendor = {
+            enable = true;
+            name = "govendor";
+            description = "Check if govendor.toml has drifted from go.mod";
+            entry = "${go-overlay.packages.${system}.govendor}/bin/govendor --check";
+            files = "(^|/)go\\.mod$";
+            pass_filenames = true;
+          };
+        };
+      };
+    in {
+      devShells.default = pkgs.mkShell {
+        inherit (pre-commit-check) shellHook;
+        buildInputs = pre-commit-check.enabledPackages;
+      };
+    };
+}
+```
+
+When you modify `go.mod` and attempt to commit, the hook will fail if `govendor.toml` is out of sync:
+
+```
+govendor.................................................................Failed
+- hook id: govendor
+- exit code: 1
+
+╭────────────┬─────────┬──────────────────────────────────────────────╮
+│ GoMod File │ Status  │ Message                                      │
+├────────────┼─────────┼──────────────────────────────────────────────┤
+│ go.mod     │ ✗ drift │ go.mod has changed, regenerate govendor.toml │
+╰────────────┴─────────┴──────────────────────────────────────────────╯
+```
+
+Run `govendor` to regenerate the manifest, then commit both files together.
 
 ## Using with buildGoModule
 

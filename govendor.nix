@@ -1,13 +1,13 @@
 {
-  pkgs,
+  buildGoApplication,
   go,
 }:
-(pkgs.buildGoModule.override {inherit go;}) {
+buildGoApplication {
   pname = "govendor";
   version = "dev";
   src = ./.;
+  modules = ./govendor.toml;
+  inherit go;
   subPackages = ["cmd/govendor"];
-  env.CGO_ENABLED = 0;
-  doCheck = false;
-  vendorHash = "sha256-swV0IyuDB70oQMQcCSzsHDVd3xqGjp+qm4VAG+aqe68=";
+  CGO_ENABLED = 0;
 }

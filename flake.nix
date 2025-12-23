@@ -1,5 +1,5 @@
 {
-  description = "Pure and reproducible nix overlay of binary distributed golang toolchains";
+  description = "Nix overlay for Go development. Pure, reproducible, auto-updated";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
@@ -54,12 +54,30 @@
           gofumpt
           golangci-lint
           nil
+          self.packages.${system}.govendor
         ];
 
         pre-commit-check = git-hooks.lib.${system}.run {
           src = ./.;
           package = pkgs.prek;
           hooks = {
+            alejandra = {
+              enable = true;
+              settings = {
+                check = true;
+              };
+            };
+
+            govendor = {
+              enable = true;
+              name = "govendor";
+              description = "Check if govendor.toml has drifted from go.mod";
+              entry = "${self.packages.${system}.govendor}/bin/govendor --check";
+              files = "(^|/)go\\.mod$";
+              excludes = ["testdata/" "test/"];
+              pass_filenames = true;
+            };
+
             typos = {
               enable = true;
               entry = "${pkgs.typos}/bin/typos";
@@ -96,11 +114,11 @@
               default = pkgs.go-bin.latest;
               go = pkgs.go-bin.latest;
               goscrape = import ./goscrape.nix {
-                inherit pkgs;
+                inherit (pkgs) buildGoApplication;
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
               };
               govendor = import ./govendor.nix {
-                inherit pkgs;
+                inherit (pkgs) buildGoApplication;
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
               };
               integration-test = import ./test/integration {
