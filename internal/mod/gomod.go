@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"sort"
 	"strings"
 
@@ -91,7 +93,52 @@ func (f *GoModFile) Dependencies() ([]GoModule, error) {
 	return f.resolveModules(downloads, pkgsByMod)
 }
 
+var platforms = []struct{ goos, goarch string }{
+	{"linux", "amd64"},
+	{"linux", "arm64"},
+	{"darwin", "amd64"},
+	{"darwin", "arm64"},
+	{"windows", "amd64"},
+	{"windows", "arm64"},
+}
+
 func (f *GoModFile) packagesByModule() (map[string][]string, error) {
+	current, err := f.packagesByModuleForPlatform(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return nil, err
+	}
+
+	p := pool.NewWithResults[map[string][]string]().WithErrors()
+	for _, plat := range platforms {
+		if plat.goos == runtime.GOOS && plat.goarch == runtime.GOARCH {
+			continue
+		}
+		p.Go(func() (map[string][]string, error) {
+			return f.packagesByModuleForPlatform(plat.goos, plat.goarch)
+		})
+	}
+
+	results, err := p.Wait()
+	if err != nil {
+		return nil, err
+	}
+
+	merged := current
+	for _, result := range results {
+		for mod, pkgs := range result {
+			merged[mod] = append(merged[mod], pkgs...)
+		}
+	}
+
+	for modPath := range merged {
+		sort.Strings(merged[modPath])
+		merged[modPath] = slices.Compact(merged[modPath])
+	}
+
+	return merged, nil
+}
+
+func (f *GoModFile) packagesByModuleForPlatform(goos, goarch string) (map[string][]string, error) {
 	cmd := []string{
 		"go",
 		"list",
@@ -101,7 +148,12 @@ func (f *GoModFile) packagesByModule() (map[string][]string, error) {
 		"./...",
 	}
 
-	out, err := exec(cmd, f.dir)
+	env := []string{
+		"GOOS=" + goos,
+		"GOARCH=" + goarch,
+	}
+
+	out, err := execWithEnv(cmd, f.dir, env)
 	if err != nil {
 		return nil, err
 	}
@@ -118,10 +170,6 @@ func (f *GoModFile) packagesByModule() (map[string][]string, error) {
 			continue
 		}
 		pkgsByMod[modPath] = append(pkgsByMod[modPath], pkgPath)
-	}
-
-	for modPath := range pkgsByMod {
-		sort.Strings(pkgsByMod[modPath])
 	}
 
 	return pkgsByMod, nil
