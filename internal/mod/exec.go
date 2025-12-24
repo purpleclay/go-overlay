@@ -27,18 +27,24 @@ func (devNull) Close() error {
 }
 
 func exec(args []string, dir string) (string, error) {
+	return execWithEnv(args, dir, nil)
+}
+
+func execWithEnv(args []string, dir string, extraEnv []string) (string, error) {
 	cmd := strings.Join(args, " ")
 	p, err := syntax.NewParser().Parse(strings.NewReader(cmd), "")
 	if err != nil {
 		return "", err
 	}
 
+	env := append(os.Environ(), extraEnv...)
+
 	var stdout bytes.Buffer
 	r, err := interp.New(
 		interp.Params("-e"),
 		interp.StdIO(os.Stdin, &stdout, os.Stderr),
 		interp.OpenHandler(openHandler),
-		interp.Env(expand.ListEnviron(os.Environ()...)),
+		interp.Env(expand.ListEnviron(env...)),
 		interp.Dir(dir),
 	)
 	if err != nil {
