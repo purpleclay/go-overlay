@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Execute() error {
+func Execute(build BuildDetails) error {
 	var (
 		check     bool
 		recursive bool
@@ -64,5 +64,7 @@ vendored dependencies without requiring nixpkgs' patched Go toolchain.`,
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "recursively scan for go.mod files")
 	cmd.Flags().IntVarP(&depth, "depth", "d", 0, "limit directory traversal depth (0 = unlimited, requires --recursive)")
 
+	cmd.Version = build.Version
+	cmd.SetVersionTemplate(build.String())
 	return cmd.Execute()
 }

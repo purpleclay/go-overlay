@@ -120,6 +120,7 @@
               govendor = import ./govendor.nix {
                 inherit (pkgs) buildGoApplication;
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
+                commit = self.rev or "unknown";
               };
               integration-test = import ./test/integration {
                 inherit pkgs;
