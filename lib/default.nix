@@ -16,14 +16,34 @@
 
   # Parse a go.mod file and extract both go and toolchain versions.
   # Toolchains were introduced in Go 1.21, https://go.dev/doc/toolchain
+  #
+  # Uses line-based parsing to reliably match the first occurrence of each
+  # directive, avoiding issues with greedy regex matching across multiple lines.
   parseGoMod = path: let
     content = builtins.readFile path;
+    lines = builtins.filter builtins.isString (builtins.split "\n" content);
 
-    # Match "go X.Y" or "go X.Y.Z" on its own line
-    goMatch = builtins.match ".*\ngo ([0-9]+\\.[0-9]+(\\.[0-9]+)?)\n.*" content;
+    # Find first line matching "go X.Y" or "go X.Y.Z" exactly
+    goLines = builtins.filter (line: builtins.match "go [0-9]+\\.[0-9]+(\\.[0-9]+)?" line != null) lines;
+    firstGoLine =
+      if goLines != []
+      then builtins.head goLines
+      else null;
+    goMatch =
+      if firstGoLine != null
+      then builtins.match "go ([0-9]+\\.[0-9]+(\\.[0-9]+)?)" firstGoLine
+      else null;
 
-    # Match "toolchain goX.Y.Z" on its own line
-    toolchainMatch = builtins.match ".*\ntoolchain go([0-9]+\\.[0-9]+\\.[0-9]+)\n.*" content;
+    # Find first line matching "toolchain goX.Y.Z" exactly
+    toolchainLines = builtins.filter (line: builtins.match "toolchain go[0-9]+\\.[0-9]+\\.[0-9]+" line != null) lines;
+    firstToolchainLine =
+      if toolchainLines != []
+      then builtins.head toolchainLines
+      else null;
+    toolchainMatch =
+      if firstToolchainLine != null
+      then builtins.match "toolchain go([0-9]+\\.[0-9]+\\.[0-9]+)" firstToolchainLine
+      else null;
   in {
     go =
       if goMatch != null
