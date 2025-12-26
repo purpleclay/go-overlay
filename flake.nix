@@ -122,10 +122,13 @@
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
                 commit = self.rev or "unknown";
               };
-              integration-test = import ./test/integration {
+              integration-build-go-module = import ./test/integration/build-go-module {
                 inherit pkgs;
                 go = pkgs.go-bin.versions."1.22.3";
               };
+              # integration-in-tree-vendor is not exposed as a package because
+              # it requires vendor/ to be generated first. It's built directly
+              # in CI after running 'go mod vendor'. See .github/workflows/nix.yml
             };
 
           apps.default = {

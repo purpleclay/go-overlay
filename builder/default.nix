@@ -1,4 +1,8 @@
-# Builder for Go applications using go-overlay's govendor.toml manifest
+# Builder for Go applications using vendored dependencies.
+# Supports two modes:
+# 1. In-tree vendor: Use existing vendor/ directory from src
+# 2. Manifest mode: Generate vendor from govendor.toml
+#
 # Unlike gomod2nix, this generates a vendor/modules.txt file so it works
 # with unpatched Go toolchains from the official binary distributions.
 {
@@ -23,6 +27,7 @@
     concatStringsSep
     escapeShellArg
     optionalString
+    pathExists
     ;
 
   # Fetch a Go module using `go mod download`.
@@ -119,13 +124,17 @@
       cp "$modulesTxtPath" "$out/modules.txt"
     '';
 
-  # Build a Go application using vendored dependencies from govendor.toml.
+  # Build a Go application using vendored dependencies.
+  # Supports two modes:
+  # 1. In-tree vendor: If modules is null and src contains vendor/, use it directly
+  # 2. Manifest mode: Generate vendor from govendor.toml (modules parameter)
+  #
   # Unlike buildGoModule, this works with unpatched Go from binary distributions.
   buildGoApplication = {
     pname,
     version,
     src,
-    modules ? src + "/govendor.toml", # Path to govendor.toml manifest
+    modules ? null, # Path to govendor.toml manifest (null = auto-detect)
     go, # Go derivation from go-overlay (e.g., go-bin.fromGoMod)
     subPackages ? ["."], # Packages to build (relative to src)
     ldflags ? [],
@@ -133,82 +142,122 @@
     CGO_ENABLED ? go.CGO_ENABLED,
     ...
   } @ attrs: let
-    manifest = fromTOML (readFile modules);
+    # Check for in-tree vendor directory
+    hasInTreeVendor = pathExists (src + "/vendor");
 
-    vendorEnv = mkVendorEnv {
-      inherit go manifest;
-    };
+    # Determine vendor mode
+    useInTreeVendor = modules == null && hasInTreeVendor;
+    useManifest = modules != null;
+
+    # Only parse manifest and create vendorEnv when using manifest mode
+    manifest =
+      if useManifest
+      then fromTOML (readFile modules)
+      else null;
+
+    vendorEnv =
+      if useManifest
+      then
+        mkVendorEnv {
+          inherit go manifest;
+        }
+      else null;
   in
-    stdenv.mkDerivation (
-      builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags"]
-      // {
-        inherit pname version src;
+    # Validate: must have either modules or in-tree vendor
+    if !useInTreeVendor && !useManifest
+    then throw "go-overlay: No vendor source found. Provide 'modules' parameter pointing to govendor.toml, or include a vendor/ directory in src."
+    else
+      stdenv.mkDerivation (
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags"]
+        // {
+          inherit pname version src;
 
-        nativeBuildInputs =
-          (attrs.nativeBuildInputs or [])
-          ++ [
-            go
-          ];
+          nativeBuildInputs =
+            (attrs.nativeBuildInputs or [])
+            ++ [
+              go
+            ];
 
-        inherit (go) GOOS GOARCH;
-        inherit CGO_ENABLED;
+          inherit (go) GOOS GOARCH;
+          inherit CGO_ENABLED;
 
-        GO111MODULE = "on";
-        GOFLAGS = "-mod=vendor";
+          GO111MODULE = "on";
+          GOFLAGS = "-mod=vendor";
 
-        configurePhase =
-          attrs.configurePhase or ''
-            runHook preConfigure
+          configurePhase =
+            attrs.configurePhase
+            or (
+              if useInTreeVendor
+              then ''
+                runHook preConfigure
 
-            export GOCACHE=$TMPDIR/go-cache
-            export GOPATH="$TMPDIR/go"
-            export GOSUMDB=off
-            export GOPROXY=off
+                export GOCACHE=$TMPDIR/go-cache
+                export GOPATH="$TMPDIR/go"
+                export GOSUMDB=off
+                export GOPROXY=off
 
-            # Copy vendor environment (dereference symlinks)
-            rm -rf vendor
-            cp -rL ${vendorEnv} vendor
-            chmod -R u+w vendor
+                # Use in-tree vendor directory as-is
+                chmod -R u+w vendor
 
-            runHook postConfigure
-          '';
+                runHook postConfigure
+              ''
+              else ''
+                runHook preConfigure
 
-        buildPhase =
-          attrs.buildPhase or ''
-            runHook preBuild
+                export GOCACHE=$TMPDIR/go-cache
+                export GOPATH="$TMPDIR/go"
+                export GOSUMDB=off
+                export GOPROXY=off
 
-            buildFlags=(
-              -v
-              -p $NIX_BUILD_CORES
-              ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
-              ${optionalString (ldflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " ldflags)}"}
-            )
+                # Copy vendor environment from manifest (dereference symlinks)
+                rm -rf vendor
+                cp -rL ${vendorEnv} vendor
+                chmod -R u+w vendor
 
-            for pkg in ${concatStringsSep " " subPackages}; do
-              echo "Building $pkg"
-              go install "''${buildFlags[@]}" "./$pkg"
-            done
+                runHook postConfigure
+              ''
+            );
 
-            runHook postBuild
-          '';
+          buildPhase =
+            attrs.buildPhase or ''
+              runHook preBuild
 
-        installPhase =
-          attrs.installPhase or ''
-            runHook preInstall
+              buildFlags=(
+                -v
+                -p $NIX_BUILD_CORES
+                ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
+                ${optionalString (ldflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " ldflags)}"}
+              )
 
-            mkdir -p $out
-            if [ -d "$GOPATH/bin" ]; then
-              cp -r "$GOPATH/bin" $out/
-            fi
+              for pkg in ${concatStringsSep " " subPackages}; do
+                echo "Building $pkg"
+                go install "''${buildFlags[@]}" "./$pkg"
+              done
 
-            runHook postInstall
-          '';
+              runHook postBuild
+            '';
 
-        passthru = {
-          inherit go vendorEnv;
-        };
-      }
-    );
+          installPhase =
+            attrs.installPhase or ''
+              runHook preInstall
+
+              mkdir -p $out
+              if [ -d "$GOPATH/bin" ]; then
+                cp -r "$GOPATH/bin" $out/
+              fi
+
+              runHook postInstall
+            '';
+
+          passthru =
+            {inherit go;}
+            // (
+              if vendorEnv != null
+              then {inherit vendorEnv;}
+              else {}
+            );
+        }
+      );
 in {
   inherit buildGoApplication mkVendorEnv fetchGoModule;
 }
