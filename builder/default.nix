@@ -91,13 +91,15 @@
         header + "\n" + explicit + optionalString (packages != "") ("\n" + packages)
     ) (builtins.attrNames modules);
 
-    # Generate symlink commands in Nix to avoid jq in the build
-    symlinkCommands = concatMapStringsSep "\n" (
+    # Generate copy commands for each module
+    # We use cp -r instead of symlinks to handle overlapping module paths
+    # (e.g., go.opentelemetry.io/otel and go.opentelemetry.io/otel/trace)
+    copyCommands = concatMapStringsSep "\n" (
       goPackagePath: let
         src = sources.${goPackagePath};
       in ''
-        mkdir -p "$out/$(dirname ${escapeShellArg goPackagePath})"
-        ln -s ${src} "$out/${escapeShellArg goPackagePath}"
+        mkdir -p "$out/${escapeShellArg goPackagePath}"
+        cp -r ${src}/* "$out/${escapeShellArg goPackagePath}/"
       ''
     ) (builtins.attrNames modules);
   in
@@ -110,8 +112,8 @@
     ''
       mkdir -p $out
 
-      # Create symlinks for each module
-      ${symlinkCommands}
+      # Copy each module
+      ${copyCommands}
 
       # Write modules.txt
       cp "$modulesTxtPath" "$out/modules.txt"
