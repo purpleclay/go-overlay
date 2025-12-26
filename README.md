@@ -283,9 +283,16 @@ go-overlay provides builder functions for Go applications using vendored depende
 
 ### `buildGoApplication`
 
-Build a Go application using a `govendor.toml` manifest.
+Build a Go application using vendored dependencies. Supports two modes:
+
+1. **In-tree vendor**: Use an existing `vendor/` directory from your source
+2. **Manifest mode**: Generate vendor from a `govendor.toml` manifest
 
 **Use when:** You want reproducible Go builds without the `vendorHash` dance.
+
+#### In-tree Vendor Mode
+
+If your project already has a committed `vendor/` directory, simply omit the `modules` parameter:
 
 ```nix
 buildGoApplication {
@@ -294,20 +301,36 @@ buildGoApplication {
   src = ./.;
   go = pkgs.go-bin.latest;
   subPackages = [ "cmd/my-app" ];
+  # No modules parameter - uses vendor/ from src
 }
 ```
 
-| Option        | Default                  | Description                         |
-| :------------ | :----------------------- | :---------------------------------- |
-| `pname`       | required                 | Package name                        |
-| `version`     | required                 | Package version                     |
-| `src`         | required                 | Source directory                    |
-| `go`          | required                 | Go derivation from go-overlay       |
-| `modules`     | `src + "/govendor.toml"` | Path to govendor.toml manifest      |
-| `subPackages` | `["."]`                  | Packages to build (relative to src) |
-| `ldflags`     | `[]`                     | Linker flags                        |
-| `tags`        | `[]`                     | Build tags                          |
-| `CGO_ENABLED` | inherited from `go`      | Enable CGO                          |
+#### Manifest Mode
+
+Use a `govendor.toml` manifest for dependency management:
+
+```nix
+buildGoApplication {
+  pname = "my-app";
+  version = "1.0.0";
+  src = ./.;
+  go = pkgs.go-bin.latest;
+  modules = ./govendor.toml;
+  subPackages = [ "cmd/my-app" ];
+}
+```
+
+| Option        | Default             | Description                                            |
+| :------------ | :------------------ | :----------------------------------------------------- |
+| `pname`       | required            | Package name                                           |
+| `version`     | required            | Package version                                        |
+| `src`         | required            | Source directory                                       |
+| `go`          | required            | Go derivation from go-overlay                          |
+| `modules`     | `null`              | Path to govendor.toml manifest (null = use in-tree vendor) |
+| `subPackages` | `["."]`             | Packages to build (relative to src)                    |
+| `ldflags`     | `[]`                | Linker flags                                           |
+| `tags`        | `[]`                | Build tags                                             |
+| `CGO_ENABLED` | inherited from `go` | Enable CGO                                             |
 
 ### `mkVendorEnv`
 
