@@ -23,26 +23,26 @@
     content = builtins.readFile path;
     lines = builtins.filter builtins.isString (builtins.split "\n" content);
 
-    # Find first line matching "go X.Y" or "go X.Y.Z" exactly
-    goLines = builtins.filter (line: builtins.match "go [0-9]+\\.[0-9]+(\\.[0-9]+)?" line != null) lines;
+    # Find first line matching "go X.Y", "go X.Y.Z", or "go X.YrcN" exactly
+    goLines = builtins.filter (line: builtins.match "go [0-9]+\\.[0-9]+((\\.[0-9]+)|(rc[0-9]+))?" line != null) lines;
     firstGoLine =
       if goLines != []
       then builtins.head goLines
       else null;
     goMatch =
       if firstGoLine != null
-      then builtins.match "go ([0-9]+\\.[0-9]+(\\.[0-9]+)?)" firstGoLine
+      then builtins.match "go ([0-9]+\\.[0-9]+((\\.[0-9]+)|(rc[0-9]+))?)" firstGoLine
       else null;
 
-    # Find first line matching "toolchain goX.Y.Z" exactly
-    toolchainLines = builtins.filter (line: builtins.match "toolchain go[0-9]+\\.[0-9]+\\.[0-9]+" line != null) lines;
+    # Find first line matching "toolchain goX.Y.Z" or "toolchain goX.YrcN" exactly
+    toolchainLines = builtins.filter (line: builtins.match "toolchain go[0-9]+\\.[0-9]+((\\.[0-9]+)|(rc[0-9]+))" line != null) lines;
     firstToolchainLine =
       if toolchainLines != []
       then builtins.head toolchainLines
       else null;
     toolchainMatch =
       if firstToolchainLine != null
-      then builtins.match "toolchain go([0-9]+\\.[0-9]+\\.[0-9]+)" firstToolchainLine
+      then builtins.match "toolchain go([0-9]+\\.[0-9]+((\\.[0-9]+)|(rc[0-9]+)))" firstToolchainLine
       else null;
   in {
     go =
