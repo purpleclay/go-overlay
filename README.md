@@ -17,6 +17,11 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 - [Installation](#installation)
 - [Library Functions](#library-functions)
 - [Builder Functions](#builder-functions)
+  - [buildGoApplication](#buildgoapplication)
+    - [In-tree Vendor Mode](#in-tree-vendor-mode)
+    - [Manifest Mode](#manifest-mode)
+    - [Local Replace Directives](#local-replace-directives)
+  - [mkVendorEnv](#mkvendorenv)
 - [Building a Go Application](#building-a-go-application)
 - [Detecting Drift with Git Hooks](#detecting-drift-with-git-hooks)
 - [Private Modules](#private-modules)
@@ -333,6 +338,26 @@ buildGoApplication {
 | `tags`        | `[]`                | Build tags                                             |
 | `CGO_ENABLED` | inherited from `go` | Enable CGO                                             |
 
+#### Local Replace Directives
+
+go-overlay supports local replace directives in `go.mod`:
+
+```
+replace example.com/mylib => ./libs/mylib
+```
+
+When `govendor` detects a local replacement, it records the path in `govendor.toml`:
+
+```toml
+[mod."example.com/mylib"]
+  version = "v1.0.0"
+  hash = "sha256-..."
+  replaced = "example.com/mylib"
+  local = "./libs/mylib"
+```
+
+During the build, `buildGoApplication` copies the local module from your source tree into the vendor directory. This works automatically—no additional configuration required.
+
 ### `mkVendorEnv`
 
 Create a vendor directory with `modules.txt` from a parsed `govendor.toml` manifest. This is a lower-level function used internally by `buildGoApplication`.
@@ -346,10 +371,11 @@ mkVendorEnv {
 }
 ```
 
-| Option     | Default  | Description                         |
-| :--------- | :------- | :---------------------------------- |
-| `go`       | required | Go derivation from go-overlay       |
-| `manifest` | required | Parsed govendor.toml (via fromTOML) |
+| Option     | Default  | Description                                          |
+| :--------- | :------- | :--------------------------------------------------- |
+| `go`       | required | Go derivation from go-overlay                        |
+| `manifest` | required | Parsed govendor.toml (via fromTOML)                  |
+| `src`      | `null`   | Source tree (required if manifest has local modules) |
 
 The resulting derivation contains each module at its import path and a `modules.txt` with package listings.
 
