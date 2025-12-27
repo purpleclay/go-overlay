@@ -19,6 +19,7 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 - [Builder Functions](#builder-functions)
 - [Building a Go Application](#building-a-go-application)
 - [Detecting Drift with Git Hooks](#detecting-drift-with-git-hooks)
+- [Private Modules](#private-modules)
 - [Using with buildGoModule](#using-with-buildgomodule)
 - [Migrating from nixpkgs](#migrating-from-nixpkgs)
 - [Used by](#used-by)
@@ -336,7 +337,7 @@ buildGoApplication {
 
 Create a vendor directory with `modules.txt` from a parsed `govendor.toml` manifest. This is a lower-level function used internally by `buildGoApplication`.
 
-**Use when:** You need custom control over the vendor directory or build process.
+**Use when:** You need custom control over the vendor directory or build process—for example, when integrating with code generation, custom build steps, or existing `stdenv.mkDerivation` workflows.
 
 ```nix
 mkVendorEnv {
@@ -345,12 +346,92 @@ mkVendorEnv {
 }
 ```
 
-| Option     | Default  | Description                              |
-| :--------- | :------- | :--------------------------------------- |
-| `go`       | required | Go derivation from go-overlay            |
-| `manifest` | required | Parsed govendor.toml (via fromTOML)      |
+| Option     | Default  | Description                         |
+| :--------- | :------- | :---------------------------------- |
+| `go`       | required | Go derivation from go-overlay       |
+| `manifest` | required | Parsed govendor.toml (via fromTOML) |
 
-The resulting derivation contains symlinks to each module at their import path and a `modules.txt` with package listings.
+The resulting derivation contains each module at its import path and a `modules.txt` with package listings.
+
+#### Custom Build Example
+
+```nix
+{ pkgs }:
+
+let
+  go = pkgs.go-bin.latest;
+  vendorEnv = pkgs.mkVendorEnv {
+    inherit go;
+    manifest = builtins.fromTOML (builtins.readFile ./govendor.toml);
+  };
+in
+pkgs.stdenv.mkDerivation {
+  pname = "myapp";
+  version = "1.0.0";
+  src = ./.;
+
+  nativeBuildInputs = [ go ];
+
+  configurePhase = ''
+    export GOCACHE=$TMPDIR/go-cache
+    export GOPATH=$TMPDIR/go
+    cp -r ${vendorEnv} vendor
+    chmod -R u+w vendor
+  '';
+
+  buildPhase = ''
+    go build -mod=vendor -o myapp ./cmd/myapp
+  '';
+
+  installPhase = ''
+    mkdir -p $out/bin
+    cp myapp $out/bin/
+  '';
+}
+```
+
+#### With Code Generation
+
+For projects requiring code generation before building:
+
+```nix
+{ pkgs }:
+
+let
+  go = pkgs.go-bin.latest;
+  vendorEnv = pkgs.mkVendorEnv {
+    inherit go;
+    manifest = builtins.fromTOML (builtins.readFile ./govendor.toml);
+  };
+in
+pkgs.stdenv.mkDerivation {
+  pname = "myapp";
+  version = "1.0.0";
+  src = ./.;
+
+  nativeBuildInputs = [ go pkgs.protobuf pkgs.protoc-gen-go ];
+
+  configurePhase = ''
+    export GOCACHE=$TMPDIR/go-cache
+    export GOPATH=$TMPDIR/go
+    cp -r ${vendorEnv} vendor
+    chmod -R u+w vendor
+  '';
+
+  buildPhase = ''
+    # Generate code first
+    protoc --go_out=. proto/*.proto
+
+    # Then build
+    go build -mod=vendor -o myapp ./cmd/myapp
+  '';
+
+  installPhase = ''
+    mkdir -p $out/bin
+    cp myapp $out/bin/
+  '';
+}
+```
 
 ## Building a Go Application
 
@@ -491,6 +572,65 @@ govendor.................................................................Failed
 ```
 
 Run `govendor` to regenerate the manifest, then commit both files together.
+
+## Private Modules
+
+go-overlay supports private Go modules through standard Go authentication mechanisms.
+
+### Generating Manifests
+
+When running `govendor`, configure authentication via environment variables or `.netrc`:
+
+```bash
+# Set GOPRIVATE to bypass the checksum database
+export GOPRIVATE="github.com/myorg/*,gitlab.mycompany.com/*"
+
+# Configure git to use token authentication
+git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+# Generate manifest
+govendor
+```
+
+Alternatively, use `~/.netrc`:
+
+```
+machine github.com
+  login oauth2
+  password ghp_xxxxxxxxxxxx
+```
+
+### Building with Private Modules
+
+Configure `buildGoApplication` with the appropriate environment variables:
+
+```nix
+buildGoApplication {
+  pname = "myapp";
+  version = "1.0.0";
+  src = ./.;
+  go = pkgs.go-bin.latest;
+
+  GOPRIVATE = "github.com/myorg/*";
+  GOPROXY = "https://proxy.golang.org,direct";
+}
+```
+
+### Using a Private Proxy
+
+For organizations running Athens, Artifactory, or similar:
+
+```nix
+buildGoApplication {
+  pname = "myapp";
+  version = "1.0.0";
+  src = ./.;
+  go = pkgs.go-bin.latest;
+
+  GOPROXY = "https://athens.mycompany.com";
+  GOSUMDB = "off";
+}
+```
 
 ## Using with buildGoModule
 
