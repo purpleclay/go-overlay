@@ -60,13 +60,20 @@
 
   # Create a vendor directory with modules.txt from a govendor.toml manifest.
   # The vendor directory contains symlinks to fetched modules.
+  # For local modules (replace directives with local paths), the source is
+  # provided separately and copied during the build phase.
   mkVendorEnv = {
     go,
     manifest, # Parsed govendor.toml (via builtins.fromTOML)
+    src ? null, # Source tree for local module replacements
   }: let
     modules = manifest.mod or {};
 
-    # Fetch all modules
+    # Separate remote and local modules
+    remoteModules = lib.filterAttrs (_: meta: !(meta ? local)) modules;
+    localModules = lib.filterAttrs (_: meta: meta ? local) modules;
+
+    # Fetch remote modules only
     sources =
       mapAttrs (
         goPackagePath: meta:
@@ -75,38 +82,75 @@
             inherit (meta) version hash;
           }
       )
-      modules;
+      remoteModules;
 
     # Generate the complete modules.txt content in Nix
-    # Format:
+    # Format for regular modules:
     # # module/path version
     # ## explicit; go X.Y
     # package/path1
-    # package/path2
-    modulesTxt = concatMapStringsSep "\n" (
-      goPackagePath: let
-        meta = modules.${goPackagePath};
-        header = "# ${goPackagePath} ${meta.version}";
-        explicit =
-          if meta.go or "" != ""
-          then "## explicit; go ${meta.go}"
-          else "## explicit";
-        packages = concatMapStringsSep "\n" (p: p) (meta.packages or []);
-      in
-        header + "\n" + explicit + optionalString (packages != "") ("\n" + packages)
-    ) (builtins.attrNames modules);
+    #
+    # Format for local replacements (Go requires both lines):
+    # # module/path version => ./local/path
+    # ## explicit; go X.Y
+    # package/path1
+    # # module/path => ./local/path
+    modulesTxt = let
+      moduleEntries = concatMapStringsSep "\n" (
+        goPackagePath: let
+          meta = modules.${goPackagePath};
+          header =
+            if meta ? local
+            then "# ${goPackagePath} ${meta.version} => ${meta.local}"
+            else "# ${goPackagePath} ${meta.version}";
+          explicit =
+            if meta.go or "" != ""
+            then "## explicit; go ${meta.go}"
+            else "## explicit";
+          packages = concatMapStringsSep "\n" (p: p) (meta.packages or []);
+        in
+          header + "\n" + explicit + optionalString (packages != "") ("\n" + packages)
+      ) (builtins.attrNames modules);
 
-    # Generate copy commands for each module
+      # Generate trailing replacement markers for local modules
+      localTrailers = concatMapStringsSep "\n" (
+        goPackagePath: let
+          meta = localModules.${goPackagePath};
+        in "# ${goPackagePath} => ${meta.local}"
+      ) (builtins.attrNames localModules);
+    in
+      moduleEntries + optionalString (localTrailers != "") ("\n" + localTrailers);
+
+    # Generate copy commands for remote modules
     # We use cp -r instead of symlinks to handle overlapping module paths
     # (e.g., go.opentelemetry.io/otel and go.opentelemetry.io/otel/trace)
-    copyCommands = concatMapStringsSep "\n" (
+    remoteCopyCommands = concatMapStringsSep "\n" (
       goPackagePath: let
-        src = sources.${goPackagePath};
+        modSrc = sources.${goPackagePath};
       in ''
         mkdir -p "$out/${escapeShellArg goPackagePath}"
-        cp -r ${src}/* "$out/${escapeShellArg goPackagePath}/"
+        cp -r ${modSrc}/* "$out/${escapeShellArg goPackagePath}/"
       ''
-    ) (builtins.attrNames modules);
+    ) (builtins.attrNames remoteModules);
+
+    # Generate copy commands for local modules (from src)
+    localCopyCommands =
+      if src != null
+      then
+        concatMapStringsSep "\n" (
+          goPackagePath: let
+            meta = localModules.${goPackagePath};
+            localPath = meta.local;
+          in ''
+            mkdir -p "$out/${escapeShellArg goPackagePath}"
+            cp -r ${src}/${escapeShellArg localPath}/* "$out/${escapeShellArg goPackagePath}/"
+          ''
+        ) (builtins.attrNames localModules)
+      else
+        # If no src provided but there are local modules, error
+        if localModules != {}
+        then throw "go-overlay: Local modules found in manifest but no 'src' provided to mkVendorEnv"
+        else "";
   in
     runCommand "vendor-env"
     {
@@ -117,8 +161,11 @@
     ''
       mkdir -p $out
 
-      # Copy each module
-      ${copyCommands}
+      # Copy remote modules
+      ${remoteCopyCommands}
+
+      # Copy local modules from source tree
+      ${localCopyCommands}
 
       # Write modules.txt
       cp "$modulesTxtPath" "$out/modules.txt"
@@ -159,7 +206,7 @@
       if useManifest
       then
         mkVendorEnv {
-          inherit go manifest;
+          inherit go manifest src;
         }
       else null;
   in

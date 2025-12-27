@@ -71,10 +71,23 @@ func (f *GoModFile) HasDependencies() bool {
 	return len(f.modfile.Require) > 0
 }
 
-func (f *GoModFile) Replacements() map[string]string {
-	replacements := make(map[string]string)
+type Replacement struct {
+	OldPath   string
+	NewPath   string
+	IsLocal   bool
+	LocalPath string
+}
+
+func (f *GoModFile) Replacements() map[string]Replacement {
+	replacements := make(map[string]Replacement)
 	for _, repl := range f.modfile.Replace {
-		replacements[repl.New.Path] = repl.Old.Path
+		isLocal := strings.HasPrefix(repl.New.Path, ".") || strings.HasPrefix(repl.New.Path, "/")
+		replacements[repl.New.Path] = Replacement{
+			OldPath:   repl.Old.Path,
+			NewPath:   repl.New.Path,
+			IsLocal:   isLocal,
+			LocalPath: repl.New.Path,
+		}
 	}
 	return replacements
 }
@@ -90,7 +103,22 @@ func (f *GoModFile) Dependencies() ([]GoModule, error) {
 		return nil, err
 	}
 
-	return f.resolveModules(downloads, pkgsByMod)
+	modules, err := f.resolveModules(downloads, pkgsByMod)
+	if err != nil {
+		return nil, err
+	}
+
+	localModules, err := f.resolveLocalModules(pkgsByMod)
+	if err != nil {
+		return nil, err
+	}
+
+	modules = append(modules, localModules...)
+	sort.Slice(modules, func(i, j int) bool {
+		return modules[i].Path < modules[j].Path
+	})
+
+	return modules, nil
 }
 
 var platforms = []struct{ goos, goarch string }{
@@ -231,8 +259,8 @@ func (f *GoModFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[s
 
 			path := meta.Path
 			var replacedPath string
-			if orig, ok := replacements[path]; ok {
-				path = orig
+			if repl, ok := replacements[path]; ok {
+				path = repl.OldPath
 				replacedPath = meta.Path
 			}
 
@@ -252,9 +280,72 @@ func (f *GoModFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[s
 		return nil, err
 	}
 
-	sort.Slice(goModules, func(i, j int) bool {
-		return goModules[i].Path < goModules[j].Path
-	})
-
 	return goModules, nil
+}
+
+func (f *GoModFile) resolveLocalModules(pkgsByMod map[string][]string) ([]GoModule, error) {
+	replacements := f.Replacements()
+
+	var localRepls []Replacement
+	for _, repl := range replacements {
+		if repl.IsLocal {
+			localRepls = append(localRepls, repl)
+		}
+	}
+
+	if len(localRepls) == 0 {
+		return nil, nil
+	}
+
+	requires := make(map[string]string)
+	for _, req := range f.modfile.Require {
+		requires[req.Mod.Path] = req.Mod.Version
+	}
+
+	p := pool.NewWithResults[GoModule]().WithErrors().WithMaxGoroutines(8)
+
+	for _, repl := range localRepls {
+		p.Go(func() (GoModule, error) {
+			localDir := filepath.Join(f.dir, repl.LocalPath)
+			localDir, err := filepath.Abs(localDir)
+			if err != nil {
+				return GoModule{}, fmt.Errorf("failed to resolve local module path %s: %w", repl.LocalPath, err)
+			}
+
+			h := sha256.New()
+			if err := nar.DumpPathFilter(h, localDir, func(path string, _ nar.NodeType) bool {
+				return strings.ToLower(filepath.Base(path)) != ".ds_store"
+			}); err != nil {
+				return GoModule{}, fmt.Errorf("failed to hash local module %s: %w", repl.LocalPath, err)
+			}
+
+			digest := h.Sum(nil)
+			hash := "sha256-" + base64.StdEncoding.EncodeToString(digest)
+
+			var goVersion string
+			localGoMod := filepath.Join(localDir, "go.mod")
+			if modData, err := os.ReadFile(localGoMod); err == nil {
+				if modFile, err := modfile.Parse(localGoMod, modData, nil); err == nil && modFile.Go != nil {
+					goVersion = modFile.Go.Version
+				}
+			}
+
+			version := requires[repl.OldPath]
+			if version == "" {
+				version = "v0.0.0"
+			}
+
+			return GoModule{
+				Path:         repl.OldPath,
+				Version:      version,
+				Packages:     pkgsByMod[repl.OldPath],
+				Hash:         hash,
+				GoVersion:    goVersion,
+				ReplacedPath: repl.OldPath,
+				Local:        repl.LocalPath,
+			}, nil
+		})
+	}
+
+	return p.Wait()
 }

@@ -126,6 +126,10 @@
                 inherit pkgs;
                 go = pkgs.go-bin.versions."1.22.3";
               };
+              integration-local-replace = import ./test/integration/local-replace {
+                inherit pkgs;
+                go = pkgs.go-bin.versions."1.22.3";
+              };
               # integration-in-tree-vendor is not exposed as a package because
               # it requires vendor/ to be generated first. It's built directly
               # in CI after running 'go mod vendor'. See .github/workflows/nix.yml

@@ -24,6 +24,7 @@ type GoModule struct {
 	GoVersion    string   `toml:"go,omitempty"`
 	Packages     []string `toml:"packages,omitempty"`
 	ReplacedPath string   `toml:"replaced,omitempty"`
+	Local        string   `toml:"local,omitempty"`
 }
 
 func newManifest(goMod *GoModFile) (*VendorManifest, error) {

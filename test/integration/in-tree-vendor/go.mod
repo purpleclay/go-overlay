@@ -1,4 +1,4 @@
-module test/integration-vendor
+module integration-in-tree-vendor
 
 go 1.22
 

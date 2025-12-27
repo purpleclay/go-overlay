@@ -165,7 +165,7 @@ jobs:
       - name: Build and run buildGoModule integration test
         run: |
           nix build .#integration-build-go-module
-          ./result/bin/integration-test
+          ./result/bin/integration-build-go-module
 
       - name: Build and run in-tree vendor integration test
         run: |
@@ -184,4 +184,9 @@ jobs:
               go = pkgs.go-bin.versions."1.22.3";
             }
           '
-          ./result/bin/integration-vendor
+          ./result/bin/integration-in-tree-vendor
+
+      - name: Build and run local-replace integration test
+        run: |
+          nix build .#integration-local-replace
+          ./result/bin/integration-local-replace

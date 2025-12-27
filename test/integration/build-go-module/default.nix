@@ -3,7 +3,7 @@
   go,
 }:
 (pkgs.buildGoModule.override {inherit go;}) {
-  pname = "integration-test";
+  pname = "build-go-module";
   version = "0.1.0";
   src = ./.;
   vendorHash = null;
