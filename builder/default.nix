@@ -187,6 +187,8 @@
     ldflags ? [],
     tags ? [],
     CGO_ENABLED ? go.CGO_ENABLED,
+    GOOS ? go.GOOS,
+    GOARCH ? go.GOARCH,
     GOPROXY ? "off",
     GOPRIVATE ? "",
     GOSUMDB ? "off",
@@ -219,7 +221,7 @@
     then throw "go-overlay: No vendor source found. Provide 'modules' parameter pointing to govendor.toml, or include a vendor/ directory in src."
     else
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB"]
         // {
           inherit pname version src;
 
@@ -229,7 +231,7 @@
               go
             ];
 
-          inherit (go) GOOS GOARCH;
+          inherit GOOS GOARCH;
           inherit CGO_ENABLED;
 
           GO111MODULE = "on";
