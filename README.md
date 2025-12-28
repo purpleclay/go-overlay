@@ -404,10 +404,18 @@ buildGoApplication {
 }
 ```
 
-Supported target platforms (scanned by govendor):
+By default, govendor resolves dependencies for these platforms:
 - `linux/amd64`, `linux/arm64`
 - `darwin/amd64`, `darwin/arm64`
 - `windows/amd64`, `windows/arm64`
+
+To build for platforms outside the defaults (e.g., FreeBSD), use `--include-platform` when generating the manifest:
+
+```bash
+govendor --include-platform=freebsd/amd64
+```
+
+This ensures dependencies with platform-specific build constraints are included. The additional platforms are persisted in `govendor.toml` and automatically used on subsequent runs.
 
 For multi-platform releases:
 
@@ -415,10 +423,8 @@ For multi-platform releases:
 let
   platforms = [
     { goos = "linux"; goarch = "amd64"; }
-    { goos = "linux"; goarch = "arm64"; }
     { goos = "darwin"; goarch = "amd64"; }
-    { goos = "darwin"; goarch = "arm64"; }
-    { goos = "windows"; goarch = "amd64"; }
+    { goos = "freebsd"; goarch = "amd64"; }
   ];
 in
 builtins.listToAttrs (map (p: {

@@ -11,12 +11,22 @@ import (
 
 func TestManifestWriteTo(t *testing.T) {
 	tests := []struct {
-		name string
-		dir  string
+		name           string
+		dir            string
+		extraPlatforms []string
 	}{
 		{
 			name: "simple",
 			dir:  "testdata/simple",
+		},
+		{
+			name:           "with-platforms",
+			dir:            "testdata/with-platforms",
+			extraPlatforms: []string{"freebsd/amd64", "freebsd/arm64"},
+		},
+		{
+			name: "local-replace",
+			dir:  "testdata/local-replace",
 		},
 	}
 
@@ -26,7 +36,7 @@ func TestManifestWriteTo(t *testing.T) {
 			goMod, err := ParseGoModFile(goModPath)
 			require.NoError(t, err)
 
-			manifest, err := newManifest(goMod)
+			manifest, err := newManifest(goMod, tt.extraPlatforms)
 			require.NoError(t, err)
 
 			var buf bytes.Buffer
