@@ -187,6 +187,10 @@
     ldflags ? [],
     tags ? [],
     CGO_ENABLED ? go.CGO_ENABLED,
+    GOPROXY ? "off",
+    GOPRIVATE ? "",
+    GOSUMDB ? "off",
+    GONOSUMDB ? "",
     ...
   } @ attrs: let
     # Check for in-tree vendor directory
@@ -215,7 +219,7 @@
     then throw "go-overlay: No vendor source found. Provide 'modules' parameter pointing to govendor.toml, or include a vendor/ directory in src."
     else
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB"]
         // {
           inherit pname version src;
 
@@ -240,8 +244,10 @@
 
                 export GOCACHE=$TMPDIR/go-cache
                 export GOPATH="$TMPDIR/go"
-                export GOSUMDB=off
-                export GOPROXY=off
+                export GOPROXY=${escapeShellArg GOPROXY}
+                export GOPRIVATE=${escapeShellArg GOPRIVATE}
+                export GOSUMDB=${escapeShellArg GOSUMDB}
+                export GONOSUMDB=${escapeShellArg GONOSUMDB}
 
                 # Use in-tree vendor directory as-is
                 chmod -R u+w vendor
@@ -253,8 +259,10 @@
 
                 export GOCACHE=$TMPDIR/go-cache
                 export GOPATH="$TMPDIR/go"
-                export GOSUMDB=off
-                export GOPROXY=off
+                export GOPROXY=${escapeShellArg GOPROXY}
+                export GOPRIVATE=${escapeShellArg GOPRIVATE}
+                export GOSUMDB=${escapeShellArg GOSUMDB}
+                export GONOSUMDB=${escapeShellArg GONOSUMDB}
 
                 # Copy vendor environment from manifest (dereference symlinks)
                 rm -rf vendor

@@ -21,6 +21,7 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
     - [In-tree Vendor Mode](#in-tree-vendor-mode)
     - [Manifest Mode](#manifest-mode)
     - [Local Replace Directives](#local-replace-directives)
+    - [Proxy Configuration](#proxy-configuration)
   - [mkVendorEnv](#mkvendorenv)
 - [Building a Go Application](#building-a-go-application)
 - [Detecting Drift with Git Hooks](#detecting-drift-with-git-hooks)
@@ -337,6 +338,10 @@ buildGoApplication {
 | `ldflags`     | `[]`                | Linker flags                                           |
 | `tags`        | `[]`                | Build tags                                             |
 | `CGO_ENABLED` | inherited from `go` | Enable CGO                                             |
+| `GOPROXY`     | `"off"`             | Go module proxy URL                                    |
+| `GOPRIVATE`   | `""`                | Glob patterns for private modules                      |
+| `GOSUMDB`     | `"off"`             | Checksum database URL                                  |
+| `GONOSUMDB`   | `""`                | Glob patterns to skip checksum verification            |
 
 #### Local Replace Directives
 
@@ -357,6 +362,25 @@ When `govendor` detects a local replacement, it records the path in `govendor.to
 ```
 
 During the build, `buildGoApplication` copies the local module from your source tree into the vendor directory. This works automatically—no additional configuration required.
+
+#### Proxy Configuration
+
+By default, `buildGoApplication` sets `GOPROXY=off` and `GOSUMDB=off` since dependencies are vendored. However, you can override these for corporate proxies or private module servers:
+
+```nix
+buildGoApplication {
+  pname = "myapp";
+  version = "1.0.0";
+  src = ./.;
+  go = pkgs.go-bin.latest;
+  modules = ./govendor.toml;
+
+  # Corporate proxy with fallback
+  GOPROXY = "https://proxy.corp.example.com,https://proxy.golang.org,direct";
+  GOPRIVATE = "github.com/myorg/*";
+  GOSUMDB = "sum.golang.org";
+}
+```
 
 ### `mkVendorEnv`
 
