@@ -28,18 +28,22 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 - [Detecting Drift with Git Hooks](#detecting-drift-with-git-hooks)
 - [Private Modules](#private-modules)
 - [Using with buildGoModule](#using-with-buildgomodule)
-- [Migrating from nixpkgs](#migrating-from-nixpkgs)
+- [Migration Guides](#migration-guides)
+  - [From gomod2nix](#from-gomod2nix)
+  - [From buildGoModule](#from-buildgomodule)
 - [Used by](#used-by)
 
 ## Why it exists?
 
-| Feature                  | go-overlay                   | nixpkgs                        |
-| ------------------------ | ---------------------------- | ------------------------------ |
-| Versions available       | 100+ (1.17 – latest)         | 2 per nixpkgs commit           |
-| New release availability | Up to 4 hours after upstream | Days to weeks                  |
-| Multiple versions        | Single flake input           | Multiple nixpkgs pins required |
-| Release candidates       | Available                    | Not available                  |
-| Building applications    | No vendorHash required       | vendorHash must be computed    |
+| Feature                  | go-overlay           | gomod2nix     | nixpkgs (buildGoModule) |
+| :----------------------- | :------------------- | :------------ | :---------------------- |
+| Go versions available    | 100+ (1.17 – latest) | nixpkgs only  | nixpkgs only            |
+| New release availability | Up to 4 hours        | Days to weeks | Days to weeks           |
+| Release candidates       | Yes                  | No            | No                      |
+| vendorHash required      | No                   | No            | Yes                     |
+| Unpatched Go binary      | Yes                  | No            | No                      |
+| Private modules          | Standard Go auth     | Complex setup | Complex setup           |
+| Drift detection          | Yes (`--check`)      | No            | N/A                     |
 
 > [!NOTE]
 > Older Go versions _are_ accessible in nixpkgs by pinning historical commits, but this requires managing multiple nixpkgs inputs and finding the correct commit for each version.
@@ -328,23 +332,23 @@ buildGoApplication {
 }
 ```
 
-| Option        | Default             | Description                                            |
-| :------------ | :------------------ | :----------------------------------------------------- |
-| `pname`       | required            | Package name                                           |
-| `version`     | required            | Package version                                        |
-| `src`         | required            | Source directory                                       |
-| `go`          | required            | Go derivation from go-overlay                          |
+| Option        | Default             | Description                                                |
+| :------------ | :------------------ | :--------------------------------------------------------- |
+| `pname`       | required            | Package name                                               |
+| `version`     | required            | Package version                                            |
+| `src`         | required            | Source directory                                           |
+| `go`          | required            | Go derivation from go-overlay                              |
 | `modules`     | `null`              | Path to govendor.toml manifest (null = use in-tree vendor) |
-| `subPackages` | `["."]`             | Packages to build (relative to src)                    |
-| `ldflags`     | `[]`                | Linker flags                                           |
-| `tags`        | `[]`                | Build tags                                             |
-| `CGO_ENABLED` | inherited from `go` | Enable CGO                                             |
-| `GOOS`        | inherited from `go` | Target operating system                                |
-| `GOARCH`      | inherited from `go` | Target architecture                                    |
-| `GOPROXY`     | `"off"`             | Go module proxy URL                                    |
-| `GOPRIVATE`   | `""`                | Glob patterns for private modules                      |
-| `GOSUMDB`     | `"off"`             | Checksum database URL                                  |
-| `GONOSUMDB`   | `""`                | Glob patterns to skip checksum verification            |
+| `subPackages` | `["."]`             | Packages to build (relative to src)                        |
+| `ldflags`     | `[]`                | Linker flags                                               |
+| `tags`        | `[]`                | Build tags                                                 |
+| `CGO_ENABLED` | inherited from `go` | Enable CGO                                                 |
+| `GOOS`        | inherited from `go` | Target operating system                                    |
+| `GOARCH`      | inherited from `go` | Target architecture                                        |
+| `GOPROXY`     | `"off"`             | Go module proxy URL                                        |
+| `GOPRIVATE`   | `""`                | Glob patterns for private modules                          |
+| `GOSUMDB`     | `"off"`             | Checksum database URL                                      |
+| `GONOSUMDB`   | `""`                | Glob patterns to skip checksum verification                |
 
 #### Local Replace Directives
 
@@ -405,6 +409,7 @@ buildGoApplication {
 ```
 
 By default, govendor resolves dependencies for these platforms:
+
 - `linux/amd64`, `linux/arm64`
 - `darwin/amd64`, `darwin/arm64`
 - `windows/amd64`, `windows/arm64`
@@ -776,27 +781,147 @@ buildGoApplication {
 }
 ```
 
-## Migrating from nixpkgs
+## Migration Guides
 
-Migrating from nixpkgs to go-overlay involves changing how Go versions are specified in your Nix expressions.
+### From gomod2nix
 
-### Before (nixpkgs)
+#### Before (gomod2nix)
 
 ```nix
-# pin to minor version only
+# flake.nix
 {
-  buildInputs = [ pkgs.go_1_24 ];
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    gomod2nix.url = "github:nix-community/gomod2nix";
+  };
+
+  outputs = { nixpkgs, gomod2nix, ... }:
+    let
+      pkgs = import nixpkgs {
+        system = "x86_64-linux";
+        overlays = [ gomod2nix.overlays.default ];
+      };
+    in {
+      packages.default = pkgs.buildGoApplication {
+        pname = "myapp";
+        version = "1.0.0";
+        src = ./.;
+        modules = ./gomod2nix.toml;
+      };
+    };
 }
 ```
 
-### After (go-overlay)
+```bash
+gomod2nix generate
+```
+
+#### After (go-overlay)
 
 ```nix
-# pin to exact version
+# flake.nix
 {
-  buildInputs = [ pkgs.go-bin.versions."1.24.5" ];
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    go-overlay.url = "github:purpleclay/go-overlay";
+  };
+
+  outputs = { nixpkgs, go-overlay, ... }:
+    let
+      system = "x86_64-linux";
+      pkgs = import nixpkgs {
+        inherit system;
+        overlays = [ go-overlay.overlays.default ];
+      };
+    in {
+      packages.default = pkgs.buildGoApplication {
+        pname = "myapp";
+        version = "1.0.0";
+        src = ./.;
+        go = pkgs.go-bin.fromGoMod ./go.mod;
+        modules = ./govendor.toml;
+      };
+    };
 }
 ```
+
+```bash
+govendor
+```
+
+#### Migration Steps
+
+1. Replace gomod2nix with go-overlay in flake inputs
+2. Update the overlay reference
+3. Add `go` parameter to `buildGoApplication`
+4. Run `govendor` to generate the new manifest
+5. Delete `gomod2nix.toml` and commit `govendor.toml`
+
+### From buildGoModule
+
+#### Before (buildGoModule)
+
+```nix
+# flake.nix
+{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+  outputs = { nixpkgs, ... }:
+    let
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+    in {
+      packages.default = pkgs.buildGoModule {
+        pname = "myapp";
+        version = "1.0.0";
+        src = ./.;
+        vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+      };
+    };
+}
+```
+
+#### After (go-overlay)
+
+```nix
+# flake.nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    go-overlay.url = "github:purpleclay/go-overlay";
+  };
+
+  outputs = { nixpkgs, go-overlay, ... }:
+    let
+      system = "x86_64-linux";
+      pkgs = import nixpkgs {
+        inherit system;
+        overlays = [ go-overlay.overlays.default ];
+      };
+    in {
+      packages.default = pkgs.buildGoApplication {
+        pname = "myapp";
+        version = "1.0.0";
+        src = ./.;
+        go = pkgs.go-bin.fromGoMod ./go.mod;
+        modules = ./govendor.toml;
+      };
+    };
+}
+```
+
+```bash
+govendor
+```
+
+#### Migration Steps
+
+1. Add go-overlay to flake inputs
+2. Add overlay to pkgs
+3. Replace `buildGoModule` with `buildGoApplication`
+4. Remove `vendorHash` parameter
+5. Add `go` and `modules` parameters
+6. Run `govendor` to generate the manifest
+7. Commit `govendor.toml`
 
 ## Used By
 
