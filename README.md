@@ -12,6 +12,8 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 
 [^3]: GitHub Actions monitors [go.dev](https://go.dev/dl/) every 4 hours. When a new release is detected, a manifest is generated and committed automatically—no manual intervention required.
 
+[^4]: gomod2nix's builder depends on its CLI tool, which in turn depends on the builder—complicating [NUR integration and bootstrapping](https://github.com/nix-community/gomod2nix/issues/196). go-overlay avoids this by having `govendor` and `buildGoApplication` communicate only via the manifest file.
+
 - [Why it exists?](#why-it-exists)
 - [Quick Start](#quick-start)
 - [Installation](#installation)
@@ -44,6 +46,7 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 | Unpatched Go binary      | Yes                  | No            | No                      |
 | Private modules          | Standard Go auth     | Complex setup | Complex setup           |
 | Drift detection          | Yes (`--check`)      | No            | N/A                     |
+| Circular dependency[^4]  | No                   | Yes           | N/A                     |
 
 > [!NOTE]
 > Older Go versions _are_ accessible in nixpkgs by pinning historical commits, but this requires managing multiple nixpkgs inputs and finding the correct commit for each version.
