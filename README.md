@@ -22,6 +22,7 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
     - [Manifest Mode](#manifest-mode)
     - [Local Replace Directives](#local-replace-directives)
     - [Proxy Configuration](#proxy-configuration)
+    - [Cross-Compilation](#cross-compilation)
   - [mkVendorEnv](#mkvendorenv)
 - [Building a Go Application](#building-a-go-application)
 - [Detecting Drift with Git Hooks](#detecting-drift-with-git-hooks)
@@ -338,6 +339,8 @@ buildGoApplication {
 | `ldflags`     | `[]`                | Linker flags                                           |
 | `tags`        | `[]`                | Build tags                                             |
 | `CGO_ENABLED` | inherited from `go` | Enable CGO                                             |
+| `GOOS`        | inherited from `go` | Target operating system                                |
+| `GOARCH`      | inherited from `go` | Target architecture                                    |
 | `GOPROXY`     | `"off"`             | Go module proxy URL                                    |
 | `GOPRIVATE`   | `""`                | Glob patterns for private modules                      |
 | `GOSUMDB`     | `"off"`             | Checksum database URL                                  |
@@ -380,6 +383,57 @@ buildGoApplication {
   GOPRIVATE = "github.com/myorg/*";
   GOSUMDB = "sum.golang.org";
 }
+```
+
+#### Cross-Compilation
+
+Build binaries for different platforms by overriding `GOOS` and `GOARCH`:
+
+```nix
+buildGoApplication {
+  pname = "myapp";
+  version = "1.0.0";
+  src = ./.;
+  go = pkgs.go-bin.latest;
+  modules = ./govendor.toml;
+
+  # Build for Windows on Linux/macOS
+  GOOS = "windows";
+  GOARCH = "amd64";
+  CGO_ENABLED = 0;
+}
+```
+
+Supported target platforms (scanned by govendor):
+- `linux/amd64`, `linux/arm64`
+- `darwin/amd64`, `darwin/arm64`
+- `windows/amd64`, `windows/arm64`
+
+For multi-platform releases:
+
+```nix
+let
+  platforms = [
+    { goos = "linux"; goarch = "amd64"; }
+    { goos = "linux"; goarch = "arm64"; }
+    { goos = "darwin"; goarch = "amd64"; }
+    { goos = "darwin"; goarch = "arm64"; }
+    { goos = "windows"; goarch = "amd64"; }
+  ];
+in
+builtins.listToAttrs (map (p: {
+  name = "myapp-${p.goos}-${p.goarch}";
+  value = pkgs.buildGoApplication {
+    pname = "myapp";
+    version = "1.0.0";
+    src = ./.;
+    go = pkgs.go-bin.latest;
+    modules = ./govendor.toml;
+    GOOS = p.goos;
+    GOARCH = p.goarch;
+    CGO_ENABLED = 0;
+  };
+}) platforms)
 ```
 
 ### `mkVendorEnv`
