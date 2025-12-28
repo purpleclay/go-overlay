@@ -92,8 +92,8 @@ func (f *GoModFile) Replacements() map[string]Replacement {
 	return replacements
 }
 
-func (f *GoModFile) Dependencies() ([]GoModule, error) {
-	pkgsByMod, err := f.packagesByModule()
+func (f *GoModFile) Dependencies(extraPlatforms []string) ([]GoModule, error) {
+	pkgsByMod, err := f.packagesByModule(extraPlatforms)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,11 @@ func (f *GoModFile) Dependencies() ([]GoModule, error) {
 	return modules, nil
 }
 
-var platforms = []struct{ goos, goarch string }{
+type platform struct {
+	goos, goarch string
+}
+
+var defaultPlatforms = []platform{
 	{"linux", "amd64"},
 	{"linux", "arm64"},
 	{"darwin", "amd64"},
@@ -130,10 +134,20 @@ var platforms = []struct{ goos, goarch string }{
 	{"windows", "arm64"},
 }
 
-func (f *GoModFile) packagesByModule() (map[string][]string, error) {
+func (f *GoModFile) packagesByModule(extraPlatforms []string) (map[string][]string, error) {
 	current, err := f.packagesByModuleForPlatform(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return nil, err
+	}
+
+	// Build platform list: defaults + extras
+	platforms := make([]platform, len(defaultPlatforms))
+	copy(platforms, defaultPlatforms)
+	for _, ep := range extraPlatforms {
+		parts := strings.Split(ep, "/")
+		if len(parts) == 2 {
+			platforms = append(platforms, platform{parts[0], parts[1]})
+		}
 	}
 
 	p := pool.NewWithResults[map[string][]string]().WithErrors()

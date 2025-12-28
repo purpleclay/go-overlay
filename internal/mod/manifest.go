@@ -2,6 +2,7 @@ package mod
 
 import (
 	"io"
+	"slices"
 
 	"github.com/BurntSushi/toml"
 )
@@ -12,9 +13,10 @@ const (
 )
 
 type VendorManifest struct {
-	Schema int                 `toml:"schema"`
-	Hash   string              `toml:"hash"`
-	Mod    map[string]GoModule `toml:"mod"`
+	Schema           int                 `toml:"schema"`
+	Hash             string              `toml:"hash"`
+	IncludePlatforms []string            `toml:"include_platforms,omitempty"`
+	Mod              map[string]GoModule `toml:"mod"`
 }
 
 type GoModule struct {
@@ -27,8 +29,8 @@ type GoModule struct {
 	Local        string   `toml:"local,omitempty"`
 }
 
-func newManifest(goMod *GoModFile) (*VendorManifest, error) {
-	deps, err := goMod.Dependencies()
+func newManifest(goMod *GoModFile, extraPlatforms []string) (*VendorManifest, error) {
+	deps, err := goMod.Dependencies(extraPlatforms)
 	if err != nil {
 		return nil, err
 	}
@@ -38,10 +40,19 @@ func newManifest(goMod *GoModFile) (*VendorManifest, error) {
 		mod[m.Path] = m
 	}
 
+	// Only store platforms if extras were provided
+	var platforms []string
+	if len(extraPlatforms) > 0 {
+		platforms = make([]string, len(extraPlatforms))
+		copy(platforms, extraPlatforms)
+		slices.Sort(platforms)
+	}
+
 	return &VendorManifest{
-		Schema: schemaVersion,
-		Hash:   goMod.Hash(),
-		Mod:    mod,
+		Schema:           schemaVersion,
+		Hash:             goMod.Hash(),
+		IncludePlatforms: platforms,
+		Mod:              mod,
 	}, nil
 }
 
@@ -67,4 +78,14 @@ func extractHash(data []byte) (string, error) {
 		return "", err
 	}
 	return manifest.Hash, nil
+}
+
+func extractPlatforms(data []byte) ([]string, error) {
+	var manifest struct {
+		IncludePlatforms []string `toml:"include_platforms"`
+	}
+	if err := toml.Unmarshal(data, &manifest); err != nil {
+		return nil, err
+	}
+	return manifest.IncludePlatforms, nil
 }

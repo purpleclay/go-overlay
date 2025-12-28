@@ -16,10 +16,11 @@ const (
 )
 
 type vendorOptions struct {
-	detectDrift bool
-	paths       []string
-	recursive   bool
-	maxDepth    int
+	detectDrift    bool
+	paths          []string
+	recursive      bool
+	maxDepth       int
+	extraPlatforms []string
 }
 
 type VendorOption func(*vendorOptions)
@@ -45,6 +46,12 @@ func WithRecursive(maxDepth int) VendorOption {
 	return func(opts *vendorOptions) {
 		opts.recursive = true
 		opts.maxDepth = maxDepth
+	}
+}
+
+func WithIncludePlatforms(platforms []string) VendorOption {
+	return func(opts *vendorOptions) {
+		opts.extraPlatforms = platforms
 	}
 }
 
@@ -147,6 +154,8 @@ func (v *Vendor) processModFile(path string) vendorResult {
 	vendorPath := filepath.Join(goMod.Dir(), vendorFile)
 	existingData, err := os.ReadFile(vendorPath)
 
+	extraPlatforms := v.opts.extraPlatforms
+
 	if os.IsNotExist(err) {
 		if v.opts.detectDrift {
 			return resultMissing(path)
@@ -159,7 +168,13 @@ func (v *Vendor) processModFile(path string) vendorResult {
 			return resultError(path, err)
 		}
 
-		if existingHash == goMod.Hash() {
+		if len(extraPlatforms) == 0 {
+			if existingPlatforms, err := extractPlatforms(existingData); err == nil {
+				extraPlatforms = existingPlatforms
+			}
+		}
+
+		if existingHash == goMod.Hash() && len(v.opts.extraPlatforms) == 0 {
 			return resultOK(path)
 		}
 
@@ -168,7 +183,7 @@ func (v *Vendor) processModFile(path string) vendorResult {
 		}
 	}
 
-	depCount, err := v.generateManifest(goMod)
+	depCount, err := v.generateManifest(goMod, extraPlatforms)
 	if err != nil {
 		return resultError(path, err)
 	}
@@ -176,8 +191,8 @@ func (v *Vendor) processModFile(path string) vendorResult {
 	return resultGenerated(path, depCount)
 }
 
-func (v *Vendor) generateManifest(goMod *GoModFile) (int, error) {
-	manifest, err := newManifest(goMod)
+func (v *Vendor) generateManifest(goMod *GoModFile, extraPlatforms []string) (int, error) {
+	manifest, err := newManifest(goMod, extraPlatforms)
 	if err != nil {
 		return 0, err
 	}
