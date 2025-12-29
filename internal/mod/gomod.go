@@ -3,9 +3,7 @@ package mod
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -230,19 +228,7 @@ func (f *GoModFile) downloadModules() ([]goModuleDownload, error) {
 		return nil, err
 	}
 
-	var downloads []goModuleDownload
-	dec := json.NewDecoder(strings.NewReader(out))
-	for {
-		var meta goModuleDownload
-		if err := dec.Decode(&meta); err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, err
-		}
-		downloads = append(downloads, meta)
-	}
-
-	return downloads, nil
+	return parseDownloadOutput(out)
 }
 
 func (f *GoModFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[string][]string) ([]GoModule, error) {

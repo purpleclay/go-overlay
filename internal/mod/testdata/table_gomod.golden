@@ -1,5 +1,5 @@
 ╭──────────────────────────┬─────────────┬───────────────────────────────────────────────────╮
-│ GoMod File               │ Status      │ Message                                           │
+│ File                     │ Status      │ Message                                           │
 ├──────────────────────────┼─────────────┼───────────────────────────────────────────────────┤
 │ path/to/drift/go.mod     │ ✗ drift     │ go.mod has changed, regenerate govendor.toml      │
 │ path/to/error/go.mod     │ ✗ error     │ vendor failed                                     │

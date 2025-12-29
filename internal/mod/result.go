@@ -2,6 +2,7 @@ package mod
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -63,6 +64,13 @@ type vendorResult struct {
 	message string
 }
 
+func fileType(path string) string {
+	if filepath.Base(path) == goWorkFile {
+		return "go.work"
+	}
+	return "go.mod"
+}
+
 func resultOK(path string) vendorResult {
 	return vendorResult{path: path, status: statusOK, message: "govendor.toml is up to date"}
 }
@@ -72,7 +80,8 @@ func resultGenerated(path string, count int) vendorResult {
 }
 
 func resultDrift(path string) vendorResult {
-	return vendorResult{path: path, status: statusDrift, message: "go.mod has changed, regenerate govendor.toml"}
+	ft := fileType(path)
+	return vendorResult{path: path, status: statusDrift, message: fmt.Sprintf("%s has changed, regenerate govendor.toml", ft)}
 }
 
 func resultMissing(path string) vendorResult {
@@ -80,7 +89,8 @@ func resultMissing(path string) vendorResult {
 }
 
 func resultSkipped(path string) vendorResult {
-	return vendorResult{path: path, status: statusSkipped, message: "go.mod has no external dependencies"}
+	ft := fileType(path)
+	return vendorResult{path: path, status: statusSkipped, message: fmt.Sprintf("%s has no external dependencies", ft)}
 }
 
 func resultError(path string, err error) vendorResult {
@@ -88,5 +98,6 @@ func resultError(path string, err error) vendorResult {
 }
 
 func resultNotFound(path string) vendorResult {
-	return vendorResult{path: path, status: statusError, message: "go.mod does not exist, check path"}
+	ft := fileType(path)
+	return vendorResult{path: path, status: statusError, message: fmt.Sprintf("%s does not exist, check path", ft)}
 }
