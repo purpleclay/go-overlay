@@ -7,5 +7,5 @@ final: prev: {
   };
 
   # Builder for Go applications using govendor.toml
-  inherit (final.callPackage ./builder {}) buildGoApplication mkVendorEnv;
+  inherit (final.callPackage ./builder {}) buildGoApplication buildGoWorkspace mkVendorEnv;
 }

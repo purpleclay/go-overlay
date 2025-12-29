@@ -3,7 +3,7 @@
   go,
   commit ? "unknown",
 }: let
-  version = "v0.4.0";
+  version = "v0.5.0";
   buildDate = "2025-12-29T00:00:00Z";
 in
   buildGoApplication {

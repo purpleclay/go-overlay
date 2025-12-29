@@ -1,7 +1,8 @@
 # Builder for Go applications using vendored dependencies.
-# Supports two modes:
+# Supports three modes:
 # 1. In-tree vendor: Use existing vendor/ directory from src
 # 2. Manifest mode: Generate vendor from govendor.toml
+# 3. Workspace mode: Build from go.work with workspace modules
 #
 # Unlike gomod2nix, this generates a vendor/modules.txt file so it works
 # with unpatched Go toolchains from the official binary distributions.
@@ -58,6 +59,31 @@
       ];
     };
 
+  # Generate modules.txt entry for a single module
+  mkModuleEntry = goPackagePath: meta: let
+    header =
+      if meta ? local
+      then "# ${goPackagePath} ${meta.version} => ${meta.local}"
+      else "# ${goPackagePath} ${meta.version}";
+    explicit =
+      if meta.go or "" != ""
+      then "## explicit; go ${meta.go}"
+      else "## explicit";
+    packages = concatMapStringsSep "\n" (p: p) (meta.packages or []);
+  in
+    header + "\n" + explicit + optionalString (packages != "") ("\n" + packages);
+
+  # Generate shell commands to copy fetched modules into vendor directory
+  mkModuleCopyCommands = sources:
+    concatMapStringsSep "\n" (
+      goPackagePath: let
+        modSrc = sources.${goPackagePath};
+      in ''
+        mkdir -p "$out/${escapeShellArg goPackagePath}"
+        cp -r ${modSrc}/* "$out/${escapeShellArg goPackagePath}/"
+      ''
+    ) (builtins.attrNames sources);
+
   # Create a vendor directory with modules.txt from a govendor.toml manifest.
   # The vendor directory contains symlinks to fetched modules.
   # For local modules (replace directives with local paths), the source is
@@ -97,19 +123,7 @@
     # # module/path => ./local/path
     modulesTxt = let
       moduleEntries = concatMapStringsSep "\n" (
-        goPackagePath: let
-          meta = modules.${goPackagePath};
-          header =
-            if meta ? local
-            then "# ${goPackagePath} ${meta.version} => ${meta.local}"
-            else "# ${goPackagePath} ${meta.version}";
-          explicit =
-            if meta.go or "" != ""
-            then "## explicit; go ${meta.go}"
-            else "## explicit";
-          packages = concatMapStringsSep "\n" (p: p) (meta.packages or []);
-        in
-          header + "\n" + explicit + optionalString (packages != "") ("\n" + packages)
+        goPackagePath: mkModuleEntry goPackagePath modules.${goPackagePath}
       ) (builtins.attrNames modules);
 
       # Generate trailing replacement markers for local modules
@@ -124,14 +138,7 @@
     # Generate copy commands for remote modules
     # We use cp -r instead of symlinks to handle overlapping module paths
     # (e.g., go.opentelemetry.io/otel and go.opentelemetry.io/otel/trace)
-    remoteCopyCommands = concatMapStringsSep "\n" (
-      goPackagePath: let
-        modSrc = sources.${goPackagePath};
-      in ''
-        mkdir -p "$out/${escapeShellArg goPackagePath}"
-        cp -r ${modSrc}/* "$out/${escapeShellArg goPackagePath}/"
-      ''
-    ) (builtins.attrNames remoteModules);
+    remoteCopyCommands = mkModuleCopyCommands sources;
 
     # Generate copy commands for local modules (from src)
     localCopyCommands =
@@ -315,6 +322,221 @@
             );
         }
       );
+  # Build a Go workspace using vendored dependencies.
+  # Supports two modes:
+  # 1. In-tree vendor: If modules is null and src contains vendor/, use it directly
+  # 2. Manifest mode: Generate vendor from govendor.toml (modules parameter)
+  #
+  # Workspace modules stay in the source tree - only external dependencies are vendored.
+  # Go resolves workspace modules via the => ./path entries in vendor/modules.txt.
+  buildGoWorkspace = {
+    pname,
+    version,
+    src,
+    modules ? null, # Path to govendor.toml manifest (null = use in-tree vendor)
+    go, # Go derivation from go-overlay
+    subPackages ? ["."], # Packages to build (relative to src)
+    ldflags ? [],
+    tags ? [],
+    CGO_ENABLED ? go.CGO_ENABLED,
+    GOOS ? go.GOOS,
+    GOARCH ? go.GOARCH,
+    GOPROXY ? "off",
+    GOPRIVATE ? "",
+    GOSUMDB ? "off",
+    GONOSUMDB ? "",
+    ...
+  } @ attrs: let
+    # Check for in-tree vendor directory
+    hasInTreeVendor = pathExists (src + "/vendor");
+
+    # Determine vendor mode
+    useInTreeVendor = modules == null && hasInTreeVendor;
+    useManifest = modules != null;
+
+    # Only parse manifest and create vendorEnv when using manifest mode
+    manifest =
+      if useManifest
+      then fromTOML (readFile modules)
+      else null;
+
+    externalModules =
+      if manifest != null
+      then manifest.mod or {}
+      else {};
+
+    workspaceModules =
+      if manifest != null
+      then manifest.workspace or {}
+      else {};
+
+    # Fetch external modules
+    externalSources =
+      mapAttrs (
+        goPackagePath: meta:
+          fetchGoModule {
+            inherit goPackagePath go;
+            inherit (meta) version hash;
+          }
+      )
+      externalModules;
+
+    # Generate modules.txt content for workspace
+    # Format (from `go work vendor`):
+    #   ## workspace
+    #   # example.com/shared v0.0.0 => ./shared
+    #   ## explicit; go 1.22
+    #   # github.com/external/dep v1.0.0
+    #   ## explicit; go 1.18
+    #   github.com/external/dep
+    modulesTxt = let
+      # Workspace module entries (must come first, after ## workspace header)
+      # Format: # module/path v0.0.0 => ./local/path
+      workspaceEntries = concatMapStringsSep "\n" (
+        modPath: let
+          meta = workspaceModules.${modPath};
+          header = "# ${modPath} v0.0.0 => ${meta.path}";
+          explicit =
+            if meta.go or "" != ""
+            then "## explicit; go ${meta.go}"
+            else "## explicit";
+        in
+          header + "\n" + explicit
+      ) (builtins.attrNames workspaceModules);
+
+      # External module entries
+      externalEntries = concatMapStringsSep "\n" (
+        goPackagePath: mkModuleEntry goPackagePath externalModules.${goPackagePath}
+      ) (builtins.attrNames externalModules);
+    in
+      "## workspace\n" + workspaceEntries + optionalString (externalEntries != "") ("\n" + externalEntries);
+
+    # Create vendor environment with external deps only
+    # Workspace modules are NOT copied to vendor - they stay in the source tree
+    # and Go resolves them via the => ./path entries in modules.txt
+    vendorEnv =
+      if useManifest
+      then
+        runCommand "workspace-vendor-env" {
+          passAsFile = ["modulesTxt"];
+          inherit modulesTxt;
+        } (
+          ''
+            mkdir -p $out
+          ''
+          + mkModuleCopyCommands externalSources
+          + ''
+
+            # Write modules.txt
+            cp "$modulesTxtPath" "$out/modules.txt"
+          ''
+        )
+      else null;
+  in
+    # Validate: must have either modules or in-tree vendor
+    if !useInTreeVendor && !useManifest
+    then throw "go-overlay: No vendor source found. Provide 'modules' parameter pointing to govendor.toml, or include a vendor/ directory in src (from 'go work vendor')."
+    else
+      stdenv.mkDerivation (
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB"]
+        // {
+          inherit pname version src;
+
+          nativeBuildInputs =
+            (attrs.nativeBuildInputs or [])
+            ++ [
+              go
+            ];
+
+          inherit GOOS GOARCH CGO_ENABLED;
+
+          GO111MODULE = "on";
+          GOFLAGS = "-mod=vendor";
+
+          configurePhase =
+            attrs.configurePhase
+            or (
+              if useInTreeVendor
+              then ''
+                runHook preConfigure
+
+                export GOCACHE=$TMPDIR/go-cache
+                export GOPATH="$TMPDIR/go"
+                export GOPROXY=${escapeShellArg GOPROXY}
+                export GOPRIVATE=${escapeShellArg GOPRIVATE}
+                export GOSUMDB=${escapeShellArg GOSUMDB}
+                export GONOSUMDB=${escapeShellArg GONOSUMDB}
+
+                # Use in-tree vendor directory as-is (from 'go work vendor')
+                chmod -R u+w vendor
+
+                runHook postConfigure
+              ''
+              else ''
+                runHook preConfigure
+
+                export GOCACHE=$TMPDIR/go-cache
+                export GOPATH="$TMPDIR/go"
+                export GOPROXY=${escapeShellArg GOPROXY}
+                export GOPRIVATE=${escapeShellArg GOPRIVATE}
+                export GOSUMDB=${escapeShellArg GOSUMDB}
+                export GONOSUMDB=${escapeShellArg GONOSUMDB}
+
+                # Copy vendor environment with external deps
+                # Workspace modules stay in source tree - Go resolves them via modules.txt
+                rm -rf vendor
+                cp -rL ${vendorEnv} vendor
+                chmod -R u+w vendor
+
+                runHook postConfigure
+              ''
+            );
+
+          buildPhase =
+            attrs.buildPhase or ''
+              runHook preBuild
+
+              buildFlags=(
+                -v
+                -p $NIX_BUILD_CORES
+                ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
+                ${optionalString (ldflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " ldflags)}"}
+              )
+
+              for pkg in ${concatStringsSep " " subPackages}; do
+                echo "Building $pkg"
+                go install "''${buildFlags[@]}" "./$pkg"
+              done
+
+              runHook postBuild
+            '';
+
+          installPhase =
+            attrs.installPhase or ''
+              runHook preInstall
+
+              mkdir -p $out
+              if [ -d "$GOPATH/bin" ]; then
+                cp -r "$GOPATH/bin" $out/
+              fi
+
+              runHook postInstall
+            '';
+
+          passthru =
+            {inherit go;}
+            // (
+              if vendorEnv != null
+              then {inherit vendorEnv;}
+              else {}
+            )
+            // (
+              if workspaceModules != {}
+              then {inherit workspaceModules;}
+              else {}
+            );
+        }
+      );
 in {
-  inherit buildGoApplication mkVendorEnv fetchGoModule;
+  inherit buildGoApplication buildGoWorkspace mkVendorEnv fetchGoModule;
 }

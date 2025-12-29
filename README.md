@@ -14,6 +14,8 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 
 [^4]: gomod2nix's builder depends on its CLI tool, which in turn depends on the builder—complicating [NUR integration and bootstrapping](https://github.com/nix-community/gomod2nix/issues/196). go-overlay avoids this by having `govendor` and `buildGoApplication` communicate only via the manifest file.
 
+[^5]: Go workspaces (`go.work`) allow multiple modules to be developed together in a monorepo. Neither [buildGoModule](https://github.com/NixOS/nixpkgs/issues/203039) nor [gomod2nix](https://discourse.nixos.org/t/gomod2nix-with-go-workspaces/43134) support workspaces because `-mod=vendor` conflicts with workspace mode. go-overlay's `buildGoWorkspace` works around this limitation.
+
 - [Why it exists?](#why-it-exists)
 - [Quick Start](#quick-start)
 - [Installation](#installation)
@@ -25,6 +27,7 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
     - [Local Replace Directives](#local-replace-directives)
     - [Proxy Configuration](#proxy-configuration)
     - [Cross-Compilation](#cross-compilation)
+  - [buildGoWorkspace](#buildgoworkspace)
   - [mkVendorEnv](#mkvendorenv)
 - [Building a Go Application](#building-a-go-application)
 - [Detecting Drift with Git Hooks](#detecting-drift-with-git-hooks)
@@ -44,6 +47,7 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 | Release candidates       | Yes                  | No            | No                      |
 | vendorHash required      | No                   | No            | Yes                     |
 | Unpatched Go binary      | Yes                  | No            | No                      |
+| Go workspaces[^5]        | Yes                  | No            | No                      |
 | Private modules          | Standard Go auth     | Complex setup | Complex setup           |
 | Drift detection          | Yes (`--check`)      | No            | N/A                     |
 | Circular dependency[^4]  | No                   | Yes           | N/A                     |
@@ -449,6 +453,130 @@ builtins.listToAttrs (map (p: {
   };
 }) platforms)
 ```
+
+### `buildGoWorkspace`
+
+Build applications from a [Go workspace](https://go.dev/doc/tutorial/workspaces) (`go.work` file). Use this when your project is a monorepo with multiple Go modules that share dependencies. Supports two modes:
+
+1. **In-tree vendor**: Use an existing `vendor/` directory from `go work vendor`
+2. **Manifest mode**: Generate vendor from a `govendor.toml` manifest
+
+**Use when:** You have a `go.work` file coordinating multiple modules in a single repository.
+
+#### In-tree Vendor Mode
+
+If your workspace already has a committed `vendor/` directory (from `go work vendor`), simply omit the `modules` parameter:
+
+```nix
+buildGoWorkspace {
+  pname = "api";
+  version = "1.0.0";
+  src = ./.;
+  go = pkgs.go-bin.latest;
+  subPackages = [ "api" ];
+  # No modules parameter - uses vendor/ from src
+}
+```
+
+#### Manifest Mode
+
+Use a `govendor.toml` manifest for dependency management:
+
+```nix
+buildGoWorkspace {
+  pname = "api";
+  version = "1.0.0";
+  src = ./.;
+  go = pkgs.go-bin.latest;
+  modules = ./govendor.toml;
+  subPackages = [ "api" ];
+}
+```
+
+#### Workspace Structure
+
+A typical workspace might look like:
+
+```
+my-monorepo/
+├── go.work
+├── govendor.toml
+├── api/
+│   ├── go.mod
+│   └── main.go
+├── worker/
+│   ├── go.mod
+│   └── main.go
+└── shared/
+    ├── go.mod
+    └── lib.go
+```
+
+Where `go.work` contains:
+
+```
+go 1.22
+
+use (
+    ./api
+    ./worker
+    ./shared
+)
+```
+
+#### Generating the Manifest
+
+Run `govendor` in the workspace root (where `go.work` lives):
+
+```bash
+govendor
+```
+
+This generates a `govendor.toml` that includes:
+- External dependencies with NAR hashes
+- Workspace modules that are dependencies of other modules
+
+#### Building Multiple Binaries
+
+Build each application separately using the same manifest:
+
+```nix
+# default.nix
+{ buildGoWorkspace, go }:
+{
+  api = buildGoWorkspace {
+    pname = "api";
+    version = "1.0.0";
+    src = ./.;
+    modules = ./govendor.toml;
+    subPackages = [ "api" ];
+    inherit go;
+  };
+
+  worker = buildGoWorkspace {
+    pname = "worker";
+    version = "1.0.0";
+    src = ./.;
+    modules = ./govendor.toml;
+    subPackages = [ "worker" ];
+    inherit go;
+  };
+}
+```
+
+| Option        | Default             | Description                                                |
+| :------------ | :------------------ | :--------------------------------------------------------- |
+| `pname`       | required            | Package name                                               |
+| `version`     | required            | Package version                                            |
+| `src`         | required            | Source directory (workspace root)                          |
+| `go`          | required            | Go derivation from go-overlay                              |
+| `modules`     | `null`              | Path to govendor.toml manifest (null = use in-tree vendor) |
+| `subPackages` | `["."]`             | Packages to build (relative to workspace root)             |
+| `ldflags`     | `[]`                | Linker flags                                               |
+| `tags`        | `[]`                | Build tags                                                 |
+| `CGO_ENABLED` | inherited from `go` | Enable CGO                                                 |
+| `GOOS`        | inherited from `go` | Target operating system                                    |
+| `GOARCH`      | inherited from `go` | Target architecture                                        |
 
 ### `mkVendorEnv`
 
