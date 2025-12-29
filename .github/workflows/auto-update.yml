@@ -24,25 +24,26 @@ jobs:
           authToken: "${{ secrets.GH_CACHIX }}"
           useDaemon: false
 
-      - name: Check GoDev Website
+      - name: Detect Latest Go Versions
         run: |
-          echo "LATEST_GO_VERSION=$(nix run .#goscrape -- detect)" >> $GITHUB_ENV
+          LATEST=$(nix run .#goscrape -- detect)
+          PREV_MINOR="1.$(($(echo "$LATEST" | cut -d. -f2) - 1))"
+          PREV=$(nix run .#goscrape -- detect "$PREV_MINOR")
+          echo "GO_VERSIONS=$LATEST $PREV" >> $GITHUB_ENV
 
-      - name: Check Manifest Exists
-        run: |
-          version="${{ env.LATEST_GO_VERSION }}"
-          echo "NIX_FILE=manifests/${version}.nix" >> $GITHUB_ENV
-          echo "MANIFEST_EXISTS=$(test -f manifests/${version}.nix && echo "true")" >> $GITHUB_ENV
-
-      - name: Generate Manifest
-        if: ${{ env.MANIFEST_EXISTS != 'true' }}
+      - name: Check and Generate Manifests
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          nix run .#goscrape -- generate ${{ env.LATEST_GO_VERSION }} --output manifests
+          for version in ${{ env.GO_VERSIONS }}; do
+            if [ ! -f "manifests/${version}.nix" ]; then
+              nix run .#goscrape -- generate "$version" --output manifests
+              echo "MANIFESTS_GENERATED=true" >> $GITHUB_ENV
+            fi
+          done
 
       - name: Import GPG key
-        if: ${{ env.MANIFEST_EXISTS != 'true' }}
+        if: ${{ env.MANIFESTS_GENERATED == 'true' }}
         uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec #v6
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -51,9 +52,14 @@ jobs:
           git_user_signingkey: true
           git_commit_gpgsign: true
 
-      - name: Commit and Push Manifest
-        if: ${{ env.MANIFEST_EXISTS != 'true' }}
+      - name: Commit and Push Manifests
+        if: ${{ env.MANIFESTS_GENERATED == 'true' }}
         run: |
-          git add "${{ env.NIX_FILE }}"
-          git commit -m "chore: generated nix manifest for go release ${{ env.LATEST_GO_VERSION }}"
+          for version in ${{ env.GO_VERSIONS }}; do
+            manifest="manifests/${version}.nix"
+            if git status --porcelain "$manifest" | grep -q .; then
+              git add "$manifest"
+              git commit -m "chore: generated nix manifest for go release ${version}"
+            fi
+          done
           git push
