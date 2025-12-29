@@ -28,6 +28,13 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
     - [Proxy Configuration](#proxy-configuration)
     - [Cross-Compilation](#cross-compilation)
   - [buildGoWorkspace](#buildgoworkspace)
+    - [In-tree Vendor Mode](#in-tree-vendor-mode-1)
+    - [Manifest Mode](#manifest-mode-1)
+    - [Workspace Structure](#workspace-structure)
+    - [Generating the Manifest](#generating-the-manifest)
+    - [Building Multiple Binaries](#building-multiple-binaries)
+    - [Proxy Configuration](#proxy-configuration-1)
+    - [Cross-Compilation](#cross-compilation-1)
   - [mkVendorEnv](#mkvendorenv)
 - [Building a Go Application](#building-a-go-application)
 - [Detecting Drift with Git Hooks](#detecting-drift-with-git-hooks)
@@ -577,6 +584,62 @@ Build each application separately using the same manifest:
 | `CGO_ENABLED` | inherited from `go` | Enable CGO                                                 |
 | `GOOS`        | inherited from `go` | Target operating system                                    |
 | `GOARCH`      | inherited from `go` | Target architecture                                        |
+| `GOPROXY`     | `"off"`             | Go module proxy URL                                        |
+| `GOPRIVATE`   | `""`                | Glob patterns for private modules                          |
+| `GOSUMDB`     | `"off"`             | Checksum database URL                                      |
+| `GONOSUMDB`   | `""`                | Glob patterns to skip checksum verification                |
+
+#### Proxy Configuration
+
+By default, `buildGoWorkspace` sets `GOPROXY=off` and `GOSUMDB=off` since dependencies are vendored. However, you can override these for corporate proxies or private module servers:
+
+```nix
+buildGoWorkspace {
+  pname = "api";
+  version = "1.0.0";
+  src = ./.;
+  go = pkgs.go-bin.latest;
+  modules = ./govendor.toml;
+  subPackages = [ "api" ];
+
+  # Corporate proxy with fallback
+  GOPROXY = "https://proxy.corp.example.com,https://proxy.golang.org,direct";
+  GOPRIVATE = "github.com/myorg/*";
+  GOSUMDB = "sum.golang.org";
+}
+```
+
+#### Cross-Compilation
+
+Build binaries for different platforms by overriding `GOOS` and `GOARCH`:
+
+```nix
+buildGoWorkspace {
+  pname = "api";
+  version = "1.0.0";
+  src = ./.;
+  go = pkgs.go-bin.latest;
+  modules = ./govendor.toml;
+  subPackages = [ "api" ];
+
+  # Build for Windows on Linux/macOS
+  GOOS = "windows";
+  GOARCH = "amd64";
+  CGO_ENABLED = 0;
+}
+```
+
+By default, govendor resolves dependencies for these platforms:
+
+- `linux/amd64`, `linux/arm64`
+- `darwin/amd64`, `darwin/arm64`
+- `windows/amd64`, `windows/arm64`
+
+To build for platforms outside the defaults (e.g., FreeBSD), use `--include-platform` when generating the manifest:
+
+```bash
+govendor --include-platform=freebsd/amd64
+```
 
 ### `mkVendorEnv`
 
