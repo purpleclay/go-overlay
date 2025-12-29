@@ -190,3 +190,29 @@ jobs:
         run: |
           nix build .#integration-local-replace
           ./result/bin/integration-local-replace
+
+      - name: Build and run workspace integration tests
+        run: |
+          nix build .#integration-workspace-api
+          ./result/bin/api
+          nix build .#integration-workspace-worker
+          ./result/bin/worker
+
+      - name: Build and run workspace in-tree vendor integration test
+        run: |
+          cd test/integration/workspace-in-tree-vendor
+          nix run .#go_1_22_3 -- work vendor
+          nix build --impure --expr '
+            let
+              flake = builtins.getFlake (toString ./../../..);
+              system = builtins.currentSystem;
+              pkgs = import flake.inputs.nixpkgs {
+                inherit system;
+                overlays = [ flake.overlays.default ];
+              };
+            in import ./. {
+              inherit pkgs;
+              go = pkgs.go-bin.versions."1.22.3";
+            }
+          '
+          ./result/bin/api

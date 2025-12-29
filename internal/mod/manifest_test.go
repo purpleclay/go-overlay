@@ -48,3 +48,34 @@ func TestManifestWriteTo(t *testing.T) {
 		})
 	}
 }
+
+func TestWorkspaceManifestWriteTo(t *testing.T) {
+	tests := []struct {
+		name           string
+		dir            string
+		extraPlatforms []string
+	}{
+		{
+			name: "workspace",
+			dir:  "testdata/workspace",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			goWorkPath := filepath.Join(tt.dir, "go.work")
+			goWork, err := ParseGoWorkFile(goWorkPath)
+			require.NoError(t, err)
+
+			manifest, err := newWorkspaceManifest(goWork, tt.extraPlatforms)
+			require.NoError(t, err)
+
+			var buf bytes.Buffer
+			if _, err := manifest.WriteTo(&buf); err != nil {
+				require.NoError(t, err)
+			}
+
+			golden.Assert(t, buf.String(), tt.name+"/govendor.golden")
+		})
+	}
+}

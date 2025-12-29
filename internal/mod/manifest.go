@@ -13,10 +13,16 @@ const (
 )
 
 type VendorManifest struct {
-	Schema           int                 `toml:"schema"`
-	Hash             string              `toml:"hash"`
-	IncludePlatforms []string            `toml:"include_platforms,omitempty"`
-	Mod              map[string]GoModule `toml:"mod"`
+	Schema           int                        `toml:"schema"`
+	Hash             string                     `toml:"hash"`
+	IncludePlatforms []string                   `toml:"include_platforms,omitempty"`
+	Workspace        map[string]WorkspaceMember `toml:"workspace,omitempty"`
+	Mod              map[string]GoModule        `toml:"mod"`
+}
+
+type WorkspaceMember struct {
+	Path      string `toml:"path"`
+	GoVersion string `toml:"go,omitempty"`
 }
 
 type GoModule struct {
@@ -40,7 +46,6 @@ func newManifest(goMod *GoModFile, extraPlatforms []string) (*VendorManifest, er
 		mod[m.Path] = m
 	}
 
-	// Only store platforms if extras were provided
 	var platforms []string
 	if len(extraPlatforms) > 0 {
 		platforms = make([]string, len(extraPlatforms))
@@ -74,10 +79,13 @@ func newWorkspaceManifest(goWork *GoWorkFile, extraPlatforms []string) (*VendorM
 		slices.Sort(platforms)
 	}
 
+	workspace := goWork.WorkspaceDependencies()
+
 	return &VendorManifest{
 		Schema:           schemaVersion,
 		Hash:             goWork.Hash(),
 		IncludePlatforms: platforms,
+		Workspace:        workspace,
 		Mod:              mod,
 	}, nil
 }

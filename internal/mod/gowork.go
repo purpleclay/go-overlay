@@ -195,6 +195,65 @@ func (w *GoWorkFile) workspaceModulePaths() []string {
 	return paths
 }
 
+func (w *GoWorkFile) WorkspaceDependencies() map[string]WorkspaceMember {
+	dirToModPath := make(map[string]string)
+	modPathToDir := make(map[string]string)
+	modPathToGoVersion := make(map[string]string)
+
+	for _, mod := range w.modules {
+		modFilePath := filepath.Join(w.dir, mod, goModFile)
+		if content, err := os.ReadFile(modFilePath); err == nil {
+			if mf, err := modfile.Parse(modFilePath, content, nil); err == nil {
+				dirToModPath[mod] = mf.Module.Mod.Path
+				modPathToDir[mf.Module.Mod.Path] = mod
+				if mf.Go != nil {
+					modPathToGoVersion[mf.Module.Mod.Path] = mf.Go.Version
+				}
+			}
+		}
+	}
+
+	workspaceModSet := make(map[string]bool)
+	for _, modPath := range dirToModPath {
+		workspaceModSet[modPath] = true
+	}
+
+	importedByOthers := make(map[string]bool)
+	for _, mod := range w.modules {
+		thisModPath := dirToModPath[mod]
+
+		cmd := []string{
+			"go",
+			"list",
+			"-deps",
+			"-f",
+			"'{{if .Module}}{{.Module.Path}}{{end}}'",
+			"./" + mod + "/...",
+		}
+
+		out, err := exec(cmd, w.dir)
+		if err != nil {
+			continue
+		}
+
+		for line := range strings.SplitSeq(out, "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" && workspaceModSet[line] && line != thisModPath {
+				importedByOthers[line] = true
+			}
+		}
+	}
+
+	members := make(map[string]WorkspaceMember)
+	for modPath := range importedByOthers {
+		members[modPath] = WorkspaceMember{
+			Path:      modPathToDir[modPath],
+			GoVersion: modPathToGoVersion[modPath],
+		}
+	}
+	return members
+}
+
 func (w *GoWorkFile) buildExcludeExpression(modulePaths []string) string {
 	if len(modulePaths) == 0 {
 		return ""

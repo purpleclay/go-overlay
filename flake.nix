@@ -26,7 +26,7 @@
       };
 
       # Builder for Go applications using govendor.toml
-      inherit (final.callPackage ./builder {}) buildGoApplication mkVendorEnv;
+      inherit (final.callPackage ./builder {}) buildGoApplication buildGoWorkspace mkVendorEnv;
     };
   in
     {
@@ -130,6 +130,16 @@
                 inherit pkgs;
                 go = pkgs.go-bin.versions."1.22.3";
               };
+              integration-workspace-api =
+                (import ./test/integration/workspace {
+                  inherit pkgs;
+                  go = pkgs.go-bin.versions."1.22.3";
+                }).api;
+              integration-workspace-worker =
+                (import ./test/integration/workspace {
+                  inherit pkgs;
+                  go = pkgs.go-bin.versions."1.22.3";
+                }).worker;
               # integration-in-tree-vendor is not exposed as a package because
               # it requires vendor/ to be generated first. It's built directly
               # in CI after running 'go mod vendor'. See .github/workflows/nix.yml
