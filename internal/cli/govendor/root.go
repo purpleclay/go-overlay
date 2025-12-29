@@ -21,12 +21,19 @@ with go-overlay's buildGoApplication Nix function.
 
 The manifest includes module versions, NAR hashes, Go version requirements,
 and package lists. This metadata enables Nix to build Go applications using
-vendored dependencies without requiring nixpkgs' patched Go toolchain.`,
+vendored dependencies without requiring nixpkgs' patched Go toolchain.
+
+Supports both single modules (go.mod) and workspaces (go.work). When a go.work
+file is detected, a unified manifest is generated containing dependencies from
+all workspace modules.`,
 		Example: `  # Generate vendor manifest for current directory
   govendor
 
   # Generate vendor manifest for specific paths
   govendor ./api ./web
+
+  # Generate vendor manifest for a Go workspace (auto-detects go.work)
+  govendor ./my-workspace
 
   # Recursively scan for go.mod files, limiting depth to 2 directories
   govendor --recursive --depth 2
@@ -72,7 +79,7 @@ vendored dependencies without requiring nixpkgs' patched Go toolchain.`,
 	}
 
 	cmd.Flags().BoolVarP(&check, "check", "c", false, "check if manifests have drifted and need updating")
-	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "recursively scan for go.mod files")
+	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "recursively scan for go.mod files (ignores go.work)")
 	cmd.Flags().IntVarP(&depth, "depth", "d", 0, "limit directory traversal depth (0 = unlimited, requires --recursive)")
 	cmd.Flags().StringArrayVar(&includePlatforms, "include-platform", nil, "extend platform list for dependency resolution (e.g., freebsd/amd64)")
 

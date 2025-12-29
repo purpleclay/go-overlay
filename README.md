@@ -634,7 +634,7 @@ nix build
 
 ## Detecting Drift with Git Hooks
 
-Use [cachix/git-hooks.nix](https://github.com/cachix/git-hooks.nix) to automatically check for manifest drift when `go.mod` changes:
+Use [cachix/git-hooks.nix](https://github.com/cachix/git-hooks.nix) to automatically check for manifest drift when `go.mod` or `go.work` changes:
 
 ```nix
 # flake.nix
@@ -659,9 +659,9 @@ Use [cachix/git-hooks.nix](https://github.com/cachix/git-hooks.nix) to automatic
           govendor = {
             enable = true;
             name = "govendor";
-            description = "Check if govendor.toml has drifted from go.mod";
+            description = "Check if govendor.toml has drifted from go.mod or go.work";
             entry = "${go-overlay.packages.${system}.govendor}/bin/govendor --check";
-            files = "(^|/)go\\.mod$";
+            files = "(^|/)go\\.(mod|work)$";
             pass_filenames = true;
           };
         };
@@ -675,18 +675,18 @@ Use [cachix/git-hooks.nix](https://github.com/cachix/git-hooks.nix) to automatic
 }
 ```
 
-When you modify `go.mod` and attempt to commit, the hook will fail if `govendor.toml` is out of sync:
+When you modify `go.mod` or `go.work` and attempt to commit, the hook will fail if `govendor.toml` is out of sync:
 
 ```
 govendor.................................................................Failed
 - hook id: govendor
 - exit code: 1
 
-╭────────────┬─────────┬──────────────────────────────────────────────╮
-│ GoMod File │ Status  │ Message                                      │
-├────────────┼─────────┼──────────────────────────────────────────────┤
-│ go.mod     │ ✗ drift │ go.mod has changed, regenerate govendor.toml │
-╰────────────┴─────────┴──────────────────────────────────────────────╯
+╭────────┬─────────┬──────────────────────────────────────────────╮
+│ File   │ Status  │ Message                                      │
+├────────┼─────────┼──────────────────────────────────────────────┤
+│ go.mod │ ✗ drift │ go.mod has changed, regenerate govendor.toml │
+╰────────┴─────────┴──────────────────────────────────────────────╯
 ```
 
 Run `govendor` to regenerate the manifest, then commit both files together.

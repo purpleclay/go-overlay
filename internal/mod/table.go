@@ -22,7 +22,7 @@ func renderResultsTable(results []vendorResult) string {
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(borderStyle).
-		Headers("GoMod File", "Status", "Message").
+		Headers("File", "Status", "Message").
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
 				return headerStyle

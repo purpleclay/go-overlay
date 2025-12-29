@@ -71,9 +71,9 @@
             govendor = {
               enable = true;
               name = "govendor";
-              description = "Check if govendor.toml has drifted from go.mod";
+              description = "Check if govendor.toml has drifted from go.mod or go.work";
               entry = "${self.packages.${system}.govendor}/bin/govendor --check";
-              files = "(^|/)go\\.mod$";
+              files = "(^|/)go\\.(mod|work)$";
               excludes = ["testdata/" "test/"];
               pass_filenames = true;
             };

@@ -56,6 +56,32 @@ func newManifest(goMod *GoModFile, extraPlatforms []string) (*VendorManifest, er
 	}, nil
 }
 
+func newWorkspaceManifest(goWork *GoWorkFile, extraPlatforms []string) (*VendorManifest, error) {
+	deps, err := goWork.Dependencies(extraPlatforms)
+	if err != nil {
+		return nil, err
+	}
+
+	mod := make(map[string]GoModule, len(deps))
+	for _, m := range deps {
+		mod[m.Path] = m
+	}
+
+	var platforms []string
+	if len(extraPlatforms) > 0 {
+		platforms = make([]string, len(extraPlatforms))
+		copy(platforms, extraPlatforms)
+		slices.Sort(platforms)
+	}
+
+	return &VendorManifest{
+		Schema:           schemaVersion,
+		Hash:             goWork.Hash(),
+		IncludePlatforms: platforms,
+		Mod:              mod,
+	}, nil
+}
+
 func (m *VendorManifest) WriteTo(w io.Writer) (int64, error) {
 	n, err := io.WriteString(w, manifestHeader)
 	if err != nil {
