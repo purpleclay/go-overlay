@@ -287,6 +287,11 @@ func (w *GoWorkFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[
 	p := pool.NewWithResults[GoModule]().WithErrors().WithMaxGoroutines(8)
 
 	for _, meta := range downloads {
+		// Only process modules that have packages actually imported by the workspace
+		if _, ok := pkgsByMod[meta.Path]; !ok {
+			continue
+		}
+
 		p.Go(func() (GoModule, error) {
 			return resolveModuleFromDownload(meta, pkgsByMod)
 		})
