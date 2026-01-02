@@ -147,6 +147,7 @@ func (w *GoWorkFile) packagesByModuleForPlatform(goos, goarch string) (map[strin
 		"go",
 		"list",
 		"-deps",
+		"-test",
 		"-f",
 		fmt.Sprintf(`'{{if not .Standard}}{{if .Module}}%s{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}{{end}}'`, excludeExpr),
 	}

@@ -183,6 +183,7 @@ func (f *GoModFile) packagesByModuleForPlatform(goos, goarch string) (map[string
 		"go",
 		"list",
 		"-deps",
+		"-test",
 		"-f",
 		fmt.Sprintf(`'{{if not .Standard}}{{if .Module}}{{if ne .Module.Path "%s"}}{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}{{end}}'`, f.ModulePath()),
 		"./...",

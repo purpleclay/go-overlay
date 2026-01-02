@@ -9,6 +9,10 @@ hash = "sha256-pHxbITaDT4iQk7odXMQCrR1ynHFOf+Ojk7rB3ZSmR2k="
     go = "1.22"
 
 [mod]
+  [mod."github.com/davecgh/go-spew"]
+    version = "v1.1.1"
+    hash = "sha256-nhzSUrE1fCkN0+RL04N4h8jWmRFPPPWbCuDc7Ss0akI="
+    packages = ["github.com/davecgh/go-spew/spew"]
   [mod."github.com/fatih/color"]
     version = "v1.18.0"
     hash = "sha256-pP5y72FSbi4j/BjyVq/XbAOFjzNjMxZt2R/lFFxGWvY="
@@ -24,8 +28,21 @@ hash = "sha256-pHxbITaDT4iQk7odXMQCrR1ynHFOf+Ojk7rB3ZSmR2k="
     hash = "sha256-qhw9hWtU5wnyFyuMbKx+7RB8ckQaFQ8D+8GKPkN3HHQ="
     go = "1.15"
     packages = ["github.com/mattn/go-isatty"]
+  [mod."github.com/pmezard/go-difflib"]
+    version = "v1.0.0"
+    hash = "sha256-/FtmHnaGjdvEIKAJtrUfEhV7EVo5A/eYrtdnUkuxLDA="
+    packages = ["github.com/pmezard/go-difflib/difflib"]
+  [mod."github.com/stretchr/testify"]
+    version = "v1.11.1"
+    hash = "sha256-sWfjkuKJyDllDEtnM8sb/pdLzPQmUYWYtmeWz/5suUc="
+    go = "1.17"
+    packages = ["github.com/stretchr/testify/assert", "github.com/stretchr/testify/assert/yaml"]
   [mod."golang.org/x/sys"]
     version = "v0.25.0"
     hash = "sha256-PXZ9EQZ7SFpcL7d3E1+KGTxziYlHEIZPfoXEbnaVD3I="
     go = "1.18"
     packages = ["golang.org/x/sys/unix", "golang.org/x/sys/windows"]
+  [mod."gopkg.in/yaml.v3"]
+    version = "v3.0.1"
+    hash = "sha256-FqL9TKYJ0XkNwJFnq9j0VvJ5ZUU1RvH/52h/f5bkYAU="
+    packages = ["gopkg.in/yaml.v3"]
