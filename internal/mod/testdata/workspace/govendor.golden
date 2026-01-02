@@ -4,11 +4,18 @@ schema = 1
 hash = "sha256-pHxbITaDT4iQk7odXMQCrR1ynHFOf+Ojk7rB3ZSmR2k="
 
 [workspace]
+  [workspace."example.com/api"]
+    path = "./api"
+    go = "1.22"
   [workspace."example.com/shared"]
     path = "./shared"
     go = "1.22"
 
 [mod]
+  [mod."example.com/shared"]
+    version = "v0.0.0"
+    go = "1.22"
+    local = "./shared"
   [mod."github.com/davecgh/go-spew"]
     version = "v1.1.1"
     hash = "sha256-nhzSUrE1fCkN0+RL04N4h8jWmRFPPPWbCuDc7Ss0akI="

@@ -28,7 +28,7 @@ type WorkspaceMember struct {
 type GoModule struct {
 	Path         string   `toml:"-"`
 	Version      string   `toml:"version"`
-	Hash         string   `toml:"hash"`
+	Hash         string   `toml:"hash,omitempty"`
 	GoVersion    string   `toml:"go,omitempty"`
 	Packages     []string `toml:"packages,omitempty"`
 	ReplacedPath string   `toml:"replaced,omitempty"`
@@ -69,6 +69,14 @@ func newWorkspaceManifest(goWork *GoWorkFile, extraPlatforms []string) (*VendorM
 
 	mod := make(map[string]GoModule, len(deps))
 	for _, m := range deps {
+		mod[m.Path] = m
+	}
+
+	localRepls, err := goWork.LocalReplacements()
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range localRepls {
 		mod[m.Path] = m
 	}
 
