@@ -3,7 +3,9 @@ package mod
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -189,7 +191,11 @@ func (f *GoModFile) packagesByModuleForPlatform(goos, goarch string) (map[string
 		"./...",
 	}
 
+	// GOWORK=off ensures this module is processed independently, which is
+	// essential for workspaces where each module's dependencies must be
+	// resolved in isolation before being merged at the workspace level.
 	env := []string{
+		"GOWORK=off",
 		"GOOS=" + goos,
 		"GOARCH=" + goarch,
 	}
@@ -224,12 +230,28 @@ func (f *GoModFile) downloadModules() ([]goModuleDownload, error) {
 		"-json",
 	}
 
-	out, err := exec(cmd, f.dir)
+	// GOWORK=off ensures this module is processed independently (see packagesByModuleForPlatform)
+	out, err := execWithEnv(cmd, f.dir, []string{"GOWORK=off"})
 	if err != nil {
 		return nil, err
 	}
 
 	return parseDownloadOutput(out)
+}
+
+func parseDownloadOutput(out string) ([]goModuleDownload, error) {
+	var downloads []goModuleDownload
+	dec := json.NewDecoder(strings.NewReader(out))
+	for {
+		var meta goModuleDownload
+		if err := dec.Decode(&meta); err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+		downloads = append(downloads, meta)
+	}
+	return downloads, nil
 }
 
 func (f *GoModFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[string][]string) ([]GoModule, error) {

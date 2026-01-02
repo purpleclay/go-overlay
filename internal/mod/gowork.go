@@ -6,21 +6,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"sort"
 	"strings"
 
-	"github.com/sourcegraph/conc/pool"
 	"golang.org/x/mod/modfile"
 )
 
 type GoWorkFile struct {
 	dir      string
-	content  []byte
-	workfile *modfile.WorkFile
-	hash     string
 	modules  []string
+	hash     string
+	workfile *modfile.WorkFile
 }
 
 func ParseGoWorkFile(path string) (*GoWorkFile, error) {
@@ -34,21 +31,41 @@ func ParseGoWorkFile(path string) (*GoWorkFile, error) {
 		return nil, fmt.Errorf("failed to parse go.work: %w", err)
 	}
 
-	h := sha256.Sum256(content)
-	hash := "sha256-" + base64.StdEncoding.EncodeToString(h[:])
-
 	var modules []string
 	for _, use := range wf.Use {
 		modules = append(modules, use.Path)
 	}
 
+	dir := filepath.Dir(path)
+	hash, err := computeWorkspaceHash(dir, modules)
+	if err != nil {
+		return nil, err
+	}
+
 	return &GoWorkFile{
-		dir:      filepath.Dir(path),
-		content:  content,
-		workfile: wf,
-		hash:     hash,
+		dir:      dir,
 		modules:  modules,
+		hash:     hash,
+		workfile: wf,
 	}, nil
+}
+
+func computeWorkspaceHash(dir string, modules []string) (string, error) {
+	h := sha256.New()
+
+	sortedModules := slices.Clone(modules)
+	slices.Sort(sortedModules)
+
+	for _, mod := range sortedModules {
+		modPath := filepath.Join(dir, mod, goModFile)
+		content, err := os.ReadFile(modPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read %s: %w", modPath, err)
+		}
+		h.Write(content)
+	}
+
+	return "sha256-" + base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
 }
 
 func (w *GoWorkFile) Dir() string {
@@ -72,21 +89,48 @@ func (w *GoWorkFile) ModulePaths() []string {
 }
 
 func (w *GoWorkFile) Dependencies(extraPlatforms []string) ([]GoModule, error) {
-	pkgsByMod, err := w.packagesByModule(extraPlatforms)
-	if err != nil {
-		return nil, err
+	allDeps := make(map[string]GoModule)
+	workspaceMembers := w.WorkspaceDependencies()
+
+	for _, modDir := range w.modules {
+		goModPath := filepath.Join(w.dir, modDir, goModFile)
+		goMod, err := ParseGoModFile(goModPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse %s: %w", goModPath, err)
+		}
+
+		deps, err := goMod.Dependencies(extraPlatforms)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get dependencies for %s: %w", modDir, err)
+		}
+
+		for _, dep := range deps {
+			// Post-process workspace members: clear hash and packages
+			// They're resolved from source, not fetched
+			if member, isWorkspace := workspaceMembers[dep.Path]; isWorkspace {
+				dep.Hash = ""
+				dep.Packages = nil
+
+				// Convert local path to be relative to workspace root
+				if dep.Local != "" {
+					dep.Local = member.Path
+				}
+			}
+
+			// Dedup/merge dependencies
+			if existing, ok := allDeps[dep.Path]; ok {
+				existing.Packages = mergePackages(existing.Packages, dep.Packages)
+				allDeps[dep.Path] = existing
+			} else {
+				allDeps[dep.Path] = dep
+			}
+		}
 	}
 
-	downloads, err := w.downloadModules()
-	if err != nil {
-		return nil, err
+	modules := make([]GoModule, 0, len(allDeps))
+	for _, mod := range allDeps {
+		modules = append(modules, mod)
 	}
-
-	modules, err := w.resolveModules(downloads, pkgsByMod)
-	if err != nil {
-		return nil, err
-	}
-
 	sort.Slice(modules, func(i, j int) bool {
 		return modules[i].Path < modules[j].Path
 	})
@@ -94,106 +138,28 @@ func (w *GoWorkFile) Dependencies(extraPlatforms []string) ([]GoModule, error) {
 	return modules, nil
 }
 
-func (w *GoWorkFile) packagesByModule(extraPlatforms []string) (map[string][]string, error) {
-	current, err := w.packagesByModuleForPlatform(runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		return nil, err
+func mergePackages(a, b []string) []string {
+	if len(a) == 0 {
+		return b
+	}
+	if len(b) == 0 {
+		return a
 	}
 
-	platforms := make([]platform, len(defaultPlatforms))
-	copy(platforms, defaultPlatforms)
-	for _, ep := range extraPlatforms {
-		parts := strings.Split(ep, "/")
-		if len(parts) == 2 {
-			platforms = append(platforms, platform{parts[0], parts[1]})
-		}
+	seen := make(map[string]bool)
+	for _, p := range a {
+		seen[p] = true
+	}
+	for _, p := range b {
+		seen[p] = true
 	}
 
-	p := pool.NewWithResults[map[string][]string]().WithErrors()
-	for _, plat := range platforms {
-		if plat.goos == runtime.GOOS && plat.goarch == runtime.GOARCH {
-			continue
-		}
-		p.Go(func() (map[string][]string, error) {
-			return w.packagesByModuleForPlatform(plat.goos, plat.goarch)
-		})
+	result := make([]string, 0, len(seen))
+	for p := range seen {
+		result = append(result, p)
 	}
-
-	results, err := p.Wait()
-	if err != nil {
-		return nil, err
-	}
-
-	merged := current
-	for _, result := range results {
-		for mod, pkgs := range result {
-			merged[mod] = append(merged[mod], pkgs...)
-		}
-	}
-
-	for modPath := range merged {
-		sort.Strings(merged[modPath])
-		merged[modPath] = slices.Compact(merged[modPath])
-	}
-
-	return merged, nil
-}
-
-func (w *GoWorkFile) packagesByModuleForPlatform(goos, goarch string) (map[string][]string, error) {
-	workspaceModules := w.workspaceModulePaths()
-	excludeExpr := w.buildExcludeExpression(workspaceModules)
-
-	cmd := []string{
-		"go",
-		"list",
-		"-deps",
-		"-test",
-		"-f",
-		fmt.Sprintf(`'{{if not .Standard}}{{if .Module}}%s{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}{{end}}'`, excludeExpr),
-	}
-
-	for _, mod := range w.modules {
-		cmd = append(cmd, "./"+mod+"/...")
-	}
-
-	env := []string{
-		"GOOS=" + goos,
-		"GOARCH=" + goarch,
-	}
-
-	out, err := execWithEnv(cmd, w.dir, env)
-	if err != nil {
-		return nil, err
-	}
-
-	pkgsByMod := make(map[string][]string)
-	for line := range strings.SplitSeq(out, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		modPath, pkgPath, ok := strings.Cut(line, "\t")
-		if !ok {
-			continue
-		}
-		pkgsByMod[modPath] = append(pkgsByMod[modPath], pkgPath)
-	}
-
-	return pkgsByMod, nil
-}
-
-func (w *GoWorkFile) workspaceModulePaths() []string {
-	var paths []string
-	for _, mod := range w.modules {
-		modPath := filepath.Join(w.dir, mod, goModFile)
-		if content, err := os.ReadFile(modPath); err == nil {
-			if mf, err := modfile.Parse(modPath, content, nil); err == nil {
-				paths = append(paths, mf.Module.Mod.Path)
-			}
-		}
-	}
-	return paths
+	sort.Strings(result)
+	return result
 }
 
 func (w *GoWorkFile) WorkspaceDependencies() map[string]WorkspaceMember {
@@ -227,125 +193,4 @@ func (w *GoWorkFile) WorkspaceDependencies() map[string]WorkspaceMember {
 	}
 
 	return members
-}
-
-func (w *GoWorkFile) LocalReplacements() ([]GoModule, error) {
-	workspaceModPaths := make(map[string]string)
-	workspaceModGoVersions := make(map[string]string)
-
-	for _, mod := range w.modules {
-		modFilePath := filepath.Join(w.dir, mod, goModFile)
-		content, err := os.ReadFile(modFilePath)
-		if err != nil {
-			continue
-		}
-
-		mf, err := modfile.Parse(modFilePath, content, nil)
-		if err != nil {
-			continue
-		}
-
-		path := mod
-		if !strings.HasPrefix(path, "./") {
-			path = "./" + path
-		}
-
-		workspaceModPaths[mf.Module.Mod.Path] = path
-		if mf.Go != nil {
-			workspaceModGoVersions[mf.Module.Mod.Path] = mf.Go.Version
-		}
-	}
-
-	replacements := make(map[string]GoModule)
-	for _, mod := range w.modules {
-		modFilePath := filepath.Join(w.dir, mod, goModFile)
-		content, err := os.ReadFile(modFilePath)
-		if err != nil {
-			continue
-		}
-
-		mf, err := modfile.Parse(modFilePath, content, nil)
-		if err != nil {
-			continue
-		}
-
-		for _, repl := range mf.Replace {
-			if repl.New.Version != "" {
-				continue
-			}
-
-			targetPath := repl.New.Path
-			if strings.HasPrefix(targetPath, "./") || strings.HasPrefix(targetPath, "../") {
-				for modPath, dirPath := range workspaceModPaths {
-					if modPath == repl.Old.Path {
-						if _, exists := replacements[modPath]; !exists {
-							replacements[modPath] = GoModule{
-								Path:      modPath,
-								Version:   "v0.0.0",
-								GoVersion: workspaceModGoVersions[modPath],
-								Local:     dirPath,
-							}
-						}
-						break
-					}
-				}
-			}
-		}
-	}
-
-	var result []GoModule
-	for _, mod := range replacements {
-		result = append(result, mod)
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Path < result[j].Path
-	})
-
-	return result, nil
-}
-
-func (w *GoWorkFile) buildExcludeExpression(modulePaths []string) string {
-	if len(modulePaths) == 0 {
-		return ""
-	}
-
-	var conditions []string
-	for _, path := range modulePaths {
-		conditions = append(conditions, fmt.Sprintf(`ne .Module.Path "%s"`, path))
-	}
-
-	return fmt.Sprintf("{{if and (%s)}}", strings.Join(conditions, ") ("))
-}
-
-func (w *GoWorkFile) downloadModules() ([]goModuleDownload, error) {
-	cmd := []string{
-		"go",
-		"mod",
-		"download",
-		"-json",
-	}
-
-	out, err := exec(cmd, w.dir)
-	if err != nil {
-		return nil, err
-	}
-
-	return parseDownloadOutput(out)
-}
-
-func (w *GoWorkFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[string][]string) ([]GoModule, error) {
-	p := pool.NewWithResults[GoModule]().WithErrors().WithMaxGoroutines(8)
-
-	for _, meta := range downloads {
-		// Only process modules that have packages actually imported by the workspace
-		if _, ok := pkgsByMod[meta.Path]; !ok {
-			continue
-		}
-
-		p.Go(func() (GoModule, error) {
-			return resolveModuleFromDownload(meta, pkgsByMod)
-		})
-	}
-
-	return p.Wait()
 }
