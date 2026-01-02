@@ -328,7 +328,7 @@
   # 2. Manifest mode: Generate vendor from govendor.toml (modules parameter)
   #
   # Workspace modules stay in the source tree - only external dependencies are vendored.
-  # Go resolves workspace modules via the => ./path entries in vendor/modules.txt.
+  # Workspace module deps (without hash in manifest) are listed in modules.txt but not fetched.
   buildGoWorkspace = {
     pname,
     version,
@@ -360,7 +360,7 @@
       then fromTOML (readFile modules)
       else null;
 
-    externalModules =
+    allModules =
       if manifest != null
       then manifest.mod or {}
       else {};
@@ -370,8 +370,11 @@
       then manifest.workspace or {}
       else {};
 
-    # Fetch external modules (excluding local replacements which come from src)
-    remoteModules = lib.filterAttrs (_: meta: !(meta ? local)) externalModules;
+    # Modules with hash are fetched, modules without hash are workspace deps
+    remoteModules = lib.filterAttrs (_: meta: meta ? hash && meta.hash != "") allModules;
+    workspaceDepModules = lib.filterAttrs (_: meta: !(meta ? hash) || meta.hash == "") allModules;
+
+    # Fetch remote modules only
     externalSources =
       mapAttrs (
         goPackagePath: meta:
@@ -385,39 +388,34 @@
     # Generate modules.txt content for workspace
     # Format (from `go work vendor`):
     #   ## workspace
-    #   # example.com/shared v0.0.0 => ./shared
+    #   # github.com/workspace/dep v0.1.0
     #   ## explicit; go 1.22
     #   # github.com/external/dep v1.0.0
     #   ## explicit; go 1.18
     #   github.com/external/dep
     modulesTxt = let
-      # Local replacement entries (workspace modules used as dependencies)
-      # These have 'local' field set in [mod] section
-      # Format: # module/path v0.0.0 => ./local/path
-      localModules = lib.filterAttrs (_: meta: meta ? local) externalModules;
-      localEntries = concatMapStringsSep "\n" (
+      # Workspace dependency entries (no hash, resolved from source tree)
+      workspaceDepEntries = concatMapStringsSep "\n" (
         modPath: let
-          meta = localModules.${modPath};
-          header = "# ${modPath} ${meta.version} => ${meta.local}";
+          meta = workspaceDepModules.${modPath};
+          header = "# ${modPath} ${meta.version}";
           explicit =
             if meta.go or "" != ""
             then "## explicit; go ${meta.go}"
             else "## explicit";
         in
           header + "\n" + explicit
-      ) (builtins.attrNames localModules);
+      ) (builtins.attrNames workspaceDepModules);
 
-      # External module entries (non-local)
-      remoteModules = lib.filterAttrs (_: meta: !(meta ? local)) externalModules;
-      externalEntries = concatMapStringsSep "\n" (
+      # Remote module entries (with hash, fetched from registry)
+      remoteEntries = concatMapStringsSep "\n" (
         goPackagePath: mkModuleEntry goPackagePath remoteModules.${goPackagePath}
       ) (builtins.attrNames remoteModules);
     in
-      "## workspace\n" + localEntries + optionalString (externalEntries != "") ("\n" + externalEntries);
+      "## workspace\n" + workspaceDepEntries + optionalString (remoteEntries != "") ("\n" + remoteEntries);
 
-    # Create vendor environment with external deps only
-    # Workspace modules are NOT copied to vendor - they stay in the source tree
-    # and Go resolves them via the => ./path entries in modules.txt
+    # Create vendor environment with remote deps only
+    # Workspace module deps are not copied - they stay in the source tree
     vendorEnv =
       if useManifest
       then

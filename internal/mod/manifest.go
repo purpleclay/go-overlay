@@ -72,14 +72,6 @@ func newWorkspaceManifest(goWork *GoWorkFile, extraPlatforms []string) (*VendorM
 		mod[m.Path] = m
 	}
 
-	localRepls, err := goWork.LocalReplacements()
-	if err != nil {
-		return nil, err
-	}
-	for _, m := range localRepls {
-		mod[m.Path] = m
-	}
-
 	var platforms []string
 	if len(extraPlatforms) > 0 {
 		platforms = make([]string, len(extraPlatforms))
