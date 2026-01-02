@@ -4,11 +4,21 @@ schema = 1
 hash = "sha256-VCFC8vh/lKUUn9ILSoqpMEQhJtnGTV4+pLFxr6dgmWA="
 
 [workspace]
+  [workspace."example.com/api"]
+    path = "./api"
+    go = "1.22"
   [workspace."example.com/shared"]
     path = "./shared"
     go = "1.22"
+  [workspace."example.com/worker"]
+    path = "./worker"
+    go = "1.22"
 
 [mod]
+  [mod."example.com/shared"]
+    version = "v0.0.0"
+    go = "1.22"
+    local = "./shared"
   [mod."github.com/aymanbagabas/go-udiff"]
     version = "v0.2.0"
     hash = "sha256-z/iTYy/E9nc5hVp5D9ZtKXmACxkI/GSuwZC6olE+4SY="

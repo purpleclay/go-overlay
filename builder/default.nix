@@ -370,7 +370,8 @@
       then manifest.workspace or {}
       else {};
 
-    # Fetch external modules
+    # Fetch external modules (excluding local replacements which come from src)
+    remoteModules = lib.filterAttrs (_: meta: !(meta ? local)) externalModules;
     externalSources =
       mapAttrs (
         goPackagePath: meta:
@@ -379,7 +380,7 @@
             inherit (meta) version hash;
           }
       )
-      externalModules;
+      remoteModules;
 
     # Generate modules.txt content for workspace
     # Format (from `go work vendor`):
@@ -390,26 +391,29 @@
     #   ## explicit; go 1.18
     #   github.com/external/dep
     modulesTxt = let
-      # Workspace module entries (must come first, after ## workspace header)
+      # Local replacement entries (workspace modules used as dependencies)
+      # These have 'local' field set in [mod] section
       # Format: # module/path v0.0.0 => ./local/path
-      workspaceEntries = concatMapStringsSep "\n" (
+      localModules = lib.filterAttrs (_: meta: meta ? local) externalModules;
+      localEntries = concatMapStringsSep "\n" (
         modPath: let
-          meta = workspaceModules.${modPath};
-          header = "# ${modPath} v0.0.0 => ${meta.path}";
+          meta = localModules.${modPath};
+          header = "# ${modPath} ${meta.version} => ${meta.local}";
           explicit =
             if meta.go or "" != ""
             then "## explicit; go ${meta.go}"
             else "## explicit";
         in
           header + "\n" + explicit
-      ) (builtins.attrNames workspaceModules);
+      ) (builtins.attrNames localModules);
 
-      # External module entries
+      # External module entries (non-local)
+      remoteModules = lib.filterAttrs (_: meta: !(meta ? local)) externalModules;
       externalEntries = concatMapStringsSep "\n" (
-        goPackagePath: mkModuleEntry goPackagePath externalModules.${goPackagePath}
-      ) (builtins.attrNames externalModules);
+        goPackagePath: mkModuleEntry goPackagePath remoteModules.${goPackagePath}
+      ) (builtins.attrNames remoteModules);
     in
-      "## workspace\n" + workspaceEntries + optionalString (externalEntries != "") ("\n" + externalEntries);
+      "## workspace\n" + localEntries + optionalString (externalEntries != "") ("\n" + externalEntries);
 
     # Create vendor environment with external deps only
     # Workspace modules are NOT copied to vendor - they stay in the source tree

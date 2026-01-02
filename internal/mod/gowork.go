@@ -197,62 +197,111 @@ func (w *GoWorkFile) workspaceModulePaths() []string {
 }
 
 func (w *GoWorkFile) WorkspaceDependencies() map[string]WorkspaceMember {
-	dirToModPath := make(map[string]string)
-	modPathToDir := make(map[string]string)
-	modPathToGoVersion := make(map[string]string)
+	members := make(map[string]WorkspaceMember)
 
 	for _, mod := range w.modules {
 		modFilePath := filepath.Join(w.dir, mod, goModFile)
-		if content, err := os.ReadFile(modFilePath); err == nil {
-			if mf, err := modfile.Parse(modFilePath, content, nil); err == nil {
-				dirToModPath[mod] = mf.Module.Mod.Path
-				modPathToDir[mf.Module.Mod.Path] = mod
-				if mf.Go != nil {
-					modPathToGoVersion[mf.Module.Mod.Path] = mf.Go.Version
+		content, err := os.ReadFile(modFilePath)
+		if err != nil {
+			continue
+		}
+
+		mf, err := modfile.Parse(modFilePath, content, nil)
+		if err != nil {
+			continue
+		}
+
+		path := mod
+		if !strings.HasPrefix(path, "./") {
+			path = "./" + path
+		}
+
+		member := WorkspaceMember{
+			Path: path,
+		}
+		if mf.Go != nil {
+			member.GoVersion = mf.Go.Version
+		}
+
+		members[mf.Module.Mod.Path] = member
+	}
+
+	return members
+}
+
+func (w *GoWorkFile) LocalReplacements() ([]GoModule, error) {
+	workspaceModPaths := make(map[string]string)
+	workspaceModGoVersions := make(map[string]string)
+
+	for _, mod := range w.modules {
+		modFilePath := filepath.Join(w.dir, mod, goModFile)
+		content, err := os.ReadFile(modFilePath)
+		if err != nil {
+			continue
+		}
+
+		mf, err := modfile.Parse(modFilePath, content, nil)
+		if err != nil {
+			continue
+		}
+
+		path := mod
+		if !strings.HasPrefix(path, "./") {
+			path = "./" + path
+		}
+
+		workspaceModPaths[mf.Module.Mod.Path] = path
+		if mf.Go != nil {
+			workspaceModGoVersions[mf.Module.Mod.Path] = mf.Go.Version
+		}
+	}
+
+	replacements := make(map[string]GoModule)
+	for _, mod := range w.modules {
+		modFilePath := filepath.Join(w.dir, mod, goModFile)
+		content, err := os.ReadFile(modFilePath)
+		if err != nil {
+			continue
+		}
+
+		mf, err := modfile.Parse(modFilePath, content, nil)
+		if err != nil {
+			continue
+		}
+
+		for _, repl := range mf.Replace {
+			if repl.New.Version != "" {
+				continue
+			}
+
+			targetPath := repl.New.Path
+			if strings.HasPrefix(targetPath, "./") || strings.HasPrefix(targetPath, "../") {
+				for modPath, dirPath := range workspaceModPaths {
+					if modPath == repl.Old.Path {
+						if _, exists := replacements[modPath]; !exists {
+							replacements[modPath] = GoModule{
+								Path:      modPath,
+								Version:   "v0.0.0",
+								GoVersion: workspaceModGoVersions[modPath],
+								Local:     dirPath,
+							}
+						}
+						break
+					}
 				}
 			}
 		}
 	}
 
-	workspaceModSet := make(map[string]bool)
-	for _, modPath := range dirToModPath {
-		workspaceModSet[modPath] = true
+	var result []GoModule
+	for _, mod := range replacements {
+		result = append(result, mod)
 	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Path < result[j].Path
+	})
 
-	importedByOthers := make(map[string]bool)
-	for _, mod := range w.modules {
-		thisModPath := dirToModPath[mod]
-
-		cmd := []string{
-			"go",
-			"list",
-			"-deps",
-			"-f",
-			"'{{if .Module}}{{.Module.Path}}{{end}}'",
-			"./" + mod + "/...",
-		}
-
-		out, err := exec(cmd, w.dir)
-		if err != nil {
-			continue
-		}
-
-		for line := range strings.SplitSeq(out, "\n") {
-			line = strings.TrimSpace(line)
-			if line != "" && workspaceModSet[line] && line != thisModPath {
-				importedByOthers[line] = true
-			}
-		}
-	}
-
-	members := make(map[string]WorkspaceMember)
-	for modPath := range importedByOthers {
-		members[modPath] = WorkspaceMember{
-			Path:      modPathToDir[modPath],
-			GoVersion: modPathToGoVersion[modPath],
-		}
-	}
-	return members
+	return result, nil
 }
 
 func (w *GoWorkFile) buildExcludeExpression(modulePaths []string) string {
