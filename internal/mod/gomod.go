@@ -260,11 +260,6 @@ func (f *GoModFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[s
 	p := pool.NewWithResults[GoModule]().WithErrors().WithMaxGoroutines(8)
 
 	for _, meta := range downloads {
-		// Only process modules that have packages actually imported by the project
-		if _, ok := pkgsByMod[meta.Path]; !ok {
-			continue
-		}
-
 		p.Go(func() (GoModule, error) {
 			h := sha256.New()
 			if err := nar.DumpPathFilter(h, meta.Dir, func(path string, _ nar.NodeType) bool {

@@ -130,6 +130,10 @@
                 inherit pkgs;
                 go = pkgs.go-bin.versions."1.22.3";
               };
+              integration-indirect-deps = import ./test/integration/indirect-deps {
+                inherit pkgs;
+                go = pkgs.go-bin.versions."1.22.3";
+              };
               integration-workspace-api =
                 (import ./test/integration/workspace {
                   inherit pkgs;
