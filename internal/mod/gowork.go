@@ -90,7 +90,7 @@ func (w *GoWorkFile) ModulePaths() []string {
 
 func (w *GoWorkFile) Dependencies(extraPlatforms []string) ([]GoModule, error) {
 	allDeps := make(map[string]GoModule)
-	workspaceMembers := w.WorkspaceDependencies()
+	workspaceMembers := w.workspaceModulePaths()
 
 	for _, modDir := range w.modules {
 		goModPath := filepath.Join(w.dir, modDir, goModFile)
@@ -107,13 +107,13 @@ func (w *GoWorkFile) Dependencies(extraPlatforms []string) ([]GoModule, error) {
 		for _, dep := range deps {
 			// Post-process workspace members: clear hash and packages
 			// They're resolved from source, not fetched
-			if member, isWorkspace := workspaceMembers[dep.Path]; isWorkspace {
+			if localPath, isWorkspace := workspaceMembers[dep.Path]; isWorkspace {
 				dep.Hash = ""
 				dep.Packages = nil
 
 				// Convert local path to be relative to workspace root
 				if dep.Local != "" {
-					dep.Local = member.Path
+					dep.Local = localPath
 				}
 			}
 
@@ -162,8 +162,38 @@ func mergePackages(a, b []string) []string {
 	return result
 }
 
-func (w *GoWorkFile) WorkspaceDependencies() map[string]WorkspaceMember {
-	members := make(map[string]WorkspaceMember)
+// WorkspaceConfig returns the workspace configuration for the manifest.
+// This includes the go version, optional toolchain, and module paths.
+func (w *GoWorkFile) WorkspaceConfig() *WorkspaceConfig {
+	modules := make([]string, 0, len(w.modules))
+	for _, mod := range w.modules {
+		path := mod
+		if !strings.HasPrefix(path, "./") {
+			path = "./" + path
+		}
+		modules = append(modules, path)
+	}
+	slices.Sort(modules)
+
+	config := &WorkspaceConfig{
+		Modules: modules,
+	}
+
+	if w.workfile.Go != nil {
+		config.Go = w.workfile.Go.Version
+	}
+
+	if w.workfile.Toolchain != nil {
+		config.Toolchain = w.workfile.Toolchain.Name
+	}
+
+	return config
+}
+
+// workspaceModulePaths returns a map of module path to local path for workspace members.
+// Used for post-processing dependencies to identify workspace members.
+func (w *GoWorkFile) workspaceModulePaths() map[string]string {
+	members := make(map[string]string)
 
 	for _, mod := range w.modules {
 		modFilePath := filepath.Join(w.dir, mod, goModFile)
@@ -182,14 +212,7 @@ func (w *GoWorkFile) WorkspaceDependencies() map[string]WorkspaceMember {
 			path = "./" + path
 		}
 
-		member := WorkspaceMember{
-			Path: path,
-		}
-		if mf.Go != nil {
-			member.GoVersion = mf.Go.Version
-		}
-
-		members[mf.Module.Mod.Path] = member
+		members[mf.Module.Mod.Path] = path
 	}
 
 	return members

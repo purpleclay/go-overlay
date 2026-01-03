@@ -191,12 +191,22 @@ jobs:
           nix build .#integration-local-replace
           ./result/bin/integration-local-replace
 
+      - name: Build and run indirect-deps integration test
+        run: |
+          nix build .#integration-indirect-deps
+          ./result/bin/integration-indirect-deps
+
       - name: Build and run workspace integration tests
         run: |
           nix build .#integration-workspace-api
           ./result/bin/api
           nix build .#integration-workspace-worker
           ./result/bin/worker
+
+      - name: Build and run workspace-no-gowork integration test
+        run: |
+          nix build .#integration-workspace-no-gowork
+          ./result/bin/api
 
       - name: Build and run workspace in-tree vendor integration test
         run: |
