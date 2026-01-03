@@ -1,6 +1,8 @@
 package mod
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"io"
 	"slices"
 
@@ -20,6 +22,15 @@ type VendorManifest struct {
 	Mod              map[string]GoModule        `toml:"mod"`
 }
 
+// combineHash creates a hash that includes both the content hash and govendor version.
+// This ensures manifests are regenerated when either dependencies or govendor changes.
+func combineHash(contentHash, version string) string {
+	h := sha256.New()
+	h.Write([]byte(contentHash))
+	h.Write([]byte(version))
+	return "sha256-" + base64.StdEncoding.EncodeToString(h.Sum(nil))
+}
+
 type WorkspaceMember struct {
 	Path      string `toml:"path"`
 	GoVersion string `toml:"go,omitempty"`
@@ -35,7 +46,7 @@ type GoModule struct {
 	Local        string   `toml:"local,omitempty"`
 }
 
-func newManifest(goMod *GoModFile, extraPlatforms []string) (*VendorManifest, error) {
+func newManifest(goMod *GoModFile, extraPlatforms []string, version string) (*VendorManifest, error) {
 	deps, err := goMod.Dependencies(extraPlatforms)
 	if err != nil {
 		return nil, err
@@ -55,13 +66,13 @@ func newManifest(goMod *GoModFile, extraPlatforms []string) (*VendorManifest, er
 
 	return &VendorManifest{
 		Schema:           schemaVersion,
-		Hash:             goMod.Hash(),
+		Hash:             combineHash(goMod.Hash(), version),
 		IncludePlatforms: platforms,
 		Mod:              mod,
 	}, nil
 }
 
-func newWorkspaceManifest(goWork *GoWorkFile, extraPlatforms []string) (*VendorManifest, error) {
+func newWorkspaceManifest(goWork *GoWorkFile, extraPlatforms []string, version string) (*VendorManifest, error) {
 	deps, err := goWork.Dependencies(extraPlatforms)
 	if err != nil {
 		return nil, err
@@ -83,7 +94,7 @@ func newWorkspaceManifest(goWork *GoWorkFile, extraPlatforms []string) (*VendorM
 
 	return &VendorManifest{
 		Schema:           schemaVersion,
-		Hash:             goWork.Hash(),
+		Hash:             combineHash(goWork.Hash(), version),
 		IncludePlatforms: platforms,
 		Workspace:        workspace,
 		Mod:              mod,

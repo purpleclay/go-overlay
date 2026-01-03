@@ -52,7 +52,9 @@ all workspace modules.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, args []string) error {
-			var opts []mod.VendorOption
+			opts := []mod.VendorOption{
+				mod.WithVersion(build.Version),
+			}
 
 			if len(args) > 0 {
 				opts = append(opts, mod.WithPaths(args...))

@@ -36,7 +36,7 @@ func TestManifestWriteTo(t *testing.T) {
 			goMod, err := ParseGoModFile(goModPath)
 			require.NoError(t, err)
 
-			manifest, err := newManifest(goMod, tt.extraPlatforms)
+			manifest, err := newManifest(goMod, tt.extraPlatforms, "dev")
 			require.NoError(t, err)
 
 			var buf bytes.Buffer
@@ -67,7 +67,7 @@ func TestWorkspaceManifestWriteTo(t *testing.T) {
 			goWork, err := ParseGoWorkFile(goWorkPath)
 			require.NoError(t, err)
 
-			manifest, err := newWorkspaceManifest(goWork, tt.extraPlatforms)
+			manifest, err := newWorkspaceManifest(goWork, tt.extraPlatforms, "dev")
 			require.NoError(t, err)
 
 			var buf bytes.Buffer

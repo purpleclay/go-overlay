@@ -17,6 +17,7 @@ const (
 )
 
 type vendorOptions struct {
+	version        string
 	detectDrift    bool
 	paths          []string
 	recursive      bool
@@ -25,6 +26,12 @@ type vendorOptions struct {
 }
 
 type VendorOption func(*vendorOptions)
+
+func WithVersion(version string) VendorOption {
+	return func(opts *vendorOptions) {
+		opts.version = version
+	}
+}
 
 func WithDriftDetection() VendorOption {
 	return func(opts *vendorOptions) {
@@ -175,7 +182,10 @@ func (v *Vendor) processWorkFile(path string) vendorResult {
 			}
 		}
 
-		if existingHash == goWork.Hash() && len(v.opts.extraPlatforms) == 0 {
+		expectedHash := combineHash(goWork.Hash(), v.opts.version)
+		noPlatformOverride := len(v.opts.extraPlatforms) == 0
+
+		if existingHash == expectedHash && noPlatformOverride {
 			return resultOK(path)
 		}
 
@@ -193,7 +203,7 @@ func (v *Vendor) processWorkFile(path string) vendorResult {
 }
 
 func (v *Vendor) generateWorkspaceManifest(goWork *GoWorkFile, extraPlatforms []string) (int, error) {
-	manifest, err := newWorkspaceManifest(goWork, extraPlatforms)
+	manifest, err := newWorkspaceManifest(goWork, extraPlatforms, v.opts.version)
 	if err != nil {
 		return 0, err
 	}
@@ -289,7 +299,10 @@ func (v *Vendor) processModFile(path string) vendorResult {
 			}
 		}
 
-		if existingHash == goMod.Hash() && len(v.opts.extraPlatforms) == 0 {
+		expectedHash := combineHash(goMod.Hash(), v.opts.version)
+		noPlatformOverride := len(v.opts.extraPlatforms) == 0
+
+		if existingHash == expectedHash && noPlatformOverride {
 			return resultOK(path)
 		}
 
@@ -307,7 +320,7 @@ func (v *Vendor) processModFile(path string) vendorResult {
 }
 
 func (v *Vendor) generateManifest(goMod *GoModFile, extraPlatforms []string) (int, error) {
-	manifest, err := newManifest(goMod, extraPlatforms)
+	manifest, err := newManifest(goMod, extraPlatforms, v.opts.version)
 	if err != nil {
 		return 0, err
 	}
