@@ -365,10 +365,22 @@
       then manifest.mod or {}
       else {};
 
-    workspaceModules =
+    workspaceConfig =
       if manifest != null
-      then manifest.workspace or {}
-      else {};
+      then manifest.workspace or null
+      else null;
+
+    # Generate go.work content from manifest workspace config
+    goWorkContent =
+      if workspaceConfig != null
+      then
+        "go ${workspaceConfig.go}\n"
+        + optionalString (workspaceConfig.toolchain or "" != "") "toolchain ${workspaceConfig.toolchain}\n"
+        + "\n"
+        + "use (\n"
+        + concatMapStringsSep "\n" (mod: "\t${mod}") (workspaceConfig.modules or [])
+        + "\n)\n"
+      else null;
 
     # Modules with hash are fetched, modules without hash are workspace deps
     remoteModules = lib.filterAttrs (_: meta: meta ? hash && meta.hash != "") allModules;
@@ -475,22 +487,28 @@
                 runHook postConfigure
               ''
               else ''
-                runHook preConfigure
+                                runHook preConfigure
 
-                export GOCACHE=$TMPDIR/go-cache
-                export GOPATH="$TMPDIR/go"
-                export GOPROXY=${escapeShellArg GOPROXY}
-                export GOPRIVATE=${escapeShellArg GOPRIVATE}
-                export GOSUMDB=${escapeShellArg GOSUMDB}
-                export GONOSUMDB=${escapeShellArg GONOSUMDB}
+                                export GOCACHE=$TMPDIR/go-cache
+                                export GOPATH="$TMPDIR/go"
+                                export GOPROXY=${escapeShellArg GOPROXY}
+                                export GOPRIVATE=${escapeShellArg GOPRIVATE}
+                                export GOSUMDB=${escapeShellArg GOSUMDB}
+                                export GONOSUMDB=${escapeShellArg GONOSUMDB}
 
-                # Copy vendor environment with external deps
-                # Workspace modules stay in source tree - Go resolves them via modules.txt
-                rm -rf vendor
-                cp -rL ${vendorEnv} vendor
-                chmod -R u+w vendor
+                                # Generate go.work if not present in source
+                                if [ ! -f go.work ]; then
+                                  cat > go.work << 'EOF'
+                ${goWorkContent}EOF
+                                fi
 
-                runHook postConfigure
+                                # Copy vendor environment with external deps
+                                # Workspace modules stay in source tree - Go resolves them via modules.txt
+                                rm -rf vendor
+                                cp -rL ${vendorEnv} vendor
+                                chmod -R u+w vendor
+
+                                runHook postConfigure
               ''
             );
 
@@ -533,8 +551,8 @@
               else {}
             )
             // (
-              if workspaceModules != {}
-              then {inherit workspaceModules;}
+              if workspaceConfig != null
+              then {inherit workspaceConfig;}
               else {}
             );
         }
