@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/BurntSushi/toml"
 	"github.com/sourcegraph/conc/pool"
 )
 
@@ -73,9 +74,8 @@ var errVendorFailed = fmt.Errorf("vendor failed")
 func (v *Vendor) VendorFiles() error {
 	// Check for workspace files first (when not in recursive mode)
 	if !v.opts.recursive {
-		workFiles, workResults := v.findWorkFiles()
-		if len(workFiles) > 0 {
-			return v.processWorkspaces(workFiles, workResults)
+		if goWork := v.findWorkspace(); goWork != nil {
+			return v.processWorkspace(goWork)
 		}
 	}
 
@@ -105,52 +105,55 @@ func (v *Vendor) VendorFiles() error {
 	return nil
 }
 
-func (v *Vendor) findWorkFiles() (workFiles []string, missing []vendorResult) {
-	paths := v.opts.paths
-	if len(paths) == 0 {
-		paths = []string{"."}
+func (v *Vendor) findWorkspace() *GoWorkFile {
+	path := "."
+	if len(v.opts.paths) > 0 {
+		path = v.opts.paths[0]
 	}
 
-	for _, path := range paths {
-		workPath := filepath.Join(path, goWorkFile)
-		if _, err := os.Stat(workPath); err == nil {
-			workFiles = append(workFiles, workPath)
+	workPath := filepath.Join(path, goWorkFile)
+	if _, err := os.Stat(workPath); err == nil {
+		goWork, err := ParseGoWorkFile(workPath)
+		if err == nil {
+			return goWork
 		}
 	}
 
-	return workFiles, nil
+	vendorPath := filepath.Join(path, vendorFile)
+	data, err := os.ReadFile(vendorPath)
+	if err != nil {
+		return nil
+	}
+
+	var manifest struct {
+		Workspace *WorkspaceConfig `toml:"workspace"`
+	}
+	if err := toml.Unmarshal(data, &manifest); err != nil || manifest.Workspace == nil {
+		return nil
+	}
+
+	goWork, err := NewGoWorkFileFromManifest(path, manifest.Workspace)
+	if err != nil {
+		return nil
+	}
+
+	return goWork
 }
 
-func (v *Vendor) processWorkspaces(workFiles []string, missingResults []vendorResult) error {
-	p := pool.NewWithResults[vendorResult]()
-	for _, workFile := range workFiles {
-		p.Go(func() vendorResult {
-			return v.processWorkFile(workFile)
-		})
-	}
+func (v *Vendor) processWorkspace(goWork *GoWorkFile) error {
+	result := v.processWorkspaceManifest(goWork)
 
-	results := append(missingResults, p.Wait()...)
+	fmt.Println(renderResultsTable([]vendorResult{result}))
 
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].path < results[j].path
-	})
-
-	fmt.Println(renderResultsTable(results))
-
-	for _, r := range results {
-		if r.status.IsFailure() {
-			return errVendorFailed
-		}
+	if result.status.IsFailure() {
+		return errVendorFailed
 	}
 
 	return nil
 }
 
-func (v *Vendor) processWorkFile(path string) vendorResult {
-	goWork, err := ParseGoWorkFile(path)
-	if err != nil {
-		return resultError(path, err)
-	}
+func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
+	displayPath := filepath.Join(goWork.Dir(), goWorkFile)
 
 	vendorPath := filepath.Join(goWork.Dir(), vendorFile)
 	existingData, err := os.ReadFile(vendorPath)
@@ -159,14 +162,14 @@ func (v *Vendor) processWorkFile(path string) vendorResult {
 
 	if os.IsNotExist(err) {
 		if v.opts.detectDrift {
-			return resultMissing(path)
+			return resultMissing(displayPath)
 		}
 	} else if err != nil {
-		return resultError(path, err)
+		return resultError(displayPath, err)
 	} else {
 		existingHash, err := extractHash(existingData)
 		if err != nil {
-			return resultError(path, err)
+			return resultError(displayPath, err)
 		}
 
 		if len(extraPlatforms) == 0 {
@@ -176,20 +179,20 @@ func (v *Vendor) processWorkFile(path string) vendorResult {
 		}
 
 		if existingHash == goWork.Hash() && len(v.opts.extraPlatforms) == 0 {
-			return resultOK(path)
+			return resultOK(displayPath)
 		}
 
 		if v.opts.detectDrift {
-			return resultDrift(path)
+			return resultDrift(displayPath)
 		}
 	}
 
 	depCount, err := v.generateWorkspaceManifest(goWork, extraPlatforms)
 	if err != nil {
-		return resultError(path, err)
+		return resultError(displayPath, err)
 	}
 
-	return resultGenerated(path, depCount)
+	return resultGenerated(displayPath, depCount)
 }
 
 func (v *Vendor) generateWorkspaceManifest(goWork *GoWorkFile, extraPlatforms []string) (int, error) {
