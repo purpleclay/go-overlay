@@ -14,10 +14,11 @@ import (
 )
 
 type GoWorkFile struct {
-	dir      string
-	modules  []string
-	hash     string
-	workfile *modfile.WorkFile
+	dir             string
+	modules         []string
+	hash            string
+	workfile        *modfile.WorkFile
+	workspaceConfig *WorkspaceConfig
 }
 
 func ParseGoWorkFile(path string) (*GoWorkFile, error) {
@@ -47,6 +48,25 @@ func ParseGoWorkFile(path string) (*GoWorkFile, error) {
 		modules:  modules,
 		hash:     hash,
 		workfile: wf,
+	}, nil
+}
+
+func NewGoWorkFileFromManifest(dir string, config *WorkspaceConfig) (*GoWorkFile, error) {
+	modules := make([]string, len(config.Modules))
+	for i, mod := range config.Modules {
+		modules[i] = strings.TrimPrefix(mod, "./")
+	}
+
+	hash, err := computeWorkspaceHash(dir, modules)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GoWorkFile{
+		dir:             dir,
+		modules:         modules,
+		hash:            hash,
+		workspaceConfig: config,
 	}, nil
 }
 
@@ -162,9 +182,11 @@ func mergePackages(a, b []string) []string {
 	return result
 }
 
-// WorkspaceConfig returns the workspace configuration for the manifest.
-// This includes the go version, optional toolchain, and module paths.
 func (w *GoWorkFile) WorkspaceConfig() *WorkspaceConfig {
+	if w.workspaceConfig != nil {
+		return w.workspaceConfig
+	}
+
 	modules := make([]string, 0, len(w.modules))
 	for _, mod := range w.modules {
 		path := mod
@@ -190,8 +212,6 @@ func (w *GoWorkFile) WorkspaceConfig() *WorkspaceConfig {
 	return config
 }
 
-// workspaceModulePaths returns a map of module path to local path for workspace members.
-// Used for post-processing dependencies to identify workspace members.
 func (w *GoWorkFile) workspaceModulePaths() map[string]string {
 	members := make(map[string]string)
 

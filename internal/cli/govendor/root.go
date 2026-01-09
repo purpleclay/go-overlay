@@ -25,15 +25,13 @@ vendored dependencies without requiring nixpkgs' patched Go toolchain.
 
 Supports both single modules (go.mod) and workspaces (go.work). When a go.work
 file is detected, a unified manifest is generated containing dependencies from
-all workspace modules.`,
+all workspace modules. As go.work files are typically gitignored, the workspace
+is reconstructed from the manifest when go.work is not present.`,
 		Example: `  # Generate vendor manifest for current directory
   govendor
 
   # Generate vendor manifest for specific paths
   govendor ./api ./web
-
-  # Generate vendor manifest for a Go workspace (auto-detects go.work)
-  govendor ./my-workspace
 
   # Recursively scan for go.mod files, limiting depth to 2 directories
   govendor --recursive --depth 2
