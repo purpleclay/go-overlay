@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          token: ${{ secrets.GH_NSV }}
 
       - name: Install Nix
         uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
@@ -42,15 +44,11 @@ jobs:
             fi
           done
 
-      - name: Import GPG key
-        if: ${{ env.MANIFESTS_GENERATED == 'true' }}
-        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec #v6
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-          trust_level: 5
-          git_user_signingkey: true
-          git_commit_gpgsign: true
+      - name: GPG Import
+        env:
+          GPG_PRIVATE_KEY: "${{ secrets.GPG_PRIVATE_KEY }}"
+          GPG_PASSPHRASE: "${{ secrets.GPG_PASSPHRASE }}"
+        run: nix run github:purpleclay/gpg-import
 
       - name: Commit and Push Manifests
         if: ${{ env.MANIFESTS_GENERATED == 'true' }}
