@@ -11,7 +11,7 @@ require (
 	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/mod v0.31.0
+	golang.org/x/mod v0.32.0
 	gotest.tools/v3 v3.5.2
 	mvdan.cc/sh/v3 v3.12.0
 )
