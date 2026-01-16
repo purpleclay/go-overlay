@@ -1,0 +1,14 @@
+name: govendor
+on:
+  pull_request:
+    branches: [main]
+    paths: ["**/go.mod", "**/go.sum"]
+
+jobs:
+  vendor:
+    if: startsWith(github.head_ref, 'renovate/')
+    uses: purpleclay/go-overlay/.github/workflows/govendor-update.yml@main
+    secrets:
+      token: ${{ secrets.GH_NSV }}
+      gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+      gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}

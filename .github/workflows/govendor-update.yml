@@ -1,0 +1,59 @@
+name: govendor-update
+on:
+  workflow_call:
+    inputs:
+      co-author:
+        description: "Co-author for the commit trailer (e.g., 'name <email>'). If not provided, uses git config from GPG import"
+        required: false
+        type: string
+    secrets:
+      token:
+        description: "GitHub token with contents:write and workflows:write permissions to push commits"
+        required: true
+      gpg-private-key:
+        description: "GPG private key for signing commits"
+        required: true
+      gpg-passphrase:
+        description: "Passphrase for the GPG private key"
+        required: true
+
+jobs:
+  govendor:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 2
+          token: ${{ secrets.token }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: GPG Import
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.gpg-private-key }}
+          GPG_PASSPHRASE: ${{ secrets.gpg-passphrase }}
+        run: nix run github:purpleclay/gpg-import
+
+      - name: Update govendor.toml
+        env:
+          CO_AUTHOR: ${{ inputs.co-author }}
+        run: |
+          nix run github:purpleclay/go-overlay#govendor
+
+          if git diff --quiet govendor.toml; then
+            echo "No changes to govendor.toml"
+            exit 0
+          fi
+
+          if [ -z "$CO_AUTHOR" ]; then
+            CO_AUTHOR="$(git config user.name) <$(git config user.email)>"
+          fi
+
+          git add govendor.toml
+          git commit --amend --no-edit --trailer "Co-authored-by: $CO_AUTHOR"
+          git push --force-with-lease
