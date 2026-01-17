@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/purpleclay/go-overlay/internal/cli/govendor"
+	"github.com/purpleclay/x/cli"
 )
 
 var (
@@ -13,9 +16,16 @@ var (
 )
 
 func main() {
-	build := govendor.NewBuildDetails(Version, Commit, BuildDate)
+	version := cli.VersionInfo{
+		Version:   Version,
+		GitCommit: Commit,
+		BuildDate: BuildDate,
+		GoVersion: runtime.Version(),
+		Platform:  runtime.GOOS + "/" + runtime.GOARCH,
+	}
 
-	if err := govendor.Execute(build); err != nil {
+	if err := govendor.Execute(version); err != nil {
+		fmt.Println(err.Error())
 		os.Exit(1)
 	}
 }

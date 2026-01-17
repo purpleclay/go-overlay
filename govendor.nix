@@ -4,7 +4,7 @@
   commit ? "unknown",
 }: let
   version = "v0.8.0";
-  buildDate = "2026-01-09T00:00:00Z";
+  buildDate = "2026-01-16T00:00:00Z";
 in
   buildGoApplication {
     inherit version go;

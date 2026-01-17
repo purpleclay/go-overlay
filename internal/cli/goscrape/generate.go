@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"fmt"
 	"html/template"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -128,34 +127,38 @@ func parse(page string, version string, date time.Time) (*Scrape, error) {
 	return s, nil
 }
 
-func newGenerateCmd(out io.Writer) *cobra.Command {
+func newGenerateCmd() *cobra.Command {
 	var outputDir string
 
 	cmd := &cobra.Command{
-		Use:   "generate [version...]",
+		Use:   "generate [VERSIONS...]",
 		Short: "Generate Nix manifests for Go versions",
-		Long: `Scrapes the Golang website (https://go.dev/dl/) for specified releases and generates
-Nix manifest files with SHA256 hashes for each platform.
+		Long: `
+		Scrapes the Golang website (https://go.dev/dl/) for specified releases and generates
+		Nix manifest files with SHA256 hashes for each platform.
 
-Versions can be specified with or without the "go" prefix (e.g., "1.21.1" or "go1.21.1").
-Multiple versions can be scraped in a single command.
+		Versions can be specified with or without the "go" prefix (e.g., "1.21.1" or "go1.21.1").
+		Multiple versions can be scraped in a single command.
 
-The output format is compatible with go-overlay and uses Nix system identifiers
-(e.g., x86_64-linux, aarch64-darwin) as keys.`,
-		Example: `  # Generate manifest for the latest available version and write to stdout
-  $ goscrape generate
+		The output format is compatible with go-overlay and uses Nix system identifiers
+		(e.g., x86_64-linux, aarch64-darwin) as keys.
+		`,
+		Example: `
+		# Generate manifest for the latest available version and write to stdout
+		goscrape generate
 
-  # Generate manifest for a specified version of Golang
-  $ goscrape generate go1.20.13
+		# Generate manifest for a specified version of Golang
+		goscrape generate go1.20.13
 
-  # Generate manifests for multiple versions
-  $ goscrape generate 1.20.13 1.21.6 1.22.0
+  		# Generate manifests for multiple versions
+    	goscrape generate 1.20.13 1.21.6 1.22.0
 
-  # Generate manifests for all minor versions of a major version
-  $ goscrape generate 1.23*
+     	# Generate manifests for all minor versions of a major version
+      	goscrape generate 1.23*
 
-  # Generate manifests and write to directory
-  $ goscrape generate 1.21.6 --output ./manifests`,
+       	# Generate manifests and write to directory
+        goscrape generate 1.21.6 --output ./manifests
+        `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -228,7 +231,7 @@ The output format is compatible with go-overlay and uses Nix system identifiers
 						return err
 					}
 				} else {
-					fmt.Fprintf(out, "%s", s.String())
+					fmt.Fprintf(cmd.OutOrStdout(), "%s", s.String())
 				}
 			}
 

@@ -2,7 +2,6 @@ package goscrape
 
 import (
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 
@@ -41,21 +40,25 @@ func listVersions(page, prefix string) ([]string, error) {
 	return result, nil
 }
 
-func newListCmd(out io.Writer) *cobra.Command {
+func newListCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list [prefix]",
+		Use:   "list [PREFIX]",
 		Short: "List all available Go versions",
-		Long: `Scrapes the Golang website (https://go.dev/dl/) and lists all available
-Go versions. Optionally filter by a version prefix to show only versions
-matching a specific release line.`,
-		Example: `  # List all available Go versions
-  $ goscrape list
+		Long: `
+		Scrapes the Golang website (https://go.dev/dl/) and lists all available
+		Go versions. Optionally filter by a version prefix to show only versions
+		matching a specific release line.
+		`,
+		Example: `
+		# List all available Go versions
+  		goscrape list
 
-  # List all Go 1.21.x versions
-  $ goscrape list 1.21
+    	# List all Go 1.21.x versions
+     	goscrape list 1.21
 
-  # List all Go 1.20.x versions
-  $ goscrape list go1.20`,
+      	# List all Go 1.20.x versions
+       	goscrape list go1.20
+        `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.RangeArgs(0, 1),
@@ -76,7 +79,7 @@ matching a specific release line.`,
 			}
 
 			for _, v := range versions {
-				fmt.Fprintf(out, "%s\n", v)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\n", v)
 			}
 
 			return nil

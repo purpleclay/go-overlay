@@ -2,7 +2,6 @@ package goscrape
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/purpleclay/go-overlay/internal/scrape"
@@ -31,18 +30,22 @@ func parseVersion(page, ver string) (string, error) {
 	return rel, nil
 }
 
-func newDetectCmd(out io.Writer) *cobra.Command {
+func newDetectCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "detect [prefix]",
+		Use:   "detect [PREFIX]",
 		Short: "Detect the latest version of a Go release",
-		Long: `Scrapes the Golang website (https://go.dev/dl/) to detect the latest version
-of a Golang release. Optionally provide a version prefix to find the latest
-patch version of a specific release.`,
-		Example: `  # Detect the latest Go version
-  $ go-scrape detect
+		Long: `
+		Scrapes the Golang website (https://go.dev/dl/) to detect the latest version
+		of a Golang release. Optionally provide a version prefix to find the latest
+		patch version of a specific release.
+		`,
+		Example: `
+		# Detect the latest Go version
+		go-scrape detect
 
-  # Detect the latest patch version of Go 1.21
-  $ go-scrape detect 1.21`,
+		# Detect the latest patch version of Go 1.21
+		go-scrape detect 1.21
+		`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.RangeArgs(0, 1),
@@ -64,7 +67,7 @@ patch version of a specific release.`,
 				return err
 			}
 
-			fmt.Fprintf(out, "%s", latestVersion)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s", latestVersion)
 			return nil
 		},
 	}
