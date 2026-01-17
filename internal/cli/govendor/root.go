@@ -2,10 +2,12 @@ package govendor
 
 import (
 	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/x/cli"
+	"github.com/purpleclay/x/theme"
 	"github.com/spf13/cobra"
 )
 
-func Execute(build BuildDetails) error {
+func Execute(version cli.VersionInfo) error {
 	var (
 		check            bool
 		recursive        bool
@@ -14,39 +16,43 @@ func Execute(build BuildDetails) error {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "govendor [paths...]",
+		Use:   "govendor [PATHS...]",
 		Short: "Generate a vendor manifest for building Go applications with Nix",
-		Long: `Generate a govendor.toml manifest containing Go module metadata for use
-with go-overlay's buildGoApplication Nix function.
+		Long: `
+		Generate a govendor.toml manifest containing Go module metadata for use
+		with go-overlay's buildGoApplication Nix function.
 
-The manifest includes module versions, NAR hashes, Go version requirements,
-and package lists. This metadata enables Nix to build Go applications using
-vendored dependencies without requiring nixpkgs' patched Go toolchain.
+		The manifest includes module versions, NAR hashes, Go version requirements,
+		and package lists. This metadata enables Nix to build Go applications using
+		vendored dependencies without requiring nixpkgs' patched Go toolchain.
 
-Supports both single modules (go.mod) and workspaces (go.work). When a go.work
-file is detected, a unified manifest is generated containing dependencies from
-all workspace modules. As go.work files are typically gitignored, the workspace
-is reconstructed from the manifest when go.work is not present.`,
-		Example: `  # Generate vendor manifest for current directory
-  govendor
+		Supports both single modules (go.mod) and workspaces (go.work). When a go.work
+		file is detected, a unified manifest is generated containing dependencies from
+		all workspace modules. As go.work files are typically added to a .gitignore file,
+		the workspace is reconstructed from the manifest when go.work is not present.
+		`,
+		Example: `
+		# Generate vendor manifest for current directory
+		govendor
 
-  # Generate vendor manifest for specific paths
-  govendor ./api ./web
+		# Generate vendor manifest for specific paths
+		govendor ./api ./web
 
-  # Recursively scan for go.mod files, limiting depth to 2 directories
-  govendor --recursive --depth 2
+		# Recursively scan for go.mod files, limiting depth to 2 directories
+		govendor --recursive --depth 2
 
-  # Check if manifests have drifted and need updating
-  govendor --check
+		# Check if manifests have drifted and need updating
+		govendor --check
 
-  # Check specific paths for manifest drift
-  govendor --check ./api ./web
+		# Check specific paths for manifest drift
+		govendor --check ./api ./web
 
-  # Recursively check for manifest drift, limiting depth to 2 directories
-  govendor --check --recursive --depth 2
+		# Recursively check for manifest drift, limiting depth to 2 directories
+		govendor --check --recursive --depth 2
 
-  # Include additional platforms for cross-compilation
-  govendor --include-platform=freebsd/amd64 --include-platform=openbsd/amd64`,
+		# Include additional platforms for cross-compilation
+		govendor --include-platform=freebsd/amd64 --include-platform=openbsd/amd64
+		`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -81,7 +87,8 @@ is reconstructed from the manifest when go.work is not present.`,
 	cmd.Flags().IntVarP(&depth, "depth", "d", 0, "limit directory traversal depth (0 = unlimited, requires --recursive)")
 	cmd.Flags().StringArrayVar(&includePlatforms, "include-platform", nil, "extend platform list for dependency resolution (e.g., freebsd/amd64)")
 
-	cmd.Version = build.Version
-	cmd.SetVersionTemplate(build.String())
-	return cmd.Execute()
+	return cli.Execute(cmd,
+		cli.WithVersionFlag(version),
+		cli.WithTheme(theme.PurpleClayCLI()),
+	)
 }
