@@ -23,6 +23,7 @@ type vendorOptions struct {
 	recursive      bool
 	maxDepth       int
 	extraPlatforms []string
+	workspace      bool
 }
 
 type VendorOption func(*vendorOptions)
@@ -51,6 +52,12 @@ func WithRecursive(maxDepth int) VendorOption {
 	}
 }
 
+func WithWorkspace() VendorOption {
+	return func(opts *vendorOptions) {
+		opts.workspace = true
+	}
+}
+
 func WithIncludePlatforms(platforms []string) VendorOption {
 	return func(opts *vendorOptions) {
 		opts.extraPlatforms = platforms
@@ -72,7 +79,10 @@ func NewVendor(opts ...VendorOption) *Vendor {
 var errVendorFailed = fmt.Errorf("vendor failed")
 
 func (v *Vendor) VendorFiles() error {
-	// Check for workspace files first (when not in recursive mode)
+	if v.opts.workspace {
+		return v.processWorkspaceMode()
+	}
+
 	if !v.opts.recursive {
 		if goWork := v.findWorkspace(); goWork != nil {
 			return v.processWorkspace(goWork)
@@ -224,7 +234,7 @@ func (v *Vendor) findModFiles() (modFiles []string, missing []vendorResult) {
 		p := pool.NewWithResults[[]string]().WithErrors()
 		for _, path := range paths {
 			p.Go(func() ([]string, error) {
-				scanner := NewFileScanner(WithMaxDepth(v.opts.maxDepth))
+				scanner := NewFileTreeScanner(WithMaxDepth(v.opts.maxDepth))
 				return scanner.ScanFrom(path)
 			})
 		}
@@ -326,4 +336,66 @@ func (v *Vendor) generateManifest(goMod *GoModFile, extraPlatforms []string) (in
 	}
 
 	return len(manifest.Mod), nil
+}
+
+func (v *Vendor) processWorkspaceMode() error {
+	path := "."
+	if len(v.opts.paths) > 0 {
+		path = v.opts.paths[0]
+	}
+
+	manifestPath, err := FindWorkspaceManifest(path)
+	if err != nil {
+		return err
+	}
+
+	var result vendorResult
+	if manifestPath == "" {
+		result = resultMissing(filepath.Join(path, vendorFile))
+	} else {
+		manifestDir := filepath.Dir(manifestPath)
+		goWork := v.findWorkspaceAt(manifestDir)
+		if goWork == nil {
+			result = resultError(manifestPath, fmt.Errorf("invalid workspace manifest"))
+		} else {
+			result = v.processWorkspaceManifest(goWork)
+		}
+	}
+
+	fmt.Println(renderResultsTable([]vendorResult{result}))
+
+	if result.status.IsFailure() {
+		return errVendorFailed
+	}
+	return nil
+}
+
+func (v *Vendor) findWorkspaceAt(path string) *GoWorkFile {
+	workPath := filepath.Join(path, goWorkFile)
+	if _, err := os.Stat(workPath); err == nil {
+		goWork, err := ParseGoWorkFile(workPath)
+		if err == nil {
+			return goWork
+		}
+	}
+
+	vendorPath := filepath.Join(path, vendorFile)
+	data, err := os.ReadFile(vendorPath)
+	if err != nil {
+		return nil
+	}
+
+	var manifest struct {
+		Workspace *WorkspaceConfig `toml:"workspace"`
+	}
+	if err := toml.Unmarshal(data, &manifest); err != nil || manifest.Workspace == nil {
+		return nil
+	}
+
+	goWork, err := NewGoWorkFileFromManifest(path, manifest.Workspace)
+	if err != nil {
+		return nil
+	}
+
+	return goWork
 }
