@@ -4,6 +4,9 @@ import (
 	"fmt"
 
 	"github.com/sourcegraph/conc/pool"
+
+	_ "github.com/btcsuite/btcd/btcutil"
+	_ "github.com/btcsuite/btcd/chaincfg/chainhash"
 )
 
 func main() {
