@@ -2,6 +2,8 @@ package mod
 
 import (
 	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -49,19 +51,19 @@ func WithMaxDepth(depth int) ScanOption {
 	}
 }
 
-type FileScanner struct {
+type FileTreeScanner struct {
 	opts scanOptions
 }
 
-func NewFileScanner(opts ...ScanOption) *FileScanner {
-	s := &FileScanner{}
+func NewFileTreeScanner(opts ...ScanOption) *FileTreeScanner {
+	s := &FileTreeScanner{}
 	for _, opt := range opts {
 		opt(&s.opts)
 	}
 	return s
 }
 
-func (s *FileScanner) ScanFrom(dir string) ([]string, error) {
+func (s *FileTreeScanner) ScanFrom(dir string) ([]string, error) {
 	var paths []string
 	var mu sync.Mutex
 
@@ -95,4 +97,51 @@ func (s *FileScanner) ScanFrom(dir string) ([]string, error) {
 	}
 
 	return paths, nil
+}
+
+// FindWorkspaceManifest walks up the directory tree from a submodule path
+// looking for a govendor.toml file. The maximum depth is derived from the
+// path itself (number of path components), preventing traversal beyond
+// the expected project root.
+//
+// For example, given "theme/go.mod", the path is cleaned to "theme" which
+// has 1 component, allowing traversal up 1 level to find the workspace manifest.
+func FindWorkspaceManifest(submodulePath string) (string, error) {
+	// Strip the filename if present (e.g., "theme/go.mod" -> "theme")
+	if base := filepath.Base(submodulePath); base == goModFile || base == goWorkFile || base == vendorFile {
+		submodulePath = filepath.Dir(submodulePath)
+	}
+
+	current, err := filepath.Abs(submodulePath)
+	if err != nil {
+		return "", err
+	}
+
+	// Count path components to determine max depth
+	// "theme" -> 1, "a/b/c" -> 3, "." -> 0
+	cleaned := filepath.Clean(submodulePath)
+	maxDepth := 0
+	if cleaned != "." {
+		maxDepth = strings.Count(cleaned, string(filepath.Separator)) + 1
+	}
+
+	depth := 0
+	for {
+		candidate := filepath.Join(current, vendorFile)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", nil
+		}
+
+		depth++
+		if depth > maxDepth {
+			return "", nil
+		}
+
+		current = parent
+	}
 }

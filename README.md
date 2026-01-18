@@ -882,6 +882,13 @@ govendor.................................................................Failed
 
 Run `govendor` to regenerate the manifest, then commit both files together.
 
+> [!NOTE]
+> For workspace projects where `go.work` is gitignored, use `--workspace` in the hook entry. This traverses up from submodule `go.mod` files to find the workspace's `govendor.toml`:
+>
+> ```nix
+> entry = "${go-overlay.packages.${system}.govendor}/bin/govendor --check --workspace";
+> ```
+
 ## Private Modules
 
 go-overlay supports private Go modules through standard Go authentication mechanisms.

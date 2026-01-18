@@ -1,6 +1,8 @@
 package govendor
 
 import (
+	"fmt"
+
 	"github.com/purpleclay/go-overlay/internal/mod"
 	"github.com/purpleclay/x/cli"
 	"github.com/purpleclay/x/theme"
@@ -11,6 +13,7 @@ func Execute(version cli.VersionInfo) error {
 	var (
 		check            bool
 		recursive        bool
+		workspace        bool
 		depth            int
 		includePlatforms []string
 	)
@@ -50,12 +53,19 @@ func Execute(version cli.VersionInfo) error {
 		# Recursively check for manifest drift, limiting depth to 2 directories
 		govendor --check --recursive --depth 2
 
+		# Reverse scan from a submodule path for a workspace manifest (govendor.toml)
+		govendor --check --workspace theme/go.mod
+
 		# Include additional platforms for cross-compilation
 		govendor --include-platform=freebsd/amd64 --include-platform=openbsd/amd64
 		`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, args []string) error {
+			if workspace && !check {
+				return fmt.Errorf("--workspace requires --check")
+			}
+
 			var opts []mod.VendorOption
 
 			if len(args) > 0 {
@@ -68,6 +78,10 @@ func Execute(version cli.VersionInfo) error {
 
 			if recursive {
 				opts = append(opts, mod.WithRecursive(depth))
+			}
+
+			if workspace {
+				opts = append(opts, mod.WithWorkspace())
 			}
 
 			if len(includePlatforms) > 0 {
@@ -84,8 +98,10 @@ func Execute(version cli.VersionInfo) error {
 
 	cmd.Flags().BoolVarP(&check, "check", "c", false, "check if manifests have drifted and need updating")
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "recursively scan for go.mod files (ignores go.work)")
-	cmd.Flags().IntVarP(&depth, "depth", "d", 0, "limit directory traversal depth (0 = unlimited, requires --recursive)")
+	cmd.Flags().BoolVarP(&workspace, "workspace", "w", false, "reverse scan from a submodule path for a govendor.toml containing a workspace manifest (requires --check)")
+	cmd.Flags().IntVarP(&depth, "depth", "d", 0, "limit directory traversal depth (0 = unlimited)")
 	cmd.Flags().StringArrayVar(&includePlatforms, "include-platform", nil, "extend platform list for dependency resolution (e.g., freebsd/amd64)")
+	cmd.MarkFlagsMutuallyExclusive("recursive", "workspace")
 
 	return cli.Execute(cmd,
 		cli.WithVersionFlag(version),
