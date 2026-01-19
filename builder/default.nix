@@ -73,16 +73,34 @@
   in
     header + "\n" + explicit + optionalString (packages != "") ("\n" + packages);
 
-  # Generate shell commands to copy fetched modules into vendor directory
-  mkModuleCopyCommands = sources:
-    concatMapStringsSep "\n" (
-      goPackagePath: let
-        modSrc = sources.${goPackagePath};
-      in ''
-        mkdir -p "$out/${escapeShellArg goPackagePath}"
-        cp -r ${modSrc}/* "$out/${escapeShellArg goPackagePath}/"
-      ''
-    ) (builtins.attrNames sources);
+  # Generate shell commands to copy fetched modules into $out directory.
+  # Handles overlapping module paths by processing deepest paths first and
+  # using symlinks where possible for performance.
+  mkModuleCopyCommands = sources: let
+    pkgPaths = builtins.attrNames sources;
+    pkgPathsSortedByDepth = lib.lists.reverseList (lib.lists.sort (p: q: p < q) pkgPaths);
+  in ''
+    shopt -s dotglob
+
+    ${concatMapStringsSep "\n" (
+        goPackagePath: let
+          modSrc = sources.${goPackagePath};
+        in ''
+          if [ -d "$out/${escapeShellArg goPackagePath}" ]; then
+              # Pkg is overlapping, copy symlinks recursively
+              # without overriding existing overlapping pkgs
+              cp -rs --update=none ${modSrc}/* "$out/${escapeShellArg goPackagePath}/"
+          else
+              # Pkg is not overlapping, symlink the directory
+              mkdir -p "$out/$(dirname ${escapeShellArg goPackagePath})"
+              ln -s ${modSrc} "$out/${escapeShellArg goPackagePath}"
+          fi
+        ''
+      )
+      pkgPathsSortedByDepth}
+
+    shopt -u dotglob
+  '';
 
   # Create a vendor directory with modules.txt from a govendor.toml manifest.
   # The vendor directory contains symlinks to fetched modules.
@@ -136,7 +154,6 @@
       moduleEntries + optionalString (localTrailers != "") ("\n" + localTrailers);
 
     # Generate copy commands for remote modules
-    # We use cp -r instead of symlinks to handle overlapping module paths
     # (e.g., go.opentelemetry.io/otel and go.opentelemetry.io/otel/trace)
     remoteCopyCommands = mkModuleCopyCommands sources;
 
@@ -144,15 +161,10 @@
     localCopyCommands =
       if src != null
       then
-        concatMapStringsSep "\n" (
-          goPackagePath: let
-            meta = localModules.${goPackagePath};
-            localPath = meta.local;
-          in ''
-            mkdir -p "$out/${escapeShellArg goPackagePath}"
-            cp -r ${src}/${escapeShellArg localPath}/* "$out/${escapeShellArg goPackagePath}/"
-          ''
-        ) (builtins.attrNames localModules)
+        mkModuleCopyCommands (mapAttrs (
+            goPackagePath: meta: "${src}/${escapeShellArg meta.local}"
+          )
+          localModules)
       else
         # If no src provided but there are local modules, error
         if localModules != {}
@@ -273,9 +285,9 @@
                 export GOSUMDB=${escapeShellArg GOSUMDB}
                 export GONOSUMDB=${escapeShellArg GONOSUMDB}
 
-                # Copy vendor environment from manifest (dereference symlinks)
+                # Copy vendor environment from manifest
                 rm -rf vendor
-                cp -rL ${vendorEnv} vendor
+                cp --no-preserve=mode -rs ${vendorEnv} vendor
                 chmod -R u+w vendor
 
                 runHook postConfigure
@@ -505,7 +517,7 @@
                                 # Copy vendor environment with external deps
                                 # Workspace modules stay in source tree - Go resolves them via modules.txt
                                 rm -rf vendor
-                                cp -rL ${vendorEnv} vendor
+                                cp --no-preserve=mode -rs ${vendorEnv} vendor
                                 chmod -R u+w vendor
 
                                 runHook postConfigure
