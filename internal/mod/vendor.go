@@ -19,6 +19,7 @@ const (
 
 type vendorOptions struct {
 	detectDrift    bool
+	force          bool
 	paths          []string
 	recursive      bool
 	maxDepth       int
@@ -31,6 +32,12 @@ type VendorOption func(*vendorOptions)
 func WithDriftDetection() VendorOption {
 	return func(opts *vendorOptions) {
 		opts.detectDrift = true
+	}
+}
+
+func WithForce() VendorOption {
+	return func(opts *vendorOptions) {
+		opts.force = true
 	}
 }
 
@@ -188,7 +195,7 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 			}
 		}
 
-		if existingHash == goWork.Hash() && len(v.opts.extraPlatforms) == 0 {
+		if !v.opts.force && existingHash == goWork.Hash() && len(v.opts.extraPlatforms) == 0 {
 			return resultOK(displayPath)
 		}
 
@@ -302,7 +309,7 @@ func (v *Vendor) processModFile(path string) vendorResult {
 			}
 		}
 
-		if existingHash == goMod.Hash() && len(v.opts.extraPlatforms) == 0 {
+		if !v.opts.force && existingHash == goMod.Hash() && len(v.opts.extraPlatforms) == 0 {
 			return resultOK(path)
 		}
 
