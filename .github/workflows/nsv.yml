@@ -1,0 +1,38 @@
+name: nsv
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  nsv:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_NSV }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@0fc020193b5a1fa3ac4575aa3a7d3aa6a35435ad # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.GH_CACHIX }}"
+          skipPush: true
+          useDaemon: false
+
+      - name: GPG Import
+        env:
+          GPG_PRIVATE_KEY: "${{ secrets.GPG_PRIVATE_KEY }}"
+          GPG_PASSPHRASE: "${{ secrets.GPG_PASSPHRASE }}"
+        run: nix run github:purpleclay/gpg-import
+
+      - name: Tag
+        run: nix run github:purpleclay/nsv -- tag --show
