@@ -200,7 +200,7 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 		}
 
 		if v.opts.detectDrift {
-			return resultDrift(displayPath)
+			return resultDrift(displayPath, goWork.Hash(), existingHash)
 		}
 	}
 
@@ -314,7 +314,7 @@ func (v *Vendor) processModFile(path string) vendorResult {
 		}
 
 		if v.opts.detectDrift {
-			return resultDrift(path)
+			return resultDrift(path, goMod.Hash(), existingHash)
 		}
 	}
 
