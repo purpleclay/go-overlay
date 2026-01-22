@@ -79,9 +79,10 @@ func resultGenerated(path string, count int) vendorResult {
 	return vendorResult{path: path, status: statusGenerated, message: fmt.Sprintf("generated govendor.toml with %d dependencies", count)}
 }
 
-func resultDrift(path string) vendorResult {
+func resultDrift(path, currentHash, manifestHash string) vendorResult {
 	ft := fileType(path)
-	return vendorResult{path: path, status: statusDrift, message: fmt.Sprintf("%s has changed, regenerate govendor.toml", ft)}
+	msg := fmt.Sprintf("%s has changed, run 'govendor' to regenerate\n\n  %-14s %s\n  %-14s %s", ft, ft+":", currentHash, "govendor.toml:", manifestHash)
+	return vendorResult{path: path, status: statusDrift, message: msg}
 }
 
 func resultMissing(path string) vendorResult {
