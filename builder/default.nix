@@ -224,7 +224,21 @@
     # Only parse manifest and create vendorEnv when using manifest mode
     manifest =
       if useManifest
-      then fromTOML (readFile modules)
+      then
+        if pathExists modules
+        then fromTOML (readFile modules)
+        else
+          throw ''
+            buildGoApplication: govendor.toml not found at ${toString modules}
+
+              Generate one by running:
+                govendor
+
+              Or specify a custom path:
+                buildGoApplication {
+                  modules = ./path/to/govendor.toml;
+                }
+          ''
       else null;
 
     vendorEnv =
@@ -237,7 +251,20 @@
   in
     # Validate: must have either modules or in-tree vendor
     if !useInTreeVendor && !useManifest
-    then throw "go-overlay: No vendor source found. Provide 'modules' parameter pointing to govendor.toml, or include a vendor/ directory in src."
+    then
+      throw ''
+        buildGoApplication: No vendor source found.
+
+          Generate a govendor.toml manifest by running:
+            govendor
+
+          Then pass it to buildGoApplication:
+            buildGoApplication {
+              modules = ./govendor.toml;
+            }
+
+          Alternatively, run 'go mod vendor' and include a vendor/ directory in src.
+      ''
     else
       stdenv.mkDerivation (
         builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB"]
@@ -369,7 +396,21 @@
     # Only parse manifest and create vendorEnv when using manifest mode
     manifest =
       if useManifest
-      then fromTOML (readFile modules)
+      then
+        if pathExists modules
+        then fromTOML (readFile modules)
+        else
+          throw ''
+            buildGoWorkspace: govendor.toml not found at ${toString modules}
+
+              Generate one by running:
+                govendor
+
+              Or specify a custom path:
+                buildGoWorkspace {
+                  modules = ./path/to/govendor.toml;
+                }
+          ''
       else null;
 
     allModules =
@@ -461,7 +502,20 @@
   in
     # Validate: must have either modules or in-tree vendor
     if !useInTreeVendor && !useManifest
-    then throw "go-overlay: No vendor source found. Provide 'modules' parameter pointing to govendor.toml, or include a vendor/ directory in src (from 'go work vendor')."
+    then
+      throw ''
+        buildGoWorkspace: No vendor source found.
+
+          Generate a govendor.toml manifest by running:
+            govendor
+
+          Then pass it to buildGoWorkspace:
+            buildGoWorkspace {
+              modules = ./govendor.toml;
+            }
+
+          Alternatively, run 'go work vendor' and include a vendor/ directory in src.
+      ''
     else
       stdenv.mkDerivation (
         builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB"]
