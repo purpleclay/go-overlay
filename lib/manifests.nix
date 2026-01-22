@@ -92,6 +92,18 @@
     parsed.major
     < latestStableParsed.major
     || (parsed.major == latestStableParsed.major && parsed.minor < minSupportedMinor);
+
+  # Get all available versions for a given minor version (e.g., "1.21" -> ["1.21.13", "1.21.12", ...])
+  versionsForMinor = minorVersion: let
+    # Handle both "1.21" and "1.21.99" formats - extract "1.21"
+    parts = lib.splitString "." minorVersion;
+    prefix =
+      if builtins.length parts >= 2
+      then "${builtins.elemAt parts 0}.${builtins.elemAt parts 1}"
+      else minorVersion;
+    matching = builtins.filter (v: lib.hasPrefix "${prefix}." v || v == prefix) sortedVersions;
+  in
+    matching;
 in {
-  inherit manifests latest latestStable latestPatch isDeprecated;
+  inherit manifests latest latestStable latestPatch isDeprecated versionsForMinor;
 }

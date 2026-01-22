@@ -65,12 +65,24 @@
       if latestPatchVersion != null
       then allVersions.${latestPatchVersion}
       else null;
+
+    # Build helpful error message with available versions
+    availableInSeries = manifestsLib.versionsForMinor version;
+    availableMsg =
+      if availableInSeries != []
+      then "\n\n  Available versions: ${lib.concatStringsSep ", " availableInSeries}"
+      else "";
+    suggestions = ''
+
+      Suggestions:
+        - Use 'go-bin.fromGoMod ./go.mod' for automatic version selection
+        - Run 'nix flake update go-overlay' to get newly released versions'';
   in
     if exact != null
     then exact
     else if fallbackToLatestPatch && latestPatch != null
     then latestPatch
-    else throw "go-overlay: Go version '${version}' is not available";
+    else throw "go-overlay: Go version '${version}' is not available${availableMsg}${suggestions}";
 
   # Use toolchain if present, otherwise resolve go version (with latest patch fallback)
   fromGoMod = path: let
