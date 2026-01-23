@@ -12,6 +12,22 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
+type execError struct {
+	err    error
+	stderr string
+}
+
+func (e *execError) Error() string {
+	if e.stderr != "" {
+		return strings.TrimSpace(e.stderr)
+	}
+	return e.err.Error()
+}
+
+func (e *execError) Unwrap() error {
+	return e.err
+}
+
 type devNull struct{}
 
 func (devNull) Read(_ []byte) (int, error) {
@@ -39,10 +55,10 @@ func execWithEnv(args []string, dir string, extraEnv []string) (string, error) {
 
 	env := append(os.Environ(), extraEnv...)
 
-	var stdout bytes.Buffer
+	var stdout, stderr bytes.Buffer
 	r, err := interp.New(
 		interp.Params("-e"),
-		interp.StdIO(os.Stdin, &stdout, os.Stderr),
+		interp.StdIO(os.Stdin, &stdout, &stderr),
 		interp.OpenHandler(openHandler),
 		interp.Env(expand.ListEnviron(env...)),
 		interp.Dir(dir),
@@ -52,7 +68,7 @@ func execWithEnv(args []string, dir string, extraEnv []string) (string, error) {
 	}
 
 	if err := r.Run(context.Background(), p); err != nil {
-		return "", err
+		return "", &execError{err: err, stderr: stderr.String()}
 	}
 
 	return stdout.String(), nil

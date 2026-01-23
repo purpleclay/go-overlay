@@ -63,12 +63,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/purpleclay/chomp v0.4.0 h1:pOI23jVu1Y+lEqThxZcoPj2kCWp0YOvenC3o2wVPX8I=
 github.com/purpleclay/chomp v0.4.0/go.mod h1:2G5jE5JN68ytZSjGLOE7QkXuFgtkNRk7b58trMmB/nc=
-github.com/purpleclay/x/cli v0.6.2 h1:vRa0dn7ghNsrnpFtOwnBtAv0LHB44Ziih0gmRtdAfrA=
-github.com/purpleclay/x/cli v0.6.2/go.mod h1:0oFaCZlpeVH6gWMK80s5xMiL88vpm33R5lQ0U5306oA=
 github.com/purpleclay/x/cli v0.6.3 h1:apwpC8VFIaIKi0OPII/CBX0OMrvwZd4WFw1TXHmLYuw=
 github.com/purpleclay/x/cli v0.6.3/go.mod h1:0oFaCZlpeVH6gWMK80s5xMiL88vpm33R5lQ0U5306oA=
-github.com/purpleclay/x/theme v0.2.2 h1:59N+Aczd8wMyoWnXLFJBeLUnKwBqrn17Sa9AlJrwIo8=
-github.com/purpleclay/x/theme v0.2.2/go.mod h1:jEFMn55ArKbuusaHpj5e408JsYf4/bld9oxHchMutew=
 github.com/purpleclay/x/theme v0.2.3 h1:bKRzlpOcw/os2f8WXUkq0r9rJKbOomxe1vypRotu24I=
 github.com/purpleclay/x/theme v0.2.3/go.mod h1:UF27r7BVzTFpe4s2cY2PseDdI3c7YL+W5QpUrgNCTh4=
 github.com/rivo/uniseg v0.1.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
