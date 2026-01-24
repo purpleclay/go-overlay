@@ -61,8 +61,8 @@ github.com/nix-community/go-nix v0.0.0-20250101154619-4bdde671e0a1 h1:kpt9ZfKcm+
 github.com/nix-community/go-nix v0.0.0-20250101154619-4bdde671e0a1/go.mod h1:qgCw4bBKZX8qMgGeEZzGFVT3notl42dBjNqO2jut0M0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/purpleclay/chomp v0.4.0 h1:pOI23jVu1Y+lEqThxZcoPj2kCWp0YOvenC3o2wVPX8I=
-github.com/purpleclay/chomp v0.4.0/go.mod h1:2G5jE5JN68ytZSjGLOE7QkXuFgtkNRk7b58trMmB/nc=
+github.com/purpleclay/chomp v0.5.0 h1:4f3GkgdyzPO/VxAZOVIvFECAVRN7Sf0VXqPAwLUZ7I0=
+github.com/purpleclay/chomp v0.5.0/go.mod h1:LFdzw8cqsEPc1W9KtjhcmlKBWI4t3XTve4iSw5IH22c=
 github.com/purpleclay/x/cli v0.6.3 h1:apwpC8VFIaIKi0OPII/CBX0OMrvwZd4WFw1TXHmLYuw=
 github.com/purpleclay/x/cli v0.6.3/go.mod h1:0oFaCZlpeVH6gWMK80s5xMiL88vpm33R5lQ0U5306oA=
 github.com/purpleclay/x/theme v0.2.3 h1:bKRzlpOcw/os2f8WXUkq0r9rJKbOomxe1vypRotu24I=
