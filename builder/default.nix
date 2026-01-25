@@ -158,31 +158,29 @@
     # (e.g., go.opentelemetry.io/otel and go.opentelemetry.io/otel/trace)
     remoteCopyCommands = mkModuleCopyCommands sources;
 
-    # Generate copy commands for local modules (from localReplaces or src)
-    # localReplaces takes precedence over src-relative paths
-    localCopyCommands =
-      if localModules != {}
-      then
-        mkModuleCopyCommands (mapAttrs (
-            goPackagePath: meta:
-              if localReplaces ? ${goPackagePath}
-              then
-                # Use explicit localReplaces path (for modules outside src tree)
-                toString localReplaces.${goPackagePath}
-              else if src != null
-              then
-                # Fall back to src-relative path
-                "${src}/${escapeShellArg meta.local}"
-              else throw "go-overlay: Local module '${goPackagePath}' not found in localReplaces and no 'src' provided"
-          )
-          localModules)
-      else "";
+    # Resolve local module sources - either from localReplaces or src-relative paths
+    # This creates the mapping used both for copy commands and as derivation inputs
+    localModuleSources =
+      mapAttrs (
+        goPackagePath: meta:
+          if localReplaces ? ${goPackagePath}
+          then localReplaces.${goPackagePath}
+          else if src != null
+          then "${src}/${meta.local}"
+          else throw "go-overlay: Local module '${goPackagePath}' not found in localReplaces and no 'src' provided"
+      )
+      localModules;
   in
     runCommand "vendor-env"
     {
       passAsFile = ["modulesTxt"];
       inherit modulesTxt;
       passthru = {inherit sources;};
+
+      # Add localReplaces paths as explicit derivation inputs so they're tracked
+      # and fetched before the build runs (fixes CI builds where store paths
+      # don't exist yet)
+      localReplaceSrcs = lib.attrValues localReplaces;
     }
     ''
       mkdir -p $out
@@ -191,7 +189,7 @@
       ${remoteCopyCommands}
 
       # Copy local modules from source tree
-      ${localCopyCommands}
+      ${mkModuleCopyCommands localModuleSources}
 
       # Write modules.txt
       cp "$modulesTxtPath" "$out/modules.txt"

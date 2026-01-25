@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 
-	"example.com/mylib"
+	lib "example.com/integration-local-replace-external"
 )
 
 func main() {
-	fmt.Println(mylib.Greet())
+	fmt.Println(lib.Greet())
 }
