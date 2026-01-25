@@ -131,6 +131,10 @@
                 inherit pkgs;
                 go = pkgs.go-bin.versions."1.22.3";
               };
+              integration-local-replace-external = import ./test/integration/local-replace-external {
+                inherit pkgs;
+                go = pkgs.go-bin.versions."1.22.3";
+              };
               integration-indirect-deps = import ./test/integration/indirect-deps {
                 inherit pkgs;
                 go = pkgs.go-bin.versions."1.22.3";

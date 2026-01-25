@@ -110,6 +110,7 @@
     go,
     manifest, # Parsed govendor.toml (via builtins.fromTOML)
     src ? null, # Source tree for local module replacements
+    localReplaces ? {}, # Map of module path to Nix path for external local replaces
   }: let
     modules = manifest.mod or {};
 
@@ -157,19 +158,25 @@
     # (e.g., go.opentelemetry.io/otel and go.opentelemetry.io/otel/trace)
     remoteCopyCommands = mkModuleCopyCommands sources;
 
-    # Generate copy commands for local modules (from src)
+    # Generate copy commands for local modules (from localReplaces or src)
+    # localReplaces takes precedence over src-relative paths
     localCopyCommands =
-      if src != null
+      if localModules != {}
       then
         mkModuleCopyCommands (mapAttrs (
-            goPackagePath: meta: "${src}/${escapeShellArg meta.local}"
+            goPackagePath: meta:
+              if localReplaces ? ${goPackagePath}
+              then
+                # Use explicit localReplaces path (for modules outside src tree)
+                toString localReplaces.${goPackagePath}
+              else if src != null
+              then
+                # Fall back to src-relative path
+                "${src}/${escapeShellArg meta.local}"
+              else throw "go-overlay: Local module '${goPackagePath}' not found in localReplaces and no 'src' provided"
           )
           localModules)
-      else
-        # If no src provided but there are local modules, error
-        if localModules != {}
-        then throw "go-overlay: Local modules found in manifest but no 'src' provided to mkVendorEnv"
-        else "";
+      else "";
   in
     runCommand "vendor-env"
     {
@@ -212,6 +219,7 @@
     GOPRIVATE ? "",
     GOSUMDB ? "off",
     GONOSUMDB ? "",
+    localReplaces ? {}, # Map of module path to Nix path for external local replaces
     ...
   } @ attrs: let
     # Check for in-tree vendor directory
@@ -245,7 +253,7 @@
       if useManifest
       then
         mkVendorEnv {
-          inherit go manifest src;
+          inherit go manifest src localReplaces;
         }
       else null;
   in
@@ -267,7 +275,7 @@
       ''
     else
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "localReplaces"]
         // {
           inherit pname version src;
 
