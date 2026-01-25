@@ -3,7 +3,7 @@
   go,
 }:
 pkgs.buildGoApplication {
-  pname = "local-replace-external";
+  pname = "integration-local-replace-external";
   version = "0.1.0";
   src = ./examples;
   modules = ./examples/govendor.toml;
@@ -12,6 +12,6 @@ pkgs.buildGoApplication {
   # Provide Nix path for local replace directive that points to parent directory
   # The govendor.toml has: local = "../"
   localReplaces = {
-    "example.com/mylib" = ./.;
+    "example.com/integration-local-replace-external" = ./.;
   };
 }

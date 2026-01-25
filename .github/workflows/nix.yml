@@ -191,6 +191,11 @@ jobs:
           nix build .#integration-local-replace
           ./result/bin/integration-local-replace
 
+      - name: Build and run local-replace-external integration test
+        run: |
+          nix build .#integration-local-replace-external
+          ./result/bin/integration-local-replace-external-app
+
       - name: Build and run indirect-deps integration test
         run: |
           nix build .#integration-indirect-deps
