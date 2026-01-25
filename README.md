@@ -3,6 +3,7 @@
 [![Auto-Update](https://github.com/purpleclay/go-overlay/actions/workflows/auto-update.yml/badge.svg)](https://github.com/purpleclay/go-overlay/actions/workflows/auto-update.yml)
 ![Nix](https://img.shields.io/badge/Nix-5277C3?logo=nixos&logoColor=white)
 ![Go](https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white)
+[![MIT](https://img.shields.io/badge/MIT-gray?logo=github&logoColor=white)](LICENSE)
 
 A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^3].
 
@@ -346,23 +347,24 @@ buildGoApplication {
 }
 ```
 
-| Option        | Default             | Description                                                |
-| :------------ | :------------------ | :--------------------------------------------------------- |
-| `pname`       | required            | Package name                                               |
-| `version`     | required            | Package version                                            |
-| `src`         | required            | Source directory                                           |
-| `go`          | required            | Go derivation from go-overlay                              |
-| `modules`     | `null`              | Path to govendor.toml manifest (null = use in-tree vendor) |
-| `subPackages` | `["."]`             | Packages to build (relative to src)                        |
-| `ldflags`     | `[]`                | Linker flags                                               |
-| `tags`        | `[]`                | Build tags                                                 |
-| `CGO_ENABLED` | inherited from `go` | Enable CGO                                                 |
-| `GOOS`        | inherited from `go` | Target operating system                                    |
-| `GOARCH`      | inherited from `go` | Target architecture                                        |
-| `GOPROXY`     | `"off"`             | Go module proxy URL                                        |
-| `GOPRIVATE`   | `""`                | Glob patterns for private modules                          |
-| `GOSUMDB`     | `"off"`             | Checksum database URL                                      |
-| `GONOSUMDB`   | `""`                | Glob patterns to skip checksum verification                |
+| Option          | Default             | Description                                                |
+| :-------------- | :------------------ | :--------------------------------------------------------- |
+| `pname`         | required            | Package name                                               |
+| `version`       | required            | Package version                                            |
+| `src`           | required            | Source directory                                           |
+| `go`            | required            | Go derivation from go-overlay                              |
+| `modules`       | `null`              | Path to govendor.toml manifest (null = use in-tree vendor) |
+| `subPackages`   | `["."]`             | Packages to build (relative to src)                        |
+| `ldflags`       | `[]`                | Linker flags                                               |
+| `tags`          | `[]`                | Build tags                                                 |
+| `localReplaces` | `{}`                | Map of module path to Nix path for external local replaces |
+| `CGO_ENABLED`   | inherited from `go` | Enable CGO                                                 |
+| `GOOS`          | inherited from `go` | Target operating system                                    |
+| `GOARCH`        | inherited from `go` | Target architecture                                        |
+| `GOPROXY`       | `"off"`             | Go module proxy URL                                        |
+| `GOPRIVATE`     | `""`                | Glob patterns for private modules                          |
+| `GOSUMDB`       | `"off"`             | Checksum database URL                                      |
+| `GONOSUMDB`     | `""`                | Glob patterns to skip checksum verification                |
 
 #### Local Replace Directives
 
@@ -383,6 +385,38 @@ When `govendor` detects a local replacement, it records the path in `govendor.to
 ```
 
 During the build, `buildGoApplication` copies the local module from your source tree into the vendor directory. This works automatically—no additional configuration required.
+
+#### External Local Replace Directives
+
+When a local replace directive points outside the `src` directory (e.g., to a parent directory), use the `localReplaces` parameter to provide the Nix path:
+
+```
+my-project/
+├── go.mod              # Main library module
+├── lib.go
+└── examples/
+    ├── go.mod          # replace github.com/myorg/mylib => ../
+    └── main.go
+```
+
+The examples module depends on the parent library via a replace directive. Since `src = ./examples` doesn't include the parent, use `localReplaces`:
+
+```nix
+buildGoApplication {
+  pname = "my-example";
+  version = "1.0.0";
+  src = ./examples;
+  go = pkgs.go-bin.latest;
+  modules = ./examples/govendor.toml;
+
+  # Provide Nix path for local replace pointing outside src
+  localReplaces = {
+    "github.com/myorg/mylib" = ./.;  # Points to project root
+  };
+}
+```
+
+The `localReplaces` attribute maps module paths to Nix paths. When a module is found in `localReplaces`, that path is used instead of resolving relative to `src`.
 
 #### Proxy Configuration
 
@@ -654,11 +688,12 @@ mkVendorEnv {
 }
 ```
 
-| Option     | Default  | Description                                          |
-| :--------- | :------- | :--------------------------------------------------- |
-| `go`       | required | Go derivation from go-overlay                        |
-| `manifest` | required | Parsed govendor.toml (via fromTOML)                  |
-| `src`      | `null`   | Source tree (required if manifest has local modules) |
+| Option          | Default  | Description                                                |
+| :-------------- | :------- | :--------------------------------------------------------- |
+| `go`            | required | Go derivation from go-overlay                              |
+| `manifest`      | required | Parsed govendor.toml (via fromTOML)                        |
+| `src`           | `null`   | Source tree (required if manifest has local modules)       |
+| `localReplaces` | `{}`     | Map of module path to Nix path for external local replaces |
 
 The resulting derivation contains each module at its import path and a `modules.txt` with package listings.
 
