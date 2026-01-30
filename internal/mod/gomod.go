@@ -262,9 +262,7 @@ func (f *GoModFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[s
 	for _, meta := range downloads {
 		p.Go(func() (GoModule, error) {
 			h := sha256.New()
-			if err := nar.DumpPathFilter(h, meta.Dir, func(path string, _ nar.NodeType) bool {
-				return strings.ToLower(filepath.Base(path)) != ".ds_store"
-			}); err != nil {
+			if err := nar.DumpPath(h, meta.Dir); err != nil {
 				return GoModule{}, err
 			}
 
