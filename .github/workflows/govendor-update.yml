@@ -2,6 +2,11 @@ name: govendor-update
 on:
   workflow_call:
     inputs:
+      working-directory:
+        description: "Working directory for govendor manifest generation"
+        required: false
+        type: string
+        default: "."
       co-author:
         description: "Co-author for the commit trailer (e.g., 'name <email>'). If not provided, uses git config from GPG import"
         required: false
@@ -40,6 +45,7 @@ jobs:
         run: nix run github:purpleclay/gpg-import
 
       - name: Update govendor.toml
+        working-directory: ${{ inputs.working-directory }}
         env:
           CO_AUTHOR: ${{ inputs.co-author }}
         run: |
