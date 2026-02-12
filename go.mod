@@ -8,7 +8,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/muesli/reflow v0.3.0
 	github.com/nix-community/go-nix v0.0.0-20250101154619-4bdde671e0a1
-	github.com/purpleclay/chomp v0.6.0
+	github.com/purpleclay/chomp v0.7.0
 	github.com/purpleclay/x/cli v0.6.3
 	github.com/purpleclay/x/theme v0.2.3
 	github.com/sourcegraph/conc v0.3.0
