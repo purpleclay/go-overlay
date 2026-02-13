@@ -14,7 +14,7 @@ func Execute(version cli.VersionInfo) error {
 		SilenceErrors: true,
 	}
 
-	cmd.AddCommand(newListCmd())
+	cmd.AddCommand(newDetectCmd(), newListCmd())
 
 	return cli.Execute(cmd,
 		cli.WithVersionFlag(version),
