@@ -7,7 +7,7 @@ on:
       - "*.nix"
       - "**/*.nix"
       - "flake.lock"
-      - "gomod2nix.toml"
+      - "govendor.toml"
   pull_request:
     branches:
       - main
@@ -15,7 +15,7 @@ on:
       - "*.nix"
       - "**/*.nix"
       - "flake.lock"
-      - "gomod2nix.toml"
+      - "govendor.toml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -116,6 +116,30 @@ jobs:
 
       - name: Build goscrape
         run: nix build .#goscrape
+
+  build-goscrapeproxy:
+    runs-on: ${{ matrix.os }}
+    name: build-goscrapeproxy / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.GH_CACHIX }}"
+          skipPush: false
+          useDaemon: false
+
+      - name: Build goscrapeproxy
+        run: nix build .#goscrapeproxy
 
   build-govendor:
     runs-on: ${{ matrix.os }}
