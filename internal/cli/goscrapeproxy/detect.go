@@ -11,7 +11,7 @@ func newDetectCmd() *cobra.Command {
 	var prefix string
 
 	cmd := &cobra.Command{
-		Use:   "detect [MODULE]",
+		Use:   "detect MODULE",
 		Short: "Detect the latest version of a Go module from the module proxy",
 		Long: `
 		Queries the Go module proxy (https://proxy.golang.org) and detects the
