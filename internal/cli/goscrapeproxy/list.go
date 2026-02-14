@@ -11,7 +11,7 @@ func newListCmd() *cobra.Command {
 	var prefix string
 
 	cmd := &cobra.Command{
-		Use:   "list [MODULE]",
+		Use:   "list MODULE",
 		Short: "List available versions of a Go module from the module proxy",
 		Long: `
 		Queries the Go module proxy (https://proxy.golang.org) and lists all
