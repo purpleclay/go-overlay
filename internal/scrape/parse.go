@@ -42,7 +42,8 @@ func Href(version string) chomp.Combinator[string] {
 		}
 
 		hrefVersion := normalizedVersion
-		if !strings.Contains(normalizedVersion, "rc") && !strings.Contains(normalizedVersion, "beta") {
+		if !strings.Contains(normalizedVersion, "rc") && !strings.Contains(normalizedVersion, "beta") &&
+			strings.Count(normalizedVersion, ".") >= 2 {
 			hrefVersion = normalizedVersion + "."
 		}
 
