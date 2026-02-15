@@ -1,6 +1,6 @@
 {lib}: let
   # Load all manifest files from the manifests directory
-  manifestDir = ../manifests;
+  manifestDir = ../manifests/go;
   manifestFiles = builtins.readDir manifestDir;
 
   # Filter to only .nix files and strip the extension to get version

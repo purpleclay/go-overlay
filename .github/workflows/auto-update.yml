@@ -38,8 +38,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           for version in ${{ env.GO_VERSIONS }}; do
-            if [ ! -f "manifests/${version}.nix" ]; then
-              nix run .#goscrape -- generate "$version" --output manifests
+            if [ ! -f "manifests/go/${version}.nix" ]; then
+              nix run .#goscrape -- generate "$version" --output manifests/go
               echo "MANIFESTS_GENERATED=true" >> $GITHUB_ENV
             fi
           done
@@ -54,7 +54,7 @@ jobs:
         if: ${{ env.MANIFESTS_GENERATED == 'true' }}
         run: |
           for version in ${{ env.GO_VERSIONS }}; do
-            manifest="manifests/${version}.nix"
+            manifest="manifests/go/${version}.nix"
             if git status --porcelain "$manifest" | grep -q .; then
               git add "$manifest"
               git commit -m "chore: generated nix manifest for go release ${version}"

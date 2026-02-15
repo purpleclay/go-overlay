@@ -157,7 +157,7 @@ func newGenerateCmd() *cobra.Command {
       	goscrape generate 1.23*
 
        	# Generate manifests and write to directory
-        goscrape generate 1.21.6 --output ./manifests
+        goscrape generate 1.21.6 --output ./manifests/go
         `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
