@@ -10,7 +10,7 @@ import (
 )
 
 func TestScrape(t *testing.T) {
-	fd, err := os.ReadFile("testdata/index-20251207.html")
+	fd, err := os.ReadFile("testdata/index-20260215.html")
 	require.NoError(t, err)
 
 	// Use a fixed date for reproducible tests

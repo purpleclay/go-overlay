@@ -75,6 +75,7 @@ func newListCmd() *cobra.Command {
 
 			versions, err := listVersions(page, prefix)
 			if err != nil {
+				fmt.Println(err)
 				return err
 			}
 
