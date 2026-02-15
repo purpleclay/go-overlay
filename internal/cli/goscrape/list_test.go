@@ -33,6 +33,9 @@ func TestListVersionsWithPrefix1_25(t *testing.T) {
 		"1.25.5",
 		"1.25.6",
 		"1.25.7",
+		"1.25rc1",
+		"1.25rc2",
+		"1.25rc3",
 	}
 	assert.Equal(t, expected, versions)
 }
