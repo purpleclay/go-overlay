@@ -1,6 +1,7 @@
 package scrape
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -78,6 +79,46 @@ Download
 
 	_, _, err := Href("go9.99.99")(html)
 	assert.Error(t, err)
+}
+
+func TestHrefCombinatorEmptyVersionFromPage(t *testing.T) {
+	fd, err := os.ReadFile("testdata/index-20260215.html")
+	require.NoError(t, err)
+
+	_, result, err := Href("")(string(fd))
+	require.NoError(t, err)
+	require.Equal(t, "/dl/go1.26.0.src.tar.gz", result)
+}
+
+func TestHrefCombinatorEmptyVersion(t *testing.T) {
+	html := `<div>
+<a class="download" href="/dl/go1.21.4.linux-amd64.tar.gz">
+Download
+</a>
+</div>`
+
+	_, result, err := Href("")(html)
+	require.NoError(t, err)
+	require.Equal(t, "/dl/go1.21.4.linux-amd64.tar.gz", result)
+}
+
+func TestHrefCombinatorEmptyVersionMultiple(t *testing.T) {
+	html := `<div>
+<a class="download" href="/dl/go1.21.4.linux-amd64.tar.gz">
+Download
+</a>
+<a class="download" href="/dl/go1.22.0.linux-amd64.tar.gz">
+Download
+</a>
+</div>`
+
+	rem, first, err := Href("")(html)
+	require.NoError(t, err)
+	require.Equal(t, "/dl/go1.21.4.linux-amd64.tar.gz", first)
+
+	_, second, err := Href("")(rem)
+	require.NoError(t, err)
+	require.Equal(t, "/dl/go1.22.0.linux-amd64.tar.gz", second)
 }
 
 func TestTargetCombinator(t *testing.T) {
