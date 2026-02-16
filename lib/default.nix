@@ -4,8 +4,24 @@
   pkgs,
 }: let
   manifestsLib = import ./manifests.nix {inherit lib;};
-  mkGoToolchain = import ./mk-go-toolchain.nix {
+  toolManifestsLib = import ./tool-manifests.nix {inherit lib;};
+
+  # Get builder functions for tool building
+  builder = pkgs.callPackage ../builder {};
+
+  buildGoTool = import ./mk-go-tool.nix {
     inherit lib;
+    inherit (pkgs) stdenv;
+    inherit (builder) fetchGoModule mkVendorEnv;
+  };
+
+  mkToolSet = import ./mk-tool-set.nix {
+    inherit lib buildGoTool;
+    toolManifests = toolManifestsLib;
+  };
+
+  mkGoToolchain = import ./mk-go-toolchain.nix {
+    inherit lib mkToolSet;
     inherit (pkgs) stdenv fetchurl;
   };
 

@@ -15,12 +15,18 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 
 [^4]: gomod2nix's builder depends on its CLI tool, which in turn depends on the builder—complicating [NUR integration and bootstrapping](https://github.com/nix-community/gomod2nix/issues/196). go-overlay avoids this by having `govendor` and `buildGoApplication` communicate only via the manifest file.
 
-[^5]: Go workspaces (`go.work`) allow multiple modules to be developed together in a monorepo. Neither [buildGoModule](https://github.com/NixOS/nixpkgs/issues/203039) nor [gomod2nix](https://discourse.nixos.org/t/gomod2nix-with-go-workspaces/43134) support workspaces because `-mod=vendor` conflicts with workspace mode. go-overlay's `buildGoWorkspace` works around this limitation.
+[^5]: Go ecosystem tools like govulncheck are built from pre-generated manifests and pinned to the selected Go toolchain. Version compatibility is enforced automatically—incompatible versions throw with a clear error message.
+
+[^6]: Go workspaces (`go.work`) allow multiple modules to be developed together in a monorepo. Neither [buildGoModule](https://github.com/NixOS/nixpkgs/issues/203039) nor [gomod2nix](https://discourse.nixos.org/t/gomod2nix-with-go-workspaces/43134) support workspaces because `-mod=vendor` conflicts with workspace mode. go-overlay's `buildGoWorkspace` works around this limitation.
 
 - [Why it exists?](#why-it-exists)
 - [Quick Start](#quick-start)
 - [Installation](#installation)
 - [Library Functions](#library-functions)
+- [Go Tools](#go-tools)
+  - [Available Tools](#available-tools)
+  - [Version Pinning](#version-pinning)
+  - [Version Compatibility](#version-compatibility)
 - [Builder Functions](#builder-functions)
   - [buildGoApplication](#buildgoapplication)
     - [In-tree Vendor Mode](#in-tree-vendor-mode)
@@ -53,9 +59,10 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 | Go versions available    | 100+ (1.17 – latest) | nixpkgs only  | nixpkgs only            |
 | New release availability | Up to 4 hours        | Days to weeks | Days to weeks           |
 | Release candidates       | Yes                  | No            | No                      |
+| Go tools[^5]             | Yes                  | No            | No                      |
 | vendorHash required      | No                   | No            | Yes                     |
 | Unpatched Go binary      | Yes                  | No            | No                      |
-| Go workspaces[^5]        | Yes                  | No            | No                      |
+| Go workspaces[^6]        | Yes                  | No            | No                      |
 | Private modules          | Standard Go auth     | Complex setup | Complex setup           |
 | Drift detection          | Yes (`--check`)      | No            | N/A                     |
 | Circular dependency[^4]  | No                   | Yes           | N/A                     |
@@ -303,6 +310,57 @@ go-bin.fromGoModStrict ./go.mod
 | `go 1.21`                        | Latest 1.21.x | Error             |
 | `go 1.21.6`                      | 1.21.6        | 1.21.6            |
 | `go 1.21` + `toolchain go1.21.6` | 1.21.6        | 1.21.6            |
+
+## Go Tools
+
+go-overlay can build Go ecosystem tools from pre-generated manifests and pin them to the selected Go toolchain. Tools are accessed directly from a Go toolchain derivation via `tools`, inspired by [rust-overlay](https://github.com/oxalica/rust-overlay):
+
+```nix
+let
+  go = pkgs.go-bin.fromGoMod ./go.mod;  # e.g., Go 1.25.4
+in {
+  devShells.default = pkgs.mkShell {
+    buildInputs = [
+      go
+      go.tools.govulncheck.latest       # latest compatible with Go 1.25.4
+      go.tools.govulncheck."1.1.3"      # pinned version
+    ];
+  };
+}
+```
+
+### Available Tools
+
+| Tool | Module |
+| :--- | :----- |
+| [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) | `golang.org/x/vuln` |
+
+### Version Pinning
+
+Each tool exposes all known versions as attributes, plus a `latest` convenience attribute that resolves to the newest version compatible with your Go toolchain:
+
+```nix
+let
+  go = pkgs.go-bin.versions."1.25.4";
+in [
+  go.tools.govulncheck.latest    # newest compatible version
+  go.tools.govulncheck."1.1.4"   # exact version
+  go.tools.govulncheck."1.0.0"   # older version
+]
+```
+
+### Version Compatibility
+
+All known versions of a tool appear in the attribute set regardless of compatibility. Compatible versions evaluate to a derivation. Incompatible versions evaluate to a `throw` with a clear error message:
+
+```sh
+go-overlay: govulncheck 1.1.4 requires Go >= 1.22.0,
+but the selected toolchain is Go 1.21.4.
+
+Latest compatible version: 1.1.3
+```
+
+This is more user-friendly than silently omitting incompatible versions, which would produce a generic "attribute not found" error.
 
 ## Builder Functions
 
