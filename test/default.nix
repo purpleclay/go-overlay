@@ -57,4 +57,21 @@ in {
   # fromGoModStrict
   fromGoModStrict-with-toolchain = assertEq "fromGoModStrict-with-toolchain" "1.21.6" (go-bin.fromGoModStrict ./fixtures/go-with-toolchain.mod).version;
   fromGoModStrict-exact = assertEq "fromGoModStrict-exact" "1.21.4" (go-bin.fromGoModStrict ./fixtures/go-exact.mod).version;
+
+  # tools - basic attribute structure
+  tools-is-attrset = assertEq "tools-is-attrset" true (builtins.isAttrs go-bin.latest.tools);
+  tools-has-govulncheck = assertEq "tools-has-govulncheck" true (builtins.hasAttr "govulncheck" go-bin.latest.tools);
+  tools-govulncheck-is-attrset = assertEq "tools-govulncheck-is-attrset" true (builtins.isAttrs go-bin.latest.tools.govulncheck);
+  tools-govulncheck-has-latest = assertEq "tools-govulncheck-has-latest" true (builtins.hasAttr "latest" go-bin.latest.tools.govulncheck);
+  tools-govulncheck-has-known-version = assertEq "tools-govulncheck-has-known-version" true (builtins.hasAttr "1.1.4" go-bin.latest.tools.govulncheck);
+
+  # tools - version selection
+  tools-govulncheck-latest-version = assertEq "tools-govulncheck-latest-version" "1.1.4" go-bin.latest.tools.govulncheck.latest.version;
+  tools-govulncheck-pinned-version = assertEq "tools-govulncheck-pinned-version" "1.1.3" go-bin.latest.tools.govulncheck."1.1.3".version;
+
+  # tools - binary exists
+  tools-govulncheck-has-binary = testBinaryExists "tools-govulncheck-has-binary" go-bin.latest.tools.govulncheck.latest "bin/govulncheck";
+
+  # tools - compatibility (Go 1.21.4 is compatible with govulncheck up to 1.1.3, but not 1.1.4 which requires Go 1.22.0)
+  tools-govulncheck-compat-old-go = assertEq "tools-govulncheck-compat-old-go" "1.1.3" go-bin.versions."1.21.4".tools.govulncheck.latest.version;
 }
