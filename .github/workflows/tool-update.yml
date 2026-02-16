@@ -62,7 +62,7 @@ jobs:
       - name: Check and Generate Manifest
         run: |
           version="${{ env.LATEST_VERSION }}"
-          manifest="${{ inputs.manifest-dir }}/${version}.nix"
+          manifest="${{ inputs.manifest-dir }}/${version#v}.nix"
 
           if [ -f "$manifest" ]; then
             echo "Manifest already exists for ${version}"
@@ -71,7 +71,7 @@ jobs:
 
           nix run .#goscrapeproxy -- generate ${{ inputs.module }} \
             --sub-packages ${{ inputs.sub-packages }} \
-            --versions "v${version}" \
+            --versions "${version}" \
             --output ${{ inputs.manifest-dir }}
 
           echo "MANIFEST_GENERATED=true" >> $GITHUB_ENV
@@ -87,8 +87,8 @@ jobs:
         if: ${{ env.MANIFEST_GENERATED == 'true' }}
         run: |
           version="${{ env.LATEST_VERSION }}"
-          manifest="${{ inputs.manifest-dir }}/${version}.nix"
+          manifest="${{ inputs.manifest-dir }}/${version#v}.nix"
 
           git add "$manifest"
-          git commit -m "chore: generated nix manifest for ${{ inputs.tool-name }} ${version}"
+          git commit -m "chore: generated nix manifest for ${{ inputs.tool-name }} ${version#v}"
           git push
