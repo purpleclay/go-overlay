@@ -274,7 +274,7 @@
       ''
     else
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "localReplaces" "allowGoReference"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "localReplaces" "allowGoReference"]
         // {
           inherit pname version src;
 
@@ -284,10 +284,12 @@
               go
             ];
 
-          inherit GOOS GOARCH CGO_ENABLED;
+          env = {
+            inherit GOOS GOARCH CGO_ENABLED;
 
-          GO111MODULE = "on";
-          GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
+            GO111MODULE = "on";
+            GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
+          };
 
           configurePhase =
             attrs.configurePhase
@@ -326,6 +328,8 @@
                 runHook postConfigure
               ''
             );
+
+          strictDeps = true;
 
           buildPhase = let
             allLdflags = ldflags ++ lib.optional (!lib.any (lib.hasPrefix "-buildid=") ldflags) "-buildid=";
@@ -529,7 +533,7 @@
       ''
     else
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "allowGoReference"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "allowGoReference"]
         // {
           inherit pname version src;
 
@@ -539,10 +543,12 @@
               go
             ];
 
-          inherit GOOS GOARCH CGO_ENABLED;
+          env = {
+            inherit GOOS GOARCH CGO_ENABLED;
 
-          GO111MODULE = "on";
-          GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
+            GO111MODULE = "on";
+            GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
+          };
 
           configurePhase =
             attrs.configurePhase
@@ -588,6 +594,8 @@
                                 runHook postConfigure
               ''
             );
+
+          strictDeps = true;
 
           buildPhase = let
             allLdflags = ldflags ++ lib.optional (!lib.any (lib.hasPrefix "-buildid=") ldflags) "-buildid=";
