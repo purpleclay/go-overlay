@@ -210,6 +210,7 @@
     subPackages ? ["."], # Packages to build (relative to src)
     ldflags ? [],
     tags ? [],
+    allowGoReference ? false,
     CGO_ENABLED ? go.CGO_ENABLED,
     GOOS ? go.GOOS,
     GOARCH ? go.GOARCH,
@@ -273,7 +274,7 @@
       ''
     else
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "localReplaces"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "localReplaces" "allowGoReference"]
         // {
           inherit pname version src;
 
@@ -283,11 +284,10 @@
               go
             ];
 
-          inherit GOOS GOARCH;
-          inherit CGO_ENABLED;
+          inherit GOOS GOARCH CGO_ENABLED;
 
           GO111MODULE = "on";
-          GOFLAGS = "-mod=vendor";
+          GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
 
           configurePhase =
             attrs.configurePhase
@@ -327,15 +327,17 @@
               ''
             );
 
-          buildPhase =
+          buildPhase = let
+            allLdflags = ldflags ++ lib.optional (!lib.any (lib.hasPrefix "-buildid=") ldflags) "-buildid=";
+          in
             attrs.buildPhase or ''
               runHook preBuild
 
               buildFlags=(
                 -v
                 -p $NIX_BUILD_CORES
+                -ldflags=${escapeShellArg (concatStringsSep " " allLdflags)}
                 ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
-                ${optionalString (ldflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " ldflags)}"}
               )
 
               for pkg in ${concatStringsSep " " subPackages}; do
@@ -357,6 +359,8 @@
 
               runHook postInstall
             '';
+
+          disallowedReferences = lib.optional (!allowGoReference) go;
 
           passthru =
             {inherit go;}
@@ -383,6 +387,7 @@
     subPackages ? ["."], # Packages to build (relative to src)
     ldflags ? [],
     tags ? [],
+    allowGoReference ? false,
     CGO_ENABLED ? go.CGO_ENABLED,
     GOOS ? go.GOOS,
     GOARCH ? go.GOARCH,
@@ -524,7 +529,7 @@
       ''
     else
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "allowGoReference"]
         // {
           inherit pname version src;
 
@@ -537,7 +542,7 @@
           inherit GOOS GOARCH CGO_ENABLED;
 
           GO111MODULE = "on";
-          GOFLAGS = "-mod=vendor";
+          GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
 
           configurePhase =
             attrs.configurePhase
@@ -584,15 +589,17 @@
               ''
             );
 
-          buildPhase =
+          buildPhase = let
+            allLdflags = ldflags ++ lib.optional (!lib.any (lib.hasPrefix "-buildid=") ldflags) "-buildid=";
+          in
             attrs.buildPhase or ''
               runHook preBuild
 
               buildFlags=(
                 -v
                 -p $NIX_BUILD_CORES
+                -ldflags=${escapeShellArg (concatStringsSep " " allLdflags)}
                 ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
-                ${optionalString (ldflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " ldflags)}"}
               )
 
               for pkg in ${concatStringsSep " " subPackages}; do
@@ -614,6 +621,8 @@
 
               runHook postInstall
             '';
+
+          disallowedReferences = lib.optional (!allowGoReference) go;
 
           passthru =
             {inherit go;}
