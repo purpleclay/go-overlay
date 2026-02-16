@@ -1,0 +1,94 @@
+name: tool-update
+on:
+  workflow_call:
+    inputs:
+      module:
+        description: "Go module path (e.g., golang.org/x/vuln)"
+        required: true
+        type: string
+      sub-packages:
+        description: "Comma-separated sub-packages to build (e.g., cmd/govulncheck)"
+        required: true
+        type: string
+      manifest-dir:
+        description: "Output directory for manifests (e.g., manifests/govulncheck)"
+        required: true
+        type: string
+      tool-name:
+        description: "Human-readable tool name for commit messages (e.g., govulncheck)"
+        required: true
+        type: string
+    secrets:
+      token:
+        description: "GitHub token with contents:write permissions to push commits"
+        required: true
+      gpg-private-key:
+        description: "GPG private key for signing commits"
+        required: true
+      gpg-passphrase:
+        description: "Passphrase for the GPG private key"
+        required: true
+      cachix-token:
+        description: "Cachix auth token"
+        required: true
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    name: update
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          token: ${{ secrets.token }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.cachix-token }}"
+          useDaemon: false
+
+      - name: Detect Latest Version
+        run: |
+          LATEST=$(nix run .#goscrapeproxy -- detect ${{ inputs.module }})
+          echo "LATEST_VERSION=$LATEST" >> $GITHUB_ENV
+
+      - name: Check and Generate Manifest
+        run: |
+          version="${{ env.LATEST_VERSION }}"
+          manifest="${{ inputs.manifest-dir }}/${version}.nix"
+
+          if [ -f "$manifest" ]; then
+            echo "Manifest already exists for ${version}"
+            exit 0
+          fi
+
+          nix run .#goscrapeproxy -- generate ${{ inputs.module }} \
+            --sub-packages ${{ inputs.sub-packages }} \
+            --versions "v${version}" \
+            --output ${{ inputs.manifest-dir }}
+
+          echo "MANIFEST_GENERATED=true" >> $GITHUB_ENV
+
+      - name: GPG Import
+        if: ${{ env.MANIFEST_GENERATED == 'true' }}
+        env:
+          GPG_PRIVATE_KEY: "${{ secrets.gpg-private-key }}"
+          GPG_PASSPHRASE: "${{ secrets.gpg-passphrase }}"
+        run: nix run github:purpleclay/gpg-import
+
+      - name: Commit and Push Manifest
+        if: ${{ env.MANIFEST_GENERATED == 'true' }}
+        run: |
+          version="${{ env.LATEST_VERSION }}"
+          manifest="${{ inputs.manifest-dir }}/${version}.nix"
+
+          git add "$manifest"
+          git commit -m "chore: generated nix manifest for ${{ inputs.tool-name }} ${version}"
+          git push

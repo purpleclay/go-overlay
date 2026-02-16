@@ -1,9 +1,10 @@
 # go-overlay
 
-[![Auto-Update](https://github.com/purpleclay/go-overlay/actions/workflows/auto-update.yml/badge.svg)](https://github.com/purpleclay/go-overlay/actions/workflows/auto-update.yml)
 ![Nix](https://img.shields.io/badge/Nix-5277C3?logo=nixos&logoColor=white)
 ![Go](https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white)
 [![MIT](https://img.shields.io/badge/MIT-gray?logo=github&logoColor=white)](LICENSE)
+[![Go Update](https://github.com/purpleclay/go-overlay/actions/workflows/go-update.yml/badge.svg)](https://github.com/purpleclay/go-overlay/actions/workflows/go-update.yml)
+[![Govulncheck Update](https://github.com/purpleclay/go-overlay/actions/workflows/govulncheck-update.yml/badge.svg)](https://github.com/purpleclay/go-overlay/actions/workflows/govulncheck-update.yml)
 
 A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^3].
 
