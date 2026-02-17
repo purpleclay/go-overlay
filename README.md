@@ -33,6 +33,8 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
     - [In-tree Vendor Mode](#in-tree-vendor-mode)
     - [Manifest Mode](#manifest-mode)
     - [Local Replace Directives](#local-replace-directives)
+    - [External Local Replace Directives](#external-local-replace-directives)
+    - [Testing](#testing)
     - [Proxy Configuration](#proxy-configuration)
     - [Cross-Compilation](#cross-compilation)
   - [buildGoWorkspace](#buildgoworkspace)
@@ -41,6 +43,7 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
     - [Workspace Structure](#workspace-structure)
     - [Generating the Manifest](#generating-the-manifest)
     - [Building Multiple Binaries](#building-multiple-binaries)
+    - [Testing](#testing-1)
     - [Proxy Configuration](#proxy-configuration-1)
     - [Cross-Compilation](#cross-compilation-1)
   - [mkVendorEnv](#mkvendorenv)
@@ -332,8 +335,8 @@ in {
 
 ### Available Tools
 
-| Tool | Module |
-| :--- | :----- |
+| Tool                                                                | Module              |
+| :------------------------------------------------------------------ | :------------------ |
 | [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) | `golang.org/x/vuln` |
 
 ### Version Pinning
@@ -406,25 +409,28 @@ buildGoApplication {
 }
 ```
 
-| Option          | Default             | Description                                                |
-| :-------------- | :------------------ | :--------------------------------------------------------- |
-| `pname`         | required            | Package name                                               |
-| `version`       | required            | Package version                                            |
-| `src`           | required            | Source directory                                           |
-| `go`            | required            | Go derivation from go-overlay                              |
-| `modules`       | `null`              | Path to govendor.toml manifest (null = use in-tree vendor) |
-| `subPackages`   | `["."]`             | Packages to build (relative to src)                        |
-| `ldflags`       | `[]`                | Linker flags                                               |
-| `tags`          | `[]`                | Build tags                                                 |
-| `allowGoReference` | `false`          | Allow Go toolchain in runtime closure                      |
-| `localReplaces` | `{}`                | Map of module path to Nix path for external local replaces |
-| `CGO_ENABLED`   | inherited from `go` | Enable CGO                                                 |
-| `GOOS`          | inherited from `go` | Target operating system                                    |
-| `GOARCH`        | inherited from `go` | Target architecture                                        |
-| `GOPROXY`       | `"off"`             | Go module proxy URL                                        |
-| `GOPRIVATE`     | `""`                | Glob patterns for private modules                          |
-| `GOSUMDB`       | `"off"`             | Checksum database URL                                      |
-| `GONOSUMDB`     | `""`                | Glob patterns to skip checksum verification                |
+| Option             | Default             | Description                                                |
+| :----------------- | :------------------ | :--------------------------------------------------------- |
+| `pname`            | required            | Package name                                               |
+| `version`          | required            | Package version                                            |
+| `src`              | required            | Source directory                                           |
+| `go`               | required            | Go derivation from go-overlay                              |
+| `modules`          | `null`              | Path to govendor.toml manifest (null = use in-tree vendor) |
+| `subPackages`      | `["."]`             | Packages to build (relative to src)                        |
+| `ldflags`          | `[]`                | Linker flags                                               |
+| `tags`             | `[]`                | Build tags                                                 |
+| `allowGoReference` | `false`             | Allow Go toolchain in runtime closure                      |
+| `localReplaces`    | `{}`                | Map of module path to Nix path for external local replaces |
+| `doCheck`          | `false`             | Run tests during the build                                 |
+| `checkFlags`       | `[]`                | Additional flags passed to `go test`                       |
+| `excludedPackages` | `[]`                | Packages to exclude from testing                           |
+| `CGO_ENABLED`      | inherited from `go` | Enable CGO                                                 |
+| `GOOS`             | inherited from `go` | Target operating system                                    |
+| `GOARCH`           | inherited from `go` | Target architecture                                        |
+| `GOPROXY`          | `"off"`             | Go module proxy URL                                        |
+| `GOPRIVATE`        | `""`                | Glob patterns for private modules                          |
+| `GOSUMDB`          | `"off"`             | Checksum database URL                                      |
+| `GONOSUMDB`        | `""`                | Glob patterns to skip checksum verification                |
 
 #### Local Replace Directives
 
@@ -477,6 +483,36 @@ buildGoApplication {
 ```
 
 The `localReplaces` attribute maps module paths to Nix paths. When a module is found in `localReplaces`, that path is used instead of resolving relative to `src`.
+
+#### Testing
+
+Tests are disabled by default. Set `doCheck = true` to run `go test` during the build:
+
+```nix
+buildGoApplication {
+  pname = "myapp";
+  version = "1.0.0";
+  src = ./.;
+  go = pkgs.go-bin.latest;
+  modules = ./govendor.toml;
+  doCheck = true;
+}
+```
+
+Tests are scoped to `subPackages`. Use `checkFlags` for additional test flags and `excludedPackages` to skip specific packages:
+
+```nix
+buildGoApplication {
+  pname = "myapp";
+  version = "1.0.0";
+  src = ./.;
+  go = pkgs.go-bin.latest;
+  modules = ./govendor.toml;
+  doCheck = true;
+  checkFlags = ["-count=1" "-timeout" "30m"];
+  excludedPackages = ["internal/e2e"];
+}
+```
 
 #### Proxy Configuration
 
@@ -634,6 +670,7 @@ govendor
 ```
 
 This generates a `govendor.toml` that includes:
+
 - External dependencies with NAR hashes
 - Workspace modules that are dependencies of other modules
 
@@ -665,24 +702,31 @@ Build each application separately using the same manifest:
 }
 ```
 
-| Option        | Default             | Description                                                |
-| :------------ | :------------------ | :--------------------------------------------------------- |
-| `pname`       | required            | Package name                                               |
-| `version`     | required            | Package version                                            |
-| `src`         | required            | Source directory (workspace root)                          |
-| `go`          | required            | Go derivation from go-overlay                              |
-| `modules`     | `null`              | Path to govendor.toml manifest (null = use in-tree vendor) |
-| `subPackages` | `["."]`             | Packages to build (relative to workspace root)             |
-| `ldflags`     | `[]`                | Linker flags                                               |
-| `tags`        | `[]`                | Build tags                                                 |
-| `allowGoReference` | `false`        | Allow Go toolchain in runtime closure                      |
-| `CGO_ENABLED` | inherited from `go` | Enable CGO                                                 |
-| `GOOS`        | inherited from `go` | Target operating system                                    |
-| `GOARCH`      | inherited from `go` | Target architecture                                        |
-| `GOPROXY`     | `"off"`             | Go module proxy URL                                        |
-| `GOPRIVATE`   | `""`                | Glob patterns for private modules                          |
-| `GOSUMDB`     | `"off"`             | Checksum database URL                                      |
-| `GONOSUMDB`   | `""`                | Glob patterns to skip checksum verification                |
+| Option             | Default             | Description                                                |
+| :----------------- | :------------------ | :--------------------------------------------------------- |
+| `pname`            | required            | Package name                                               |
+| `version`          | required            | Package version                                            |
+| `src`              | required            | Source directory (workspace root)                          |
+| `go`               | required            | Go derivation from go-overlay                              |
+| `modules`          | `null`              | Path to govendor.toml manifest (null = use in-tree vendor) |
+| `subPackages`      | `["."]`             | Packages to build (relative to workspace root)             |
+| `ldflags`          | `[]`                | Linker flags                                               |
+| `tags`             | `[]`                | Build tags                                                 |
+| `allowGoReference` | `false`             | Allow Go toolchain in runtime closure                      |
+| `doCheck`          | `false`             | Run tests during the build                                 |
+| `checkFlags`       | `[]`                | Additional flags passed to `go test`                       |
+| `excludedPackages` | `[]`                | Packages to exclude from testing                           |
+| `CGO_ENABLED`      | inherited from `go` | Enable CGO                                                 |
+| `GOOS`             | inherited from `go` | Target operating system                                    |
+| `GOARCH`           | inherited from `go` | Target architecture                                        |
+| `GOPROXY`          | `"off"`             | Go module proxy URL                                        |
+| `GOPRIVATE`        | `""`                | Glob patterns for private modules                          |
+| `GOSUMDB`          | `"off"`             | Checksum database URL                                      |
+| `GONOSUMDB`        | `""`                | Glob patterns to skip checksum verification                |
+
+#### Testing
+
+Tests are disabled by default. Set `doCheck = true` to run `go test` during the build. The `checkFlags` and `excludedPackages` options work the same as in `buildGoApplication`. See [Testing](#testing) for examples.
 
 #### Proxy Configuration
 
