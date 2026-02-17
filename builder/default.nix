@@ -76,7 +76,10 @@
   # Generate shell commands to copy fetched modules into $out directory.
   # Handles overlapping module paths by processing deepest paths first and
   # using symlinks where possible for performance.
-  mkModuleCopyCommands = sources: let
+  mkModuleCopyCommands = {
+    sources,
+    useSymlinks ? true,
+  }: let
     pkgPaths = builtins.attrNames sources;
     pkgPathsSortedByDepth = lib.lists.reverseList (lib.lists.sort (p: q: p < q) pkgPaths);
   in ''
@@ -85,17 +88,24 @@
     ${concatMapStringsSep "\n" (
         goPackagePath: let
           modSrc = sources.${goPackagePath};
-        in ''
-          if [ -d "$out/${escapeShellArg goPackagePath}" ]; then
-              # Pkg is overlapping, copy symlinks recursively
-              # without overriding existing overlapping pkgs
-              cp -rs --update=none ${modSrc}/* "$out/${escapeShellArg goPackagePath}/"
-          else
-              # Pkg is not overlapping, symlink the directory
-              mkdir -p "$out/$(dirname ${escapeShellArg goPackagePath})"
-              ln -s ${modSrc} "$out/${escapeShellArg goPackagePath}"
-          fi
-        ''
+        in
+          if useSymlinks
+          then ''
+            if [ -d "$out/${escapeShellArg goPackagePath}" ]; then
+                cp -rs --update=none ${modSrc}/* "$out/${escapeShellArg goPackagePath}/"
+            else
+                mkdir -p "$out/$(dirname ${escapeShellArg goPackagePath})"
+                ln -s ${modSrc} "$out/${escapeShellArg goPackagePath}"
+            fi
+          ''
+          else ''
+            if [ -d "$out/${escapeShellArg goPackagePath}" ]; then
+                cp -r --reflink=auto --update=none ${modSrc}/* "$out/${escapeShellArg goPackagePath}/"
+            else
+                mkdir -p "$out/$(dirname ${escapeShellArg goPackagePath})"
+                cp -r --reflink=auto ${modSrc} "$out/${escapeShellArg goPackagePath}"
+            fi
+          ''
       )
       pkgPathsSortedByDepth}
 
@@ -103,7 +113,9 @@
   '';
 
   # Create a vendor directory with modules.txt from a govendor.toml manifest.
-  # The vendor directory contains symlinks to fetched modules.
+  # For Go >= 1.25, modules are symlinked for efficiency (GODEBUG=embedfollowsymlinks=1
+  # handles //go:embed compatibility). For older Go, modules are copied using
+  # cp -r --reflink=auto to avoid //go:embed rejecting symlinks as irregular files.
   # For local modules (replace directives with local paths), the source is
   # provided separately and copied during the build phase.
   mkVendorEnv = {
@@ -112,6 +124,7 @@
     src ? null, # Source tree for local module replacements
     localReplaces ? {}, # Map of module path to Nix path for external local replaces
   }: let
+    useSymlinks = lib.versionAtLeast go.version "1.25";
     modules = manifest.mod or {};
 
     # Separate remote and local modules
@@ -156,7 +169,7 @@
 
     # Generate copy commands for remote modules
     # (e.g., go.opentelemetry.io/otel and go.opentelemetry.io/otel/trace)
-    remoteCopyCommands = mkModuleCopyCommands sources;
+    remoteCopyCommands = mkModuleCopyCommands {inherit sources useSymlinks;};
 
     # Resolve local module sources - either from localReplaces or src-relative paths
     # This creates the mapping used both for copy commands and as derivation inputs
@@ -175,7 +188,7 @@
     {
       passAsFile = ["modulesTxt"];
       inherit modulesTxt;
-      passthru = {inherit sources;};
+      passthru = {inherit sources useSymlinks;};
 
       # Add localReplaces paths as explicit derivation inputs so they're tracked
       # and fetched before the build runs (fixes CI builds where store paths
@@ -189,7 +202,10 @@
       ${remoteCopyCommands}
 
       # Copy local modules from source tree
-      ${mkModuleCopyCommands localModuleSources}
+      ${mkModuleCopyCommands {
+        sources = localModuleSources;
+        inherit useSymlinks;
+      }}
 
       # Write modules.txt
       cp "$modulesTxtPath" "$out/modules.txt"
@@ -291,6 +307,7 @@
 
               GO111MODULE = "on";
               GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
+              GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
             };
 
           configurePhase =
@@ -324,7 +341,11 @@
 
                 # Copy vendor environment from manifest
                 rm -rf vendor
-                cp --no-preserve=mode -rs ${vendorEnv} vendor
+                ${
+                  if vendorEnv.useSymlinks
+                  then "cp --no-preserve=mode -rs ${vendorEnv} vendor"
+                  else "cp -r --reflink=auto ${vendorEnv} vendor"
+                }
                 chmod -R u+w vendor
 
                 runHook postConfigure
@@ -518,23 +539,29 @@
 
     # Create vendor environment with remote deps only
     # Workspace module deps are not copied - they stay in the source tree
+    useSymlinks = lib.versionAtLeast go.version "1.25";
+
     vendorEnv =
       if useManifest
       then
-        runCommand "workspace-vendor-env" {
-          passAsFile = ["modulesTxt"];
-          inherit modulesTxt;
-        } (
-          ''
-            mkdir -p $out
-          ''
-          + mkModuleCopyCommands externalSources
-          + ''
+        (runCommand "workspace-vendor-env" {
+            passAsFile = ["modulesTxt"];
+            inherit modulesTxt;
+          } (
+            ''
+              mkdir -p $out
+            ''
+            + mkModuleCopyCommands {
+              sources = externalSources;
+              inherit useSymlinks;
+            }
+            + ''
 
-            # Write modules.txt
-            cp "$modulesTxtPath" "$out/modules.txt"
-          ''
-        )
+              # Write modules.txt
+              cp "$modulesTxtPath" "$out/modules.txt"
+            ''
+          ))
+        .overrideAttrs (_: {passthru = {inherit useSymlinks;};})
       else null;
   in
     # Validate: must have either modules or in-tree vendor
@@ -572,6 +599,7 @@
 
               GO111MODULE = "on";
               GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
+              GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
             };
 
           configurePhase =
@@ -612,7 +640,11 @@
                                 # Copy vendor environment with external deps
                                 # Workspace modules stay in source tree - Go resolves them via modules.txt
                                 rm -rf vendor
-                                cp --no-preserve=mode -rs ${vendorEnv} vendor
+                                ${
+                  if vendorEnv.useSymlinks
+                  then "cp --no-preserve=mode -rs ${vendorEnv} vendor"
+                  else "cp -r --reflink=auto ${vendorEnv} vendor"
+                }
                                 chmod -R u+w vendor
 
                                 runHook postConfigure

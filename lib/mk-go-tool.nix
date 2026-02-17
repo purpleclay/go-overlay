@@ -40,6 +40,7 @@ in
       inherit (go) GOOS GOARCH CGO_ENABLED;
       GO111MODULE = "on";
       GOFLAGS = "-mod=vendor -trimpath";
+      GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
     };
 
     strictDeps = true;
@@ -54,7 +55,11 @@ in
       export GOSUMDB=off
 
       rm -rf vendor
-      cp --no-preserve=mode -rs ${vendorEnv} vendor
+      ${
+        if vendorEnv.useSymlinks
+        then "cp --no-preserve=mode -rs ${vendorEnv} vendor"
+        else "cp -r --reflink=auto ${vendorEnv} vendor"
+      }
       chmod -R u+w vendor
 
       runHook postConfigure
