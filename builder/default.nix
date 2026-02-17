@@ -348,6 +348,22 @@
               runHook postBuild
             '';
 
+          checkPhase =
+            attrs.checkPhase or ''
+              runHook preCheck
+
+              checkFlags=(
+                -v
+                -p $NIX_BUILD_CORES
+                ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
+                ${optionalString (ldflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " ldflags)}"}
+              )
+
+              go test "''${checkFlags[@]}" ./...
+
+              runHook postCheck
+            '';
+
           installPhase =
             attrs.installPhase or ''
               runHook preInstall
@@ -608,6 +624,22 @@
               done
 
               runHook postBuild
+            '';
+
+          checkPhase =
+            attrs.checkPhase or ''
+              runHook preCheck
+
+              checkFlags=(
+                -v
+                -p $NIX_BUILD_CORES
+                ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
+                ${optionalString (ldflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " ldflags)}"}
+              )
+
+              go test "''${checkFlags[@]}" ./...
+
+              runHook postCheck
             '';
 
           installPhase =
