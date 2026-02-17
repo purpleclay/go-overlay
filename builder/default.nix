@@ -228,6 +228,8 @@
     tags ? [],
     allowGoReference ? false, # When true, disables -trimpath, -buildid= and disallowedReferences
     localReplaces ? {}, # Map of module path to Nix path for external local replaces
+    checkFlags ? [], # Additional flags passed to go test
+    excludedPackages ? [], # Packages to exclude from testing
     CGO_ENABLED ? go.CGO_ENABLED,
     GOOS ? go.GOOS,
     GOARCH ? go.GOARCH,
@@ -290,7 +292,7 @@
       ''
     else
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "localReplaces" "allowGoReference"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "localReplaces" "allowGoReference" "checkFlags" "excludedPackages"]
         // {
           inherit pname version src;
 
@@ -378,18 +380,28 @@
               runHook postBuild
             '';
 
-          checkPhase =
+          doCheck = attrs.doCheck or false;
+
+          checkPhase = let
+            testPackages =
+              if excludedPackages == []
+              then concatMapStringsSep " " (p: "./${p}/...") subPackages
+              else
+                "$(go list ${concatMapStringsSep " " (p: "./${p}/...") subPackages}"
+                + " | grep -v ${concatMapStringsSep " | grep -v " (p: escapeShellArg p) excludedPackages})";
+          in
             attrs.checkPhase or ''
               runHook preCheck
 
-              checkFlags=(
-                -v
-                -p $NIX_BUILD_CORES
-                ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
-                ${optionalString (ldflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " ldflags)}"}
-              )
+              export GOFLAGS=''${GOFLAGS//-trimpath/}
 
-              go test "''${checkFlags[@]}" ./...
+              go test \
+                -v \
+                -p $NIX_BUILD_CORES \
+                -vet=off \
+                ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"} \
+                ${optionalString (checkFlags != []) (concatStringsSep " " checkFlags)} \
+                ${testPackages}
 
               runHook postCheck
             '';
@@ -435,6 +447,8 @@
     ldflags ? [],
     tags ? [],
     allowGoReference ? false, # When true, disables -trimpath, -buildid= and disallowedReferences
+    checkFlags ? [], # Additional flags passed to go test
+    excludedPackages ? [], # Packages to exclude from testing
     CGO_ENABLED ? go.CGO_ENABLED,
     GOOS ? go.GOOS,
     GOARCH ? go.GOARCH,
@@ -582,7 +596,7 @@
       ''
     else
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "allowGoReference"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "allowGoReference" "checkFlags" "excludedPackages"]
         // {
           inherit pname version src;
 
@@ -677,18 +691,28 @@
               runHook postBuild
             '';
 
-          checkPhase =
+          doCheck = attrs.doCheck or false;
+
+          checkPhase = let
+            testPackages =
+              if excludedPackages == []
+              then concatMapStringsSep " " (p: "./${p}/...") subPackages
+              else
+                "$(go list ${concatMapStringsSep " " (p: "./${p}/...") subPackages}"
+                + " | grep -v ${concatMapStringsSep " | grep -v " (p: escapeShellArg p) excludedPackages})";
+          in
             attrs.checkPhase or ''
               runHook preCheck
 
-              checkFlags=(
-                -v
-                -p $NIX_BUILD_CORES
-                ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
-                ${optionalString (ldflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " ldflags)}"}
-              )
+              export GOFLAGS=''${GOFLAGS//-trimpath/}
 
-              go test "''${checkFlags[@]}" ./...
+              go test \
+                -v \
+                -p $NIX_BUILD_CORES \
+                -vet=off \
+                ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"} \
+                ${optionalString (checkFlags != []) (concatStringsSep " " checkFlags)} \
+                ${testPackages}
 
               runHook postCheck
             '';
