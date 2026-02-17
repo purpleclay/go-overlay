@@ -36,10 +36,14 @@ in
 
     nativeBuildInputs = [go];
 
-    inherit (go) GOOS GOARCH CGO_ENABLED;
+    env = {
+      inherit (go) GOOS GOARCH CGO_ENABLED;
+      GO111MODULE = "on";
+      GOFLAGS = "-mod=vendor -trimpath";
+    };
 
-    GO111MODULE = "on";
-    GOFLAGS = "-mod=vendor";
+    strictDeps = true;
+    disallowedReferences = [go];
 
     configurePhase = ''
       runHook preConfigure
@@ -62,6 +66,7 @@ in
       buildFlags=(
         -v
         -p $NIX_BUILD_CORES
+        -ldflags=-buildid=
       )
 
       for pkg in ${concatStringsSep " " subPackages}; do
