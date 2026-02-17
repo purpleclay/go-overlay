@@ -210,7 +210,8 @@
     subPackages ? ["."], # Packages to build (relative to src)
     ldflags ? [],
     tags ? [],
-    allowGoReference ? false,
+    allowGoReference ? false, # When true, disables -trimpath, -buildid= and disallowedReferences
+    localReplaces ? {}, # Map of module path to Nix path for external local replaces
     CGO_ENABLED ? go.CGO_ENABLED,
     GOOS ? go.GOOS,
     GOARCH ? go.GOARCH,
@@ -218,7 +219,6 @@
     GOPRIVATE ? "",
     GOSUMDB ? "off",
     GONOSUMDB ? "",
-    localReplaces ? {}, # Map of module path to Nix path for external local replaces
     ...
   } @ attrs: let
     # Check for in-tree vendor directory
@@ -284,12 +284,14 @@
               go
             ];
 
-          env = {
-            inherit GOOS GOARCH CGO_ENABLED;
+          env =
+            attrs.env or {}
+            // {
+              inherit GOOS GOARCH CGO_ENABLED;
 
-            GO111MODULE = "on";
-            GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
-          };
+              GO111MODULE = "on";
+              GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
+            };
 
           configurePhase =
             attrs.configurePhase
@@ -332,7 +334,10 @@
           strictDeps = true;
 
           buildPhase = let
-            allLdflags = ldflags ++ lib.optional (!lib.any (lib.hasPrefix "-buildid=") ldflags) "-buildid=";
+            allLdflags =
+              if allowGoReference
+              then ldflags
+              else ["-buildid="] ++ ldflags;
           in
             attrs.buildPhase or ''
               runHook preBuild
@@ -340,7 +345,7 @@
               buildFlags=(
                 -v
                 -p $NIX_BUILD_CORES
-                -ldflags=${escapeShellArg (concatStringsSep " " allLdflags)}
+                ${optionalString (allLdflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " allLdflags)}"}
                 ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
               )
 
@@ -391,6 +396,7 @@
             );
         }
       );
+
   # Build a Go workspace using vendored dependencies.
   # Supports two modes:
   # 1. In-tree vendor: If modules is null and src contains vendor/, use it directly
@@ -407,7 +413,7 @@
     subPackages ? ["."], # Packages to build (relative to src)
     ldflags ? [],
     tags ? [],
-    allowGoReference ? false,
+    allowGoReference ? false, # When true, disables -trimpath, -buildid= and disallowedReferences
     CGO_ENABLED ? go.CGO_ENABLED,
     GOOS ? go.GOOS,
     GOARCH ? go.GOARCH,
@@ -559,12 +565,14 @@
               go
             ];
 
-          env = {
-            inherit GOOS GOARCH CGO_ENABLED;
+          env =
+            attrs.env or {}
+            // {
+              inherit GOOS GOARCH CGO_ENABLED;
 
-            GO111MODULE = "on";
-            GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
-          };
+              GO111MODULE = "on";
+              GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
+            };
 
           configurePhase =
             attrs.configurePhase
@@ -614,7 +622,10 @@
           strictDeps = true;
 
           buildPhase = let
-            allLdflags = ldflags ++ lib.optional (!lib.any (lib.hasPrefix "-buildid=") ldflags) "-buildid=";
+            allLdflags =
+              if allowGoReference
+              then ldflags
+              else ["-buildid="] ++ ldflags;
           in
             attrs.buildPhase or ''
               runHook preBuild
@@ -622,7 +633,7 @@
               buildFlags=(
                 -v
                 -p $NIX_BUILD_CORES
-                -ldflags=${escapeShellArg (concatStringsSep " " allLdflags)}
+                ${optionalString (allLdflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " allLdflags)}"}
                 ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
               )
 

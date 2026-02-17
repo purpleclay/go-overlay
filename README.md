@@ -416,6 +416,7 @@ buildGoApplication {
 | `subPackages`   | `["."]`             | Packages to build (relative to src)                        |
 | `ldflags`       | `[]`                | Linker flags                                               |
 | `tags`          | `[]`                | Build tags                                                 |
+| `allowGoReference` | `false`          | Allow Go toolchain in runtime closure                      |
 | `localReplaces` | `{}`                | Map of module path to Nix path for external local replaces |
 | `CGO_ENABLED`   | inherited from `go` | Enable CGO                                                 |
 | `GOOS`          | inherited from `go` | Target operating system                                    |
@@ -674,6 +675,7 @@ Build each application separately using the same manifest:
 | `subPackages` | `["."]`             | Packages to build (relative to workspace root)             |
 | `ldflags`     | `[]`                | Linker flags                                               |
 | `tags`        | `[]`                | Build tags                                                 |
+| `allowGoReference` | `false`        | Allow Go toolchain in runtime closure                      |
 | `CGO_ENABLED` | inherited from `go` | Enable CGO                                                 |
 | `GOOS`        | inherited from `go` | Target operating system                                    |
 | `GOARCH`      | inherited from `go` | Target architecture                                        |
