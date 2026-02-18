@@ -237,6 +237,14 @@ jobs:
           nix build .#integration-workspace-no-gowork
           ./result/bin/api
 
+      - name: Build and run check-phase integration test
+        run: nix build .#integration-check-phase
+
+      - name: Build and run tool-directive-codegen integration test
+        run: |
+          nix build .#integration-tool-directive-codegen
+          ./result/bin/integration-tool-directive-codegen
+
       - name: Build and run workspace in-tree vendor integration test
         run: |
           cd test/integration/workspace-in-tree-vendor
