@@ -59,6 +59,7 @@
           license = lib.licenses.bsd3;
           maintainers = [];
           platforms = builtins.attrNames (lib.filterAttrs (n: v: builtins.isAttrs v) manifest);
+          mainProgram = "go";
         };
       };
 in

@@ -99,5 +99,6 @@ in
       description = "${pname} - built from ${manifest.module}@v${manifest.version}";
       homepage = "https://pkg.go.dev/${manifest.module}";
       license = lib.licenses.bsd3;
+      mainProgram = pname;
     };
   }
