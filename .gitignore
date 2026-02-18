@@ -8,6 +8,7 @@
 !CONTRIBUTING.md
 !.zed/*
 !.github/**/*
+!typos.toml
 
 !flake.lock
 !flake.nix
