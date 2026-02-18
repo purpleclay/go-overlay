@@ -181,14 +181,10 @@ func (f *GoModFile) packagesByModule(extraPlatforms []string) (map[string][]stri
 }
 
 func (f *GoModFile) packagesByModuleForPlatform(goos, goarch string) (map[string][]string, error) {
+	listFmt := fmt.Sprintf(`'{{if not .Standard}}{{if .Module}}{{if ne .Module.Path "%s"}}{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}{{end}}'`, f.ModulePath())
+
 	cmd := []string{
-		"go",
-		"list",
-		"-deps",
-		"-test",
-		"-f",
-		fmt.Sprintf(`'{{if not .Standard}}{{if .Module}}{{if ne .Module.Path "%s"}}{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}{{end}}'`, f.ModulePath()),
-		"./...",
+		"go", "list", "-deps", "-test", "-f", listFmt, "./...",
 	}
 
 	// GOWORK=off ensures this module is processed independently, which is
@@ -205,6 +201,31 @@ func (f *GoModFile) packagesByModuleForPlatform(goos, goarch string) (map[string
 		return nil, err
 	}
 
+	pkgsByMod := parsePackagesByModule(out)
+
+	// Include tool dependencies (Go 1.24+) so their packages appear in the
+	// module-to-package mapping and are listed in modules.txt. A separate
+	// invocation without -test avoids pulling in each tool's test-only
+	// dependencies.
+	if len(f.modfile.Tool) > 0 {
+		toolCmd := []string{
+			"go", "list", "-deps", "-f", listFmt, "tool",
+		}
+
+		toolOut, err := execWithEnv(toolCmd, f.dir, env)
+		if err != nil {
+			return nil, err
+		}
+
+		for mod, pkgs := range parsePackagesByModule(toolOut) {
+			pkgsByMod[mod] = append(pkgsByMod[mod], pkgs...)
+		}
+	}
+
+	return pkgsByMod, nil
+}
+
+func parsePackagesByModule(out string) map[string][]string {
 	pkgsByMod := make(map[string][]string)
 	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
@@ -218,8 +239,7 @@ func (f *GoModFile) packagesByModuleForPlatform(goos, goarch string) (map[string
 		}
 		pkgsByMod[modPath] = append(pkgsByMod[modPath], pkgPath)
 	}
-
-	return pkgsByMod, nil
+	return pkgsByMod
 }
 
 func (f *GoModFile) downloadModules() ([]goModuleDownload, error) {
