@@ -45,9 +45,9 @@ jobs:
       - name: Run Alejandra
         run: nix develop -c alejandra --check .
 
-  tests:
+  checks:
     runs-on: ${{ matrix.os }}
-    name: tests / ${{ matrix.os }}
+    name: checks / ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-24.04, macos-15]
@@ -66,8 +66,8 @@ jobs:
           skipPush: true
           useDaemon: false
 
-      - name: Run unit tests
-        run: nix flake check
+      - name: Run all checks
+        run: nix run github:Mic92/nix-fast-build -- --skip-cached --no-nom --flake .#checks
 
   build:
     runs-on: ${{ matrix.os }}
@@ -165,9 +165,9 @@ jobs:
       - name: Build go-vendor
         run: nix build .#govendor
 
-  integration:
+  integration-in-tree-vendor:
     runs-on: ${{ matrix.os }}
-    name: integration / ${{ matrix.os }}
+    name: integration-in-tree-vendor / ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-24.04, macos-15]
@@ -185,11 +185,6 @@ jobs:
           authToken: "${{ secrets.GH_CACHIX }}"
           skipPush: true
           useDaemon: false
-
-      - name: Build and run buildGoModule integration test
-        run: |
-          nix build .#integration-build-go-module
-          ./result/bin/integration-build-go-module
 
       - name: Build and run in-tree vendor integration test
         run: |
@@ -209,41 +204,6 @@ jobs:
             }
           '
           ./result/bin/integration-in-tree-vendor
-
-      - name: Build and run local-replace integration test
-        run: |
-          nix build .#integration-local-replace
-          ./result/bin/integration-local-replace
-
-      - name: Build and run local-replace-external integration test
-        run: |
-          nix build .#integration-local-replace-external
-          ./result/bin/integration-local-replace-external-app
-
-      - name: Build and run indirect-deps integration test
-        run: |
-          nix build .#integration-indirect-deps
-          ./result/bin/integration-indirect-deps
-
-      - name: Build and run workspace integration tests
-        run: |
-          nix build .#integration-workspace-api
-          ./result/bin/api
-          nix build .#integration-workspace-worker
-          ./result/bin/worker
-
-      - name: Build and run workspace-no-gowork integration test
-        run: |
-          nix build .#integration-workspace-no-gowork
-          ./result/bin/api
-
-      - name: Build and run check-phase integration test
-        run: nix build .#integration-check-phase
-
-      - name: Build and run tool-directive-codegen integration test
-        run: |
-          nix build .#integration-tool-directive-codegen
-          ./result/bin/integration-tool-directive-codegen
 
       - name: Build and run workspace in-tree vendor integration test
         run: |

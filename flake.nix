@@ -96,13 +96,15 @@
           pkgs.go-bin.versions;
 
         libTests = import ./test {inherit pkgs;};
+        integrationTests = import ./test/integration {inherit pkgs;};
       in
         with pkgs; {
           checks =
             {
               inherit pre-commit-check;
             }
-            // libTests;
+            // libTests
+            // integrationTests;
 
           devShells.default = mkShell {
             inherit (pre-commit-check) shellHook;
@@ -129,47 +131,6 @@
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
                 commit = self.rev or "unknown";
               };
-              integration-build-go-module = import ./test/integration/build-go-module {
-                inherit pkgs;
-                go = pkgs.go-bin.versions."1.22.3";
-              };
-              integration-local-replace = import ./test/integration/local-replace {
-                inherit pkgs;
-                go = pkgs.go-bin.versions."1.22.3";
-              };
-              integration-local-replace-external = import ./test/integration/local-replace-external {
-                inherit pkgs;
-                go = pkgs.go-bin.versions."1.22.3";
-              };
-              integration-indirect-deps = import ./test/integration/indirect-deps {
-                inherit pkgs;
-                go = pkgs.go-bin.versions."1.22.3";
-              };
-              integration-workspace-api =
-                (import ./test/integration/workspace {
-                  inherit pkgs;
-                  go = pkgs.go-bin.versions."1.22.3";
-                }).api;
-              integration-workspace-worker =
-                (import ./test/integration/workspace {
-                  inherit pkgs;
-                  go = pkgs.go-bin.versions."1.22.3";
-                }).worker;
-              integration-workspace-no-gowork = import ./test/integration/workspace-no-gowork {
-                inherit pkgs;
-                go = pkgs.go-bin.versions."1.22.3";
-              };
-              integration-check-phase = import ./test/integration/check-phase {
-                inherit pkgs;
-                go = pkgs.go-bin.versions."1.22.3";
-              };
-              integration-tool-directive-codegen = import ./test/integration/tool-directive-codegen {
-                inherit pkgs;
-                go = pkgs.go-bin.versions."1.25.0";
-              };
-              # integration-in-tree-vendor is not exposed as a package because
-              # it requires vendor/ to be generated first. It's built directly
-              # in CI after running 'go mod vendor'. See .github/workflows/nix.yml
             };
 
           apps.default = {
