@@ -6,6 +6,14 @@ in {
     inherit pkgs;
     go = go_1_22;
   };
+  integration-check-phase = import ./check-phase {
+    inherit pkgs;
+    go = go_1_22;
+  };
+  integration-indirect-deps = import ./indirect-deps {
+    inherit pkgs;
+    go = go_1_22;
+  };
   integration-local-replace = import ./local-replace {
     inherit pkgs;
     go = go_1_22;
@@ -14,9 +22,13 @@ in {
     inherit pkgs;
     go = go_1_22;
   };
-  integration-indirect-deps = import ./indirect-deps {
+  integration-stdlib-only = import ./stdlib-only {
     inherit pkgs;
     go = go_1_22;
+  };
+  integration-tool-directive-codegen = import ./tool-directive-codegen {
+    inherit pkgs;
+    go = go_1_25;
   };
   integration-workspace-api =
     (import ./workspace {
@@ -31,13 +43,5 @@ in {
   integration-workspace-no-gowork = import ./workspace-no-gowork {
     inherit pkgs;
     go = go_1_22;
-  };
-  integration-check-phase = import ./check-phase {
-    inherit pkgs;
-    go = go_1_22;
-  };
-  integration-tool-directive-codegen = import ./tool-directive-codegen {
-    inherit pkgs;
-    go = go_1_25;
   };
 }

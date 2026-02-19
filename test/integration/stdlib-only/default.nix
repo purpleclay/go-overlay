@@ -3,9 +3,8 @@
   go,
 }:
 pkgs.buildGoApplication {
-  pname = "check-phase";
+  pname = "stdlib-only";
   version = "0.1.0";
   src = ./.;
   inherit go;
-  doCheck = true;
 }

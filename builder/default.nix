@@ -245,6 +245,12 @@
     # Determine vendor mode
     useInTreeVendor = modules == null && hasInTreeVendor;
     useManifest = modules != null;
+    useVendor = useInTreeVendor || useManifest;
+
+    # Guard against missing modules for projects with external dependencies.
+    # A go.sum indicates the project depends on external modules and needs
+    # either a govendor.toml manifest or an in-tree vendor directory.
+    hasGoSum = pathExists (src + "/go.sum");
 
     # Only parse manifest and create vendorEnv when using manifest mode
     manifest =
@@ -274,23 +280,21 @@
         }
       else null;
   in
-    # Validate: must have either modules or in-tree vendor
-    if !useInTreeVendor && !useManifest
-    then
-      throw ''
-        buildGoApplication: No vendor source found.
+    assert (useVendor || !hasGoSum)
+    || throw ''
+      buildGoApplication: project has external dependencies (go.sum exists)
+      but no vendor source was provided.
 
-          Generate a govendor.toml manifest by running:
-            govendor
+        Generate a govendor.toml by running:
+          govendor
 
-          Then pass it to buildGoApplication:
-            buildGoApplication {
-              modules = ./govendor.toml;
-            }
+        Then pass it to buildGoApplication:
+          buildGoApplication {
+            modules = ./govendor.toml;
+          }
 
-          Alternatively, run 'go mod vendor' and include a vendor/ directory in src.
-      ''
-    else
+        Alternatively, commit a vendor directory using 'go mod vendor'.
+    '';
       stdenv.mkDerivation (
         builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "localReplaces" "allowGoReference" "checkFlags" "excludedPackages"]
         // {
@@ -308,13 +312,15 @@
               inherit GOOS GOARCH CGO_ENABLED;
 
               GO111MODULE = "on";
-              GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
+              GOFLAGS =
+                optionalString useVendor "-mod=vendor"
+                + optionalString (!allowGoReference) (optionalString useVendor " " + "-trimpath");
               GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
             };
 
           configurePhase =
             attrs.configurePhase
-            or (
+          or (
               if useInTreeVendor
               then ''
                 runHook preConfigure
@@ -331,7 +337,8 @@
 
                 runHook postConfigure
               ''
-              else ''
+              else if useManifest
+              then ''
                 runHook preConfigure
 
                 export GOCACHE=$TMPDIR/go-cache
@@ -349,6 +356,15 @@
                   else "cp -r --reflink=auto ${vendorEnv} vendor"
                 }
                 chmod -R u+w vendor
+
+                runHook postConfigure
+              ''
+              else ''
+                runHook preConfigure
+
+                export GOCACHE=$TMPDIR/go-cache
+                export GOPATH="$TMPDIR/go"
+                export GOPROXY=${escapeShellArg GOPROXY}
 
                 runHook postConfigure
               ''
@@ -464,6 +480,12 @@
     # Determine vendor mode
     useInTreeVendor = modules == null && hasInTreeVendor;
     useManifest = modules != null;
+    useVendor = useInTreeVendor || useManifest;
+
+    # Guard against missing modules for projects with external dependencies.
+    # A go.sum indicates the project depends on external modules and needs
+    # either a govendor.toml manifest or an in-tree vendor directory.
+    hasGoSum = pathExists (src + "/go.sum");
 
     # Only parse manifest and create vendorEnv when using manifest mode
     manifest =
@@ -578,23 +600,21 @@
         .overrideAttrs (_: {passthru = {inherit useSymlinks;};})
       else null;
   in
-    # Validate: must have either modules or in-tree vendor
-    if !useInTreeVendor && !useManifest
-    then
-      throw ''
-        buildGoWorkspace: No vendor source found.
+    assert (useVendor || !hasGoSum)
+    || throw ''
+      buildGoWorkspace: project has external dependencies (go.sum exists)
+      but no vendor source was provided.
 
-          Generate a govendor.toml manifest by running:
-            govendor
+        Generate a govendor.toml by running:
+          govendor
 
-          Then pass it to buildGoWorkspace:
-            buildGoWorkspace {
-              modules = ./govendor.toml;
-            }
+        Then pass it to buildGoWorkspace:
+          buildGoWorkspace {
+            modules = ./govendor.toml;
+          }
 
-          Alternatively, run 'go work vendor' and include a vendor/ directory in src.
-      ''
-    else
+        Alternatively, commit a vendor directory using 'go work vendor'.
+    '';
       stdenv.mkDerivation (
         builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "allowGoReference" "checkFlags" "excludedPackages"]
         // {
@@ -612,7 +632,9 @@
               inherit GOOS GOARCH CGO_ENABLED;
 
               GO111MODULE = "on";
-              GOFLAGS = "-mod=vendor" + lib.optionalString (!allowGoReference) " -trimpath";
+              GOFLAGS =
+                lib.optionalString useVendor "-mod=vendor"
+                + lib.optionalString (!allowGoReference) (lib.optionalString useVendor " " + "-trimpath");
               GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
             };
 
@@ -635,7 +657,8 @@
 
                 runHook postConfigure
               ''
-              else ''
+              else if useManifest
+              then ''
                                 runHook preConfigure
 
                                 export GOCACHE=$TMPDIR/go-cache
@@ -662,6 +685,15 @@
                                 chmod -R u+w vendor
 
                                 runHook postConfigure
+              ''
+              else ''
+                runHook preConfigure
+
+                export GOCACHE=$TMPDIR/go-cache
+                export GOPATH="$TMPDIR/go"
+                export GOPROXY=${escapeShellArg GOPROXY}
+
+                runHook postConfigure
               ''
             );
 
