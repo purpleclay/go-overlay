@@ -6,5 +6,15 @@
       "matchFileNames": ["**/testdata/**", "**/test/**"],
       "enabled": false
     }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update tool versions in tools.env",
+      "fileMatch": ["^manifests/tools\\.env$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+?) depName=(?<depName>[\\S]+?)\\n[A-Z_]+_VERSION=(?<currentValue>v?[0-9]+\\.[0-9]+\\.[0-9]+)"
+      ]
+    }
   ]
 }

@@ -334,10 +334,10 @@ in {
 
 ### Available Tools
 
-| Tool                                                                     | Module                                 | Status                                                                                                                                                                                                                                                   |
-| :----------------------------------------------------------------------- | :------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck)      | `golang.org/x/vuln`                    | [![auto-update](https://img.shields.io/github/actions/workflow/status/purpleclay/go-overlay/govulncheck-update.yml?label=auto-update&logo=nixos&logoColor=white)](https://github.com/purpleclay/go-overlay/actions/workflows/govulncheck-update.yml)     |
-| [golangci-lint](https://pkg.go.dev/github.com/golangci/golangci-lint/v2) | `github.com/golangci/golangci-lint/v2` | [![auto-update](https://img.shields.io/github/actions/workflow/status/purpleclay/go-overlay/golangci-lint-update.yml?label=auto-update&logo=nixos&logoColor=white)](https://github.com/purpleclay/go-overlay/actions/workflows/golangci-lint-update.yml) |
+| Tool                                                                     | Module                                 |
+| :----------------------------------------------------------------------- | :------------------------------------- |
+| [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck)      | `golang.org/x/vuln`                    |
+| [golangci-lint](https://pkg.go.dev/github.com/golangci/golangci-lint/v2) | `github.com/golangci/golangci-lint/v2` |
 
 ### Version Pinning
 

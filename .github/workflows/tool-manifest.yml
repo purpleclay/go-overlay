@@ -1,0 +1,15 @@
+name: tool-manifest
+on:
+  pull_request:
+    branches: [main]
+    paths: ["manifests/tools.env"]
+
+jobs:
+  generate:
+    if: startsWith(github.head_ref, 'renovate/')
+    uses: ./.github/workflows/tool-manifest-update.yml
+    secrets:
+      token: ${{ secrets.GH_NSV }}
+      gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+      gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+      cachix-token: ${{ secrets.GH_CACHIX }}

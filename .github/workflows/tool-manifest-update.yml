@@ -1,0 +1,127 @@
+name: tool-manifest-update
+on:
+  workflow_call:
+    secrets:
+      token:
+        description: "GitHub token with contents:write permissions to push commits"
+        required: true
+      gpg-private-key:
+        description: "GPG private key for signing commits"
+        required: true
+      gpg-passphrase:
+        description: "Passphrase for the GPG private key"
+        required: true
+      cachix-token:
+        description: "Cachix auth token"
+        required: true
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    name: update
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 2
+          token: ${{ secrets.token }}
+
+      - name: Detect changed tools
+        id: detect
+        run: |
+          # Find which _VERSION= lines changed in tools.env
+          changed=$(git diff HEAD~1 -- manifests/tools.env | grep '^+[A-Z]' | grep '_VERSION=' || true)
+
+          if [ -z "$changed" ]; then
+            echo "No tool version changes detected"
+            echo "changed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "changed=true" >> $GITHUB_OUTPUT
+
+          # Extract the prefix for each changed tool (e.g., GOVULNCHECK from GOVULNCHECK_VERSION=v1.1.5)
+          prefixes=""
+          while IFS= read -r line; do
+            # Strip leading + and extract prefix before _VERSION=
+            prefix=$(echo "$line" | sed 's/^+//' | sed 's/_VERSION=.*//')
+            prefixes="${prefixes}${prefix} "
+          done <<< "$changed"
+
+          echo "prefixes=${prefixes}" >> $GITHUB_OUTPUT
+
+      - name: Install Nix
+        if: steps.detect.outputs.changed == 'true'
+        uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Cachix
+        if: steps.detect.outputs.changed == 'true'
+        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+        with:
+          name: purpleclay
+          authToken: "${{ secrets.cachix-token }}"
+          useDaemon: false
+
+      - name: Generate manifests
+        if: steps.detect.outputs.changed == 'true'
+        run: |
+          source manifests/tools.env
+
+          for prefix in ${{ steps.detect.outputs.prefixes }}; do
+            version_var="${prefix}_VERSION"
+            module_var="${prefix}_MODULE"
+            sub_packages_var="${prefix}_SUB_PACKAGES"
+            manifest_dir_var="${prefix}_MANIFEST_DIR"
+            tool_name_var="${prefix}_TOOL_NAME"
+
+            version="${!version_var}"
+            module="${!module_var}"
+            sub_packages="${!sub_packages_var}"
+            manifest_dir="${!manifest_dir_var}"
+            tool_name="${!tool_name_var}"
+
+            manifest="${manifest_dir}/${version#v}.nix"
+            if [ -f "$manifest" ]; then
+              echo "Manifest already exists for ${tool_name} ${version}, skipping"
+              continue
+            fi
+
+            echo "Generating manifest for ${tool_name} ${version}"
+            nix run .#goscrapeproxy -- generate "${module}" \
+              --sub-packages "${sub_packages}" \
+              --versions "${version}" \
+              --output "${manifest_dir}"
+          done
+
+      - name: GPG Import
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          GPG_PRIVATE_KEY: "${{ secrets.gpg-private-key }}"
+          GPG_PASSPHRASE: "${{ secrets.gpg-passphrase }}"
+        run: nix run github:purpleclay/gpg-import
+
+      - name: Commit and push manifests
+        if: steps.detect.outputs.changed == 'true'
+        run: |
+          source manifests/tools.env
+
+          for prefix in ${{ steps.detect.outputs.prefixes }}; do
+            version_var="${prefix}_VERSION"
+            manifest_dir_var="${prefix}_MANIFEST_DIR"
+            tool_name_var="${prefix}_TOOL_NAME"
+
+            version="${!version_var}"
+            manifest_dir="${!manifest_dir_var}"
+            tool_name="${!tool_name_var}"
+
+            manifest="${manifest_dir}/${version#v}.nix"
+            if [ -f "$manifest" ]; then
+              git add "$manifest"
+              git commit -m "chore: generated nix manifest for ${tool_name} ${version#v}"
+            fi
+          done
+
+          git push
