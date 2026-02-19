@@ -195,8 +195,10 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 			}
 		}
 
-		if !v.opts.force && existingHash == goWork.Hash() && len(v.opts.extraPlatforms) == 0 {
-			return resultOK(displayPath)
+		if !v.opts.force && existingHash == goWork.Hash() {
+			if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
+				return resultOK(displayPath)
+			}
 		}
 
 		if v.opts.detectDrift {
@@ -309,8 +311,10 @@ func (v *Vendor) processModFile(path string) vendorResult {
 			}
 		}
 
-		if !v.opts.force && existingHash == goMod.Hash() && len(v.opts.extraPlatforms) == 0 {
-			return resultOK(path)
+		if !v.opts.force && existingHash == goMod.Hash() {
+			if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
+				return resultOK(path)
+			}
 		}
 
 		if v.opts.detectDrift {
