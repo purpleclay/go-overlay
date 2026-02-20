@@ -75,7 +75,10 @@
               description = "Check if govendor.toml has drifted from go.mod or go.work";
               entry = "${self.packages.${system}.govendor}/bin/govendor --check";
               files = "(^|/)go\\.(mod|work)$";
-              excludes = ["testdata/" "test/"];
+              excludes = [
+                "testdata/"
+                "test/"
+              ];
               pass_filenames = true;
             };
 
@@ -87,12 +90,12 @@
         };
 
         # Generate versioned package names (e.g., "1.25.5" -> "go_1_25_5", "1.25rc3" -> "go_1_25rc3")
-        versionToPackageName = version:
-          "go_" + builtins.replaceStrings ["."] ["_"] version;
+        versionToPackageName = version: "go_" + builtins.replaceStrings ["."] ["_"] version;
 
         versionedPackages =
-          pkgs.lib.mapAttrs'
-          (version: drv: pkgs.lib.nameValuePair (versionToPackageName version) drv)
+          pkgs.lib.mapAttrs' (
+            version: drv: pkgs.lib.nameValuePair (versionToPackageName version) drv
+          )
           pkgs.go-bin.versions;
 
         libTests = import ./test {inherit pkgs;};
@@ -148,7 +151,7 @@
             program = "${self.packages.${system}.goscrape}/bin/goscrape";
             meta = {
               description = "A tool for scraping Go toolchains from https://go.dev/dl/";
-              homepage = "https://github.com/golang/go-overlay";
+              homepage = "https://github.com/purpleclay/go-overlay";
               license = licenses.mit;
               maintainers = with lib.maintainers; [purpleclay];
             };
@@ -170,7 +173,7 @@
             program = "${self.packages.${system}.govendor}/bin/govendor";
             meta = {
               description = "A tool for vendoring Go dependencies for a Go project";
-              homepage = "https://github.com/golang/go-overlay";
+              homepage = "https://github.com/purpleclay/go-overlay";
               license = licenses.mit;
               maintainers = with lib.maintainers; [purpleclay];
             };
