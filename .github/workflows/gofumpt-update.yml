@@ -1,0 +1,19 @@
+name: gofumpt-update
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+
+jobs:
+  gofumpt:
+    uses: ./.github/workflows/tool-update.yml
+    with:
+      module: mvdan.cc/gofumpt
+      sub-packages: .
+      manifest-dir: manifests/gofumpt
+      tool-name: gofumpt
+    secrets:
+      token: ${{ secrets.GH_NSV }}
+      gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+      gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+      cachix-token: ${{ secrets.GH_CACHIX }}
