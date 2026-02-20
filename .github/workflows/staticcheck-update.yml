@@ -1,0 +1,19 @@
+name: staticcheck-update
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+
+jobs:
+  staticcheck:
+    uses: ./.github/workflows/tool-update.yml
+    with:
+      module: honnef.co/go/tools
+      sub-packages: cmd/staticcheck
+      manifest-dir: manifests/staticcheck
+      tool-name: staticcheck
+    secrets:
+      token: ${{ secrets.GH_NSV }}
+      gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+      gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+      cachix-token: ${{ secrets.GH_CACHIX }}
