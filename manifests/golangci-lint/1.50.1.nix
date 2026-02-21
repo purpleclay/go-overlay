@@ -222,7 +222,7 @@
       version = "v1.2.6";
       hash = "sha256-+oxitLeJxYF19Z6g+6CgmCHJ1Y5D8raMi2Cb3M6nXCs=";
       go = "1.12";
-      packages = ["github.com/go-ole/go-ole" "github.com/go-ole/go-ole/oleutil"];
+      packages = [];
     };
     "github.com/go-toolsmith/astcast" = {
       version = "v1.0.0";
@@ -414,7 +414,7 @@
       version = "v1.0.1";
       hash = "sha256-ZTP9pLgwAAvHYK5A4PqwWCHGt00x5zMSOpCPoomQ3Sg=";
       go = "1.18";
-      packages = ["github.com/inconshreveable/mousetrap"];
+      packages = [];
     };
     "github.com/jgautheron/goconst" = {
       version = "v1.5.1";
@@ -960,7 +960,7 @@
       version = "v1.2.2";
       hash = "sha256-Rno6F82JIeglBobQl6YKl3U6+FvWXmFavJlzpOJgoXI=";
       go = "1.16";
-      packages = ["github.com/yusufpapurcu/wmi"];
+      packages = [];
     };
     "gitlab.com/bosi/decorder" = {
       version = "v0.2.3";
@@ -1014,7 +1014,7 @@
       version = "v0.1.0";
       hash = "sha256-nZbEJ/2PuWrDLD4ujeVvcFGoIsfVoIH/Lcp4FjD7hpU=";
       go = "1.17";
-      packages = ["golang.org/x/sys/execabs" "golang.org/x/sys/internal/unsafeheader" "golang.org/x/sys/unix" "golang.org/x/sys/windows"];
+      packages = ["golang.org/x/sys/execabs" "golang.org/x/sys/unix"];
     };
     "golang.org/x/text" = {
       version = "v0.3.8";
