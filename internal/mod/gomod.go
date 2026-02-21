@@ -92,8 +92,11 @@ func (f *GoModFile) Replacements() map[string]Replacement {
 	return replacements
 }
 
-func (f *GoModFile) Dependencies(extraPlatforms []string) ([]GoModule, error) {
-	pkgsByMod, err := f.packagesByModule(extraPlatforms)
+func (f *GoModFile) Dependencies(platforms []string) ([]GoModule, error) {
+	if platforms == nil {
+		platforms = DefaultPlatforms
+	}
+	pkgsByMod, err := f.packagesByModule(platforms)
 	if err != nil {
 		return nil, err
 	}
@@ -121,42 +124,36 @@ func (f *GoModFile) Dependencies(extraPlatforms []string) ([]GoModule, error) {
 	return modules, nil
 }
 
-type platform struct {
-	goos, goarch string
+// DefaultPlatforms is the default set of platforms used for cross-platform
+// dependency resolution. Callers can pass a subset to Dependencies to
+// restrict resolution to specific platforms.
+var DefaultPlatforms = []string{
+	"linux/amd64",
+	"linux/arm64",
+	"darwin/amd64",
+	"darwin/arm64",
+	"windows/amd64",
+	"windows/arm64",
 }
 
-var defaultPlatforms = []platform{
-	{"linux", "amd64"},
-	{"linux", "arm64"},
-	{"darwin", "amd64"},
-	{"darwin", "arm64"},
-	{"windows", "amd64"},
-	{"windows", "arm64"},
-}
-
-func (f *GoModFile) packagesByModule(extraPlatforms []string) (map[string][]string, error) {
+func (f *GoModFile) packagesByModule(platforms []string) (map[string][]string, error) {
 	current, err := f.packagesByModuleForPlatform(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return nil, err
 	}
 
-	// Build platform list: defaults + extras
-	platforms := make([]platform, len(defaultPlatforms))
-	copy(platforms, defaultPlatforms)
-	for _, ep := range extraPlatforms {
-		parts := strings.Split(ep, "/")
-		if len(parts) == 2 {
-			platforms = append(platforms, platform{parts[0], parts[1]})
-		}
-	}
-
 	p := pool.NewWithResults[map[string][]string]().WithErrors()
 	for _, plat := range platforms {
-		if plat.goos == runtime.GOOS && plat.goarch == runtime.GOARCH {
+		parts := strings.Split(plat, "/")
+		if len(parts) != 2 {
+			continue
+		}
+		goos, goarch := parts[0], parts[1]
+		if goos == runtime.GOOS && goarch == runtime.GOARCH {
 			continue
 		}
 		p.Go(func() (map[string][]string, error) {
-			return f.packagesByModuleForPlatform(plat.goos, plat.goarch)
+			return f.packagesByModuleForPlatform(goos, goarch)
 		})
 	}
 

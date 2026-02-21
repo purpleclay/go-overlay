@@ -36,8 +36,8 @@ type GoModule struct {
 	Local        string   `toml:"local,omitempty"`
 }
 
-func newManifest(goMod *GoModFile, extraPlatforms []string) (*VendorManifest, error) {
-	deps, err := goMod.Dependencies(extraPlatforms)
+func newManifest(goMod *GoModFile, platforms []string, includePlatforms []string) (*VendorManifest, error) {
+	deps, err := goMod.Dependencies(platforms)
 	if err != nil {
 		return nil, err
 	}
@@ -47,23 +47,23 @@ func newManifest(goMod *GoModFile, extraPlatforms []string) (*VendorManifest, er
 		mod[m.Path] = m
 	}
 
-	var platforms []string
-	if len(extraPlatforms) > 0 {
-		platforms = make([]string, len(extraPlatforms))
-		copy(platforms, extraPlatforms)
-		slices.Sort(platforms)
+	var recorded []string
+	if len(includePlatforms) > 0 {
+		recorded = make([]string, len(includePlatforms))
+		copy(recorded, includePlatforms)
+		slices.Sort(recorded)
 	}
 
 	return &VendorManifest{
 		Schema:           schemaVersion,
 		Hash:             goMod.Hash(),
-		IncludePlatforms: platforms,
+		IncludePlatforms: recorded,
 		Mod:              mod,
 	}, nil
 }
 
-func newWorkspaceManifest(goWork *GoWorkFile, extraPlatforms []string) (*VendorManifest, error) {
-	deps, err := goWork.Dependencies(extraPlatforms)
+func newWorkspaceManifest(goWork *GoWorkFile, platforms []string, includePlatforms []string) (*VendorManifest, error) {
+	deps, err := goWork.Dependencies(platforms)
 	if err != nil {
 		return nil, err
 	}
@@ -73,17 +73,17 @@ func newWorkspaceManifest(goWork *GoWorkFile, extraPlatforms []string) (*VendorM
 		mod[m.Path] = m
 	}
 
-	var platforms []string
-	if len(extraPlatforms) > 0 {
-		platforms = make([]string, len(extraPlatforms))
-		copy(platforms, extraPlatforms)
-		slices.Sort(platforms)
+	var recorded []string
+	if len(includePlatforms) > 0 {
+		recorded = make([]string, len(includePlatforms))
+		copy(recorded, includePlatforms)
+		slices.Sort(recorded)
 	}
 
 	return &VendorManifest{
 		Schema:           schemaVersion,
 		Hash:             goWork.Hash(),
-		IncludePlatforms: platforms,
+		IncludePlatforms: recorded,
 		Workspace:        goWork.WorkspaceConfig(),
 		Mod:              mod,
 	}, nil

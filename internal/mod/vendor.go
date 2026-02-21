@@ -206,7 +206,8 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 		}
 	}
 
-	depCount, err := v.generateWorkspaceManifest(goWork, extraPlatforms)
+	platforms := append(DefaultPlatforms, extraPlatforms...)
+	depCount, err := v.generateWorkspaceManifest(goWork, platforms, extraPlatforms)
 	if err != nil {
 		return resultError(displayPath, err)
 	}
@@ -214,8 +215,8 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 	return resultGenerated(displayPath, depCount)
 }
 
-func (v *Vendor) generateWorkspaceManifest(goWork *GoWorkFile, extraPlatforms []string) (int, error) {
-	manifest, err := newWorkspaceManifest(goWork, extraPlatforms)
+func (v *Vendor) generateWorkspaceManifest(goWork *GoWorkFile, platforms []string, includePlatforms []string) (int, error) {
+	manifest, err := newWorkspaceManifest(goWork, platforms, includePlatforms)
 	if err != nil {
 		return 0, err
 	}
@@ -322,7 +323,8 @@ func (v *Vendor) processModFile(path string) vendorResult {
 		}
 	}
 
-	depCount, err := v.generateManifest(goMod, extraPlatforms)
+	platforms := append(DefaultPlatforms, extraPlatforms...)
+	depCount, err := v.generateManifest(goMod, platforms, extraPlatforms)
 	if err != nil {
 		return resultError(path, err)
 	}
@@ -330,8 +332,8 @@ func (v *Vendor) processModFile(path string) vendorResult {
 	return resultGenerated(path, depCount)
 }
 
-func (v *Vendor) generateManifest(goMod *GoModFile, extraPlatforms []string) (int, error) {
-	manifest, err := newManifest(goMod, extraPlatforms)
+func (v *Vendor) generateManifest(goMod *GoModFile, platforms []string, includePlatforms []string) (int, error) {
+	manifest, err := newManifest(goMod, platforms, includePlatforms)
 	if err != nil {
 		return 0, err
 	}

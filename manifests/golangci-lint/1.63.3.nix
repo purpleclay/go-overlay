@@ -294,7 +294,7 @@
       version = "v1.2.6";
       hash = "sha256-+oxitLeJxYF19Z6g+6CgmCHJ1Y5D8raMi2Cb3M6nXCs=";
       go = "1.12";
-      packages = ["github.com/go-ole/go-ole" "github.com/go-ole/go-ole/oleutil"];
+      packages = [];
     };
     "github.com/go-toolsmith/astcast" = {
       version = "v1.1.0";
@@ -480,7 +480,7 @@
       version = "v1.1.0";
       hash = "sha256-XWlYH0c8IcxAwQTnIi6WYqq44nOKUylSWxWO/vi+8pE=";
       go = "1.18";
-      packages = ["github.com/inconshreveable/mousetrap"];
+      packages = [];
     };
     "github.com/jgautheron/goconst" = {
       version = "v1.7.1";
@@ -798,7 +798,7 @@
       version = "v1.13.1";
       hash = "sha256-fD4n3XVDNHL7hfUXK9qi31LpBVzWnRK/7LNc3BmPtnU=";
       go = "1.22";
-      packages = ["github.com/rogpeppe/go-internal/internal/syscall/windows" "github.com/rogpeppe/go-internal/internal/syscall/windows/sysdll" "github.com/rogpeppe/go-internal/lockedfile" "github.com/rogpeppe/go-internal/lockedfile/internal/filelock"];
+      packages = ["github.com/rogpeppe/go-internal/lockedfile" "github.com/rogpeppe/go-internal/lockedfile/internal/filelock"];
     };
     "github.com/ryancurrah/gomodguard" = {
       version = "v1.3.5";
@@ -1062,7 +1062,7 @@
       version = "v1.2.4";
       hash = "sha256-N+YDBjOW59YOsZ2lRBVtFsEEi48KhNQRb63/0ZSU3bA=";
       go = "1.16";
-      packages = ["github.com/yusufpapurcu/wmi"];
+      packages = [];
     };
     "gitlab.com/bosi/decorder" = {
       version = "v0.4.2";
@@ -1134,7 +1134,7 @@
       version = "v0.28.0";
       hash = "sha256-kzSlDo5FKsQU9cLefIt2dueGUfz9XuEW+mGSGlPATGc=";
       go = "1.18";
-      packages = ["golang.org/x/sys/unix" "golang.org/x/sys/windows"];
+      packages = ["golang.org/x/sys/unix"];
     };
     "golang.org/x/text" = {
       version = "v0.20.0";

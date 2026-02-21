@@ -11,18 +11,18 @@ import (
 
 func TestManifestWriteTo(t *testing.T) {
 	tests := []struct {
-		name           string
-		dir            string
-		extraPlatforms []string
+		name             string
+		dir              string
+		includePlatforms []string
 	}{
 		{
 			name: "simple",
 			dir:  "testdata/simple",
 		},
 		{
-			name:           "with-platforms",
-			dir:            "testdata/with-platforms",
-			extraPlatforms: []string{"freebsd/amd64", "freebsd/arm64"},
+			name:             "with-platforms",
+			dir:              "testdata/with-platforms",
+			includePlatforms: []string{"freebsd/amd64", "freebsd/arm64"},
 		},
 		{
 			name: "local-replace",
@@ -36,7 +36,11 @@ func TestManifestWriteTo(t *testing.T) {
 			goMod, err := ParseGoModFile(goModPath)
 			require.NoError(t, err)
 
-			manifest, err := newManifest(goMod, tt.extraPlatforms)
+			platforms := DefaultPlatforms
+			if len(tt.includePlatforms) > 0 {
+				platforms = append(DefaultPlatforms, tt.includePlatforms...)
+			}
+			manifest, err := newManifest(goMod, platforms, tt.includePlatforms)
 			require.NoError(t, err)
 
 			var buf bytes.Buffer
@@ -51,9 +55,9 @@ func TestManifestWriteTo(t *testing.T) {
 
 func TestWorkspaceManifestWriteTo(t *testing.T) {
 	tests := []struct {
-		name           string
-		dir            string
-		extraPlatforms []string
+		name             string
+		dir              string
+		includePlatforms []string
 	}{
 		{
 			name: "workspace",
@@ -67,7 +71,11 @@ func TestWorkspaceManifestWriteTo(t *testing.T) {
 			goWork, err := ParseGoWorkFile(goWorkPath)
 			require.NoError(t, err)
 
-			manifest, err := newWorkspaceManifest(goWork, tt.extraPlatforms)
+			platforms := DefaultPlatforms
+			if len(tt.includePlatforms) > 0 {
+				platforms = append(DefaultPlatforms, tt.includePlatforms...)
+			}
+			manifest, err := newWorkspaceManifest(goWork, platforms, tt.includePlatforms)
 			require.NoError(t, err)
 
 			var buf bytes.Buffer

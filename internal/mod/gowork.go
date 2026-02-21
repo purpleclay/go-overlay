@@ -108,7 +108,7 @@ func (w *GoWorkFile) ModulePaths() []string {
 	return paths
 }
 
-func (w *GoWorkFile) Dependencies(extraPlatforms []string) ([]GoModule, error) {
+func (w *GoWorkFile) Dependencies(platforms []string) ([]GoModule, error) {
 	allDeps := make(map[string]GoModule)
 	workspaceMembers := w.workspaceModulePaths()
 
@@ -119,7 +119,7 @@ func (w *GoWorkFile) Dependencies(extraPlatforms []string) ([]GoModule, error) {
 			return nil, fmt.Errorf("failed to parse %s: %w", goModPath, err)
 		}
 
-		deps, err := goMod.Dependencies(extraPlatforms)
+		deps, err := goMod.Dependencies(platforms)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get dependencies for %s: %w", modDir, err)
 		}

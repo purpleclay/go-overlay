@@ -66,7 +66,7 @@
       version = "v0.13.0";
       hash = "sha256-/+RDZ0a0oEfJ0k304VqpJpdrl2ZXa3yFlOxy4mjW7w0=";
       go = "1.17";
-      packages = ["golang.org/x/sys/execabs" "golang.org/x/sys/windows"];
+      packages = ["golang.org/x/sys/execabs"];
     };
     "golang.org/x/telemetry" = {
       version = "v0.0.0-20231011160506-788d5629a052";
