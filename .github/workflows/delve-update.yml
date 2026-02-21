@@ -1,0 +1,19 @@
+name: delve-update
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+
+jobs:
+  delve:
+    uses: ./.github/workflows/tool-update.yml
+    with:
+      module: github.com/go-delve/delve
+      sub-packages: cmd/dlv
+      manifest-dir: manifests/delve
+      tool-name: delve
+    secrets:
+      token: ${{ secrets.GH_NSV }}
+      gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+      gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+      cachix-token: ${{ secrets.GH_CACHIX }}
