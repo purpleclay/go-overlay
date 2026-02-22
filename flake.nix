@@ -50,9 +50,7 @@
 
         devBuildInputs = with pkgs; [
           alejandra
-          go-bin.versions."1.25.4"
-          gofumpt
-          golangci-lint
+          ((go-bin.fromGoMod ./go.mod).withTools ["gofumpt" "golangci-lint"])
           nil
           self.packages.${system}.govendor
           typos

@@ -3,6 +3,7 @@
   lib,
   stdenv,
   fetchurl,
+  symlinkJoin,
   mkToolSet ? null,
 }: manifest: let
   platform = manifest.${stdenv.hostPlatform.system} or null;
@@ -49,9 +50,35 @@
           runHook postInstall
         '';
 
-        passthru = lib.optionalAttrs (mkToolSet != null) {
-          tools = mkToolSet self;
-        };
+        # tools: attribute set of all bundled tools, keyed by name. Each tool
+        #   exposes versioned attributes and a `latest` convenience attribute
+        #   that resolves to the newest compatible version for this toolchain.
+        #   Example: go.tools.govulncheck.latest, go.tools.delve."1.24.2"
+        #
+        # withTools: convenience function that bundles this Go toolchain with
+        #   selected tools into a single derivation using symlinkJoin. Accepts
+        #   a list of tool names and resolves each to its latest compatible version.
+        #   Example: go.withTools ["govulncheck" "golangci-lint" "delve"]
+        passthru = lib.optionalAttrs (mkToolSet != null) (let
+          toolSet = mkToolSet self;
+        in {
+          tools = toolSet;
+          withTools = toolNames: let
+            availableTools = builtins.attrNames toolSet;
+            resolvedTools =
+              map (
+                name:
+                  if toolSet ? ${name}
+                  then toolSet.${name}.latest
+                  else throw "go-overlay: unknown tool '${name}'. Available tools: ${lib.concatStringsSep ", " availableTools}"
+              )
+              toolNames;
+          in
+            symlinkJoin {
+              name = "go-${manifest.version}-with-tools";
+              paths = [self] ++ resolvedTools;
+            };
+        });
 
         meta = {
           description = "The Go programming language";

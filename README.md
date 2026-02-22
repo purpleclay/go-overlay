@@ -24,6 +24,8 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 - [Installation](#installation)
 - [Library Functions](#library-functions)
 - [Go Tools](#go-tools)
+  - [`withTools`](#withtools)
+  - [Individual Tool Access](#individual-tool-access)
   - [Available Tools](#available-tools)
   - [Version Pinning](#version-pinning)
   - [Version Compatibility](#version-compatibility)
@@ -316,7 +318,27 @@ go-bin.fromGoModStrict ./go.mod
 
 ## Go Tools
 
-go-overlay can build Go ecosystem tools from pre-generated manifests and pin them to the selected Go toolchain. Tools are accessed directly from a Go toolchain derivation via `tools`, inspired by [rust-overlay](https://github.com/oxalica/rust-overlay):
+go-overlay can build Go ecosystem tools from pre-generated manifests and pin them to the selected Go toolchain. Tools are accessed directly from a Go toolchain derivation, inspired by [rust-overlay](https://github.com/oxalica/rust-overlay).
+
+### `withTools`
+
+The simplest way to compose a Go toolchain with tools is `withTools`. It bundles the toolchain and selected tools into a single derivation, resolving each to its latest compatible version:
+
+```nix
+let
+  go = pkgs.go-bin.fromGoMod ./go.mod;  # e.g., Go 1.25.4
+in {
+  devShells.default = pkgs.mkShell {
+    buildInputs = [
+      (go.withTools ["govulncheck" "golangci-lint" "delve"])
+    ];
+  };
+}
+```
+
+### Individual Tool Access
+
+For more control, access tools individually via `tools`. Each tool exposes versioned attributes and a `latest` convenience attribute:
 
 ```nix
 let

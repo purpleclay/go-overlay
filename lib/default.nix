@@ -22,7 +22,7 @@
 
   mkGoToolchain = import ./mk-go-toolchain.nix {
     inherit lib mkToolSet;
-    inherit (pkgs) stdenv fetchurl;
+    inherit (pkgs) stdenv fetchurl symlinkJoin;
   };
 
   allVersions =
