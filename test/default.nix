@@ -74,4 +74,24 @@ in {
 
   # tools - compatibility (Go 1.21.4 is compatible with govulncheck up to 1.1.3, but not 1.1.4 which requires Go 1.22.0)
   tools-govulncheck-compat-old-go = assertEq "tools-govulncheck-compat-old-go" "1.1.3" go-bin.versions."1.21.4".tools.govulncheck.latest.version;
+
+  # withTools - bundles toolchain and tools into a single derivation
+  withTools-has-go-binary = testBinaryExists "withTools-has-go-binary" (go-bin.latest.withTools ["govulncheck"]) "bin/go";
+  withTools-has-tool-binary = testBinaryExists "withTools-has-tool-binary" (go-bin.latest.withTools ["govulncheck"]) "bin/govulncheck";
+  withTools-multiple-tools = testBinaryExists "withTools-multiple-tools" (go-bin.latest.withTools ["govulncheck" "gofumpt"]) "bin/gofumpt";
+
+  # withTools - version pinning
+  withTools-pinned-version = testBinaryExists "withTools-pinned-version" (go-bin.latest.withTools [
+    {
+      name = "gofumpt";
+      version = "0.7.0";
+    }
+  ]) "bin/gofumpt";
+  withTools-mixed-entries = testBinaryExists "withTools-mixed-entries" (go-bin.latest.withTools [
+    "govulncheck"
+    {
+      name = "gofumpt";
+      version = "0.7.0";
+    }
+  ]) "bin/gofumpt";
 }

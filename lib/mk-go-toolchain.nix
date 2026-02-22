@@ -56,27 +56,36 @@
         #   Example: go.tools.govulncheck.latest, go.tools.delve."1.24.2"
         #
         # withTools: convenience function that bundles this Go toolchain with
-        #   selected tools into a single derivation using symlinkJoin. Accepts
-        #   a list of tool names and resolves each to its latest compatible version.
-        #   Example: go.withTools ["govulncheck" "golangci-lint" "delve"]
+        #   selected tools into a single derivation using symlinkJoin. Each
+        #   entry can be a string (resolved to latest) or an attribute set
+        #   with name and version for pinning a specific version.
+        #   Example: go.withTools [
+        #     "govulncheck"
+        #     "golangci-lint"
+        #     { name = "gofumpt"; version = "0.7.0"; }
+        #   ]
         passthru = lib.optionalAttrs (mkToolSet != null) (let
           toolSet = mkToolSet self;
+          availableTools = builtins.attrNames toolSet;
+
+          resolveTool = entry: let
+            isSet = builtins.isAttrs entry;
+            name =
+              if isSet
+              then entry.name
+              else entry;
+          in
+            if !(toolSet ? ${name})
+            then throw "go-overlay: unknown tool '${name}'. Available tools: ${lib.concatStringsSep ", " availableTools}"
+            else if isSet
+            then toolSet.${name}.${entry.version}
+            else toolSet.${name}.latest;
         in {
           tools = toolSet;
-          withTools = toolNames: let
-            availableTools = builtins.attrNames toolSet;
-            resolvedTools =
-              map (
-                name:
-                  if toolSet ? ${name}
-                  then toolSet.${name}.latest
-                  else throw "go-overlay: unknown tool '${name}'. Available tools: ${lib.concatStringsSep ", " availableTools}"
-              )
-              toolNames;
-          in
+          withTools = toolEntries:
             symlinkJoin {
               name = "go-${manifest.version}-with-tools";
-              paths = [self] ++ resolvedTools;
+              paths = [self] ++ map resolveTool toolEntries;
             };
         });
 
