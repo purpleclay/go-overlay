@@ -80,6 +80,8 @@
             else if isSet
             then toolSet.${name}.${entry.version}
             else toolSet.${name}.latest;
+
+          defaultToolNames = ["delve" "gofumpt" "golangci-lint" "gopls" "govulncheck" "staticcheck"];
         in {
           tools = toolSet;
           withTools = toolEntries:
@@ -87,6 +89,18 @@
               name = "go-${manifest.version}-with-tools";
               paths = [self] ++ map resolveTool toolEntries;
             };
+          # withDefaultTools: bundles this Go toolchain with a curated set of essential
+          #   Go development tools at their latest compatible versions. Provides a
+          #   one-liner for a fully equipped Go dev shell without needing to know
+          #   which tools to include.
+          #   Tools: delve (debugger), gofumpt (formatter), golangci-lint (linter),
+          #          gopls (language server), govulncheck (vulnerability scanner),
+          #          staticcheck (static analysis)
+          #   Example: buildInputs = [ go.withDefaultTools ];
+          withDefaultTools = symlinkJoin {
+            name = "go-${manifest.version}-with-default-tools";
+            paths = [self] ++ map resolveTool defaultToolNames;
+          };
         });
 
         meta = {

@@ -94,4 +94,8 @@ in {
       version = "0.7.0";
     }
   ]) "bin/gofumpt";
+
+  # withDefaultTools - bundles toolchain with curated default tools into a single derivation
+  # Binary existence is verified in CI via the build-with-default-tools matrix job
+  withDefaultTools-is-derivation = assertEq "withDefaultTools-is-derivation" true (builtins.isAttrs go-bin.latest.withDefaultTools);
 }
