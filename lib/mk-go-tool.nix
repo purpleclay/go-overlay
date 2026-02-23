@@ -28,10 +28,11 @@
   };
 
   subPackages = manifest.subPackages or ["."];
+
+  version = manifest.version;
 in
   stdenv.mkDerivation {
-    inherit pname;
-    version = manifest.version;
+    inherit pname version;
     src = toolSrc;
 
     nativeBuildInputs = [go];
@@ -68,15 +69,22 @@ in
     buildPhase = ''
       runHook preBuild
 
-      buildFlags=(
-        -v
-        -p $NIX_BUILD_CORES
-        -ldflags=-buildid=
+      declare -a ldflags
+      ldflags+=(
+        "-buildid="
+        "-X main.version=${version}"
+        "-X main.commit=v${version}"
+        "-X main.date=1970-01-01T00:00:00Z"
       )
+
+      declare -a flags
+      flags+=("-v")
+      flags+=("-p" "$NIX_BUILD_CORES")
+      flags+=(''${ldflags:+-ldflags="''${ldflags[*]}"})
 
       for pkg in ${concatStringsSep " " subPackages}; do
         echo "Building $pkg"
-        go install "''${buildFlags[@]}" "./$pkg"
+        go install "''${flags[@]}" "./$pkg"
       done
 
       runHook postBuild
