@@ -25,6 +25,7 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 - [Library Functions](#library-functions)
 - [Go Tools](#go-tools)
   - [`withTools`](#withtools)
+  - [`withDefaultTools`](#withdefaulttools)
   - [Individual Tool Access](#individual-tool-access)
   - [Available Tools](#available-tools)
   - [Version Pinning](#version-pinning)
@@ -339,6 +340,33 @@ in {
   };
 }
 ```
+
+### `withDefaultTools`
+
+For a fully equipped Go development environment in a single line, use `withDefaultTools`. It bundles the toolchain with a curated set of essential tools at their latest compatible versions — no configuration required:
+
+```nix
+let
+  go = pkgs.go-bin.fromGoMod ./go.mod;
+in {
+  devShells.default = pkgs.mkShell {
+    buildInputs = [ go.withDefaultTools ];
+  };
+}
+```
+
+The default set mirrors what tools like VSCode's Go extension install out of the box:
+
+| Tool           | Role                    |
+| :------------- | :---------------------- |
+| `delve`        | Debugger                |
+| `gofumpt`      | Formatter               |
+| `golangci-lint` | Linter                 |
+| `gopls`        | Language server         |
+| `govulncheck`  | Vulnerability scanner   |
+| `staticcheck`  | Static analysis         |
+
+Every tool is pinned to the latest version compatible with the selected Go toolchain.
 
 ### Individual Tool Access
 
