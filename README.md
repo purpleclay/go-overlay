@@ -322,7 +322,7 @@ go-overlay can build Go ecosystem tools from pre-generated manifests and pin the
 
 ### `withTools`
 
-The simplest way to compose a Go toolchain with tools is `withTools`. It bundles the toolchain and selected tools into a single derivation, resolving each to its latest compatible version:
+The simplest way to compose a Go toolchain with tools is `withTools`. It bundles the toolchain and selected tools into a single derivation. Each entry can be a tool name (resolved to the latest compatible version) or an attribute set with `name` and `version` to pin a specific version:
 
 ```nix
 let
@@ -330,7 +330,11 @@ let
 in {
   devShells.default = pkgs.mkShell {
     buildInputs = [
-      (go.withTools ["govulncheck" "golangci-lint" "delve"])
+      (go.withTools [
+        "govulncheck"                              # latest compatible
+        "golangci-lint"                            # latest compatible
+        { name = "gofumpt"; version = "0.7.0"; }   # pinned version
+      ])
     ];
   };
 }
