@@ -9,8 +9,6 @@ on:
       - "flake.lock"
       - "govendor.toml"
   pull_request:
-    branches:
-      - main
     paths:
       - "*.nix"
       - "**/*.nix"
