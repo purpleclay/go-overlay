@@ -85,6 +85,11 @@ func resultDrift(path, currentHash, manifestHash string) vendorResult {
 	return vendorResult{path: path, status: statusDrift, message: msg}
 }
 
+func resultSchemaMismatch(path string, manifestSchema, currentSchema int) vendorResult {
+	msg := fmt.Sprintf("govendor.toml uses schema v%d, current govendor requires schema v%d — run 'govendor' to regenerate", manifestSchema, currentSchema)
+	return vendorResult{path: path, status: statusDrift, message: msg}
+}
+
 func resultMissing(path string) vendorResult {
 	return vendorResult{path: path, status: statusMissing, message: "govendor.toml not found, run govendor to generate"}
 }
