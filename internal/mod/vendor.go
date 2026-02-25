@@ -184,6 +184,14 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 	} else if err != nil {
 		return resultError(displayPath, err)
 	} else {
+		manifestSchema, err := extractSchema(existingData)
+		if err != nil {
+			return resultError(displayPath, err)
+		}
+		if manifestSchema != schemaVersion {
+			return resultSchemaMismatch(displayPath, manifestSchema, schemaVersion)
+		}
+
 		existingHash, err := extractHash(existingData)
 		if err != nil {
 			return resultError(displayPath, err)
@@ -301,6 +309,14 @@ func (v *Vendor) processModFile(path string) vendorResult {
 	} else if err != nil {
 		return resultError(path, err)
 	} else {
+		manifestSchema, err := extractSchema(existingData)
+		if err != nil {
+			return resultError(path, err)
+		}
+		if manifestSchema != schemaVersion {
+			return resultSchemaMismatch(path, manifestSchema, schemaVersion)
+		}
+
 		existingHash, err := extractHash(existingData)
 		if err != nil {
 			return resultError(path, err)
