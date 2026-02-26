@@ -14,6 +14,7 @@ const (
 
 type VendorManifest struct {
 	Schema           int                 `toml:"schema"`
+	Version          string              `toml:"version,omitempty"`
 	Hash             string              `toml:"hash"`
 	IncludePlatforms []string            `toml:"include_platforms,omitempty"`
 	Workspace        *WorkspaceConfig    `toml:"workspace,omitempty"`
@@ -36,7 +37,7 @@ type GoModule struct {
 	Local        string   `toml:"local,omitempty"`
 }
 
-func newManifest(goMod *GoModFile, platforms []string, includePlatforms []string) (*VendorManifest, error) {
+func newManifest(goMod *GoModFile, platforms []string, includePlatforms []string, vendoredVersion string) (*VendorManifest, error) {
 	deps, err := goMod.Dependencies(platforms)
 	if err != nil {
 		return nil, err
@@ -56,13 +57,14 @@ func newManifest(goMod *GoModFile, platforms []string, includePlatforms []string
 
 	return &VendorManifest{
 		Schema:           schemaVersion,
+		Version:          vendoredVersion,
 		Hash:             goMod.Hash(),
 		IncludePlatforms: recorded,
 		Mod:              mod,
 	}, nil
 }
 
-func newWorkspaceManifest(goWork *GoWorkFile, platforms []string, includePlatforms []string) (*VendorManifest, error) {
+func newWorkspaceManifest(goWork *GoWorkFile, platforms []string, includePlatforms []string, vendoredVersion string) (*VendorManifest, error) {
 	deps, err := goWork.Dependencies(platforms)
 	if err != nil {
 		return nil, err
@@ -82,6 +84,7 @@ func newWorkspaceManifest(goWork *GoWorkFile, platforms []string, includePlatfor
 
 	return &VendorManifest{
 		Schema:           schemaVersion,
+		Version:          vendoredVersion,
 		Hash:             goWork.Hash(),
 		IncludePlatforms: recorded,
 		Workspace:        goWork.WorkspaceConfig(),
@@ -111,6 +114,16 @@ func extractSchema(data []byte) (int, error) {
 		return 0, err
 	}
 	return manifest.Schema, nil
+}
+
+func extractVersion(data []byte) (string, error) {
+	var manifest struct {
+		Version string `toml:"version"`
+	}
+	if err := toml.Unmarshal(data, &manifest); err != nil {
+		return "", err
+	}
+	return manifest.Version, nil
 }
 
 func extractHash(data []byte) (string, error) {

@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/BurntSushi/toml"
+	semver "github.com/Masterminds/semver/v3"
 	"github.com/sourcegraph/conc/pool"
 )
 
@@ -18,13 +19,15 @@ const (
 )
 
 type vendorOptions struct {
-	detectDrift    bool
-	force          bool
-	paths          []string
-	recursive      bool
-	maxDepth       int
-	extraPlatforms []string
-	workspace      bool
+	detectDrift     bool
+	force           bool
+	paths           []string
+	recursive       bool
+	maxDepth        int
+	extraPlatforms  []string
+	workspace       bool
+	vendoredVersion string
+	strict          bool
 }
 
 type VendorOption func(*vendorOptions)
@@ -68,6 +71,18 @@ func WithWorkspace() VendorOption {
 func WithIncludePlatforms(platforms []string) VendorOption {
 	return func(opts *vendorOptions) {
 		opts.extraPlatforms = platforms
+	}
+}
+
+func WithVendoredVersion(version string) VendorOption {
+	return func(opts *vendorOptions) {
+		opts.vendoredVersion = version
+	}
+}
+
+func WithStrict() VendorOption {
+	return func(opts *vendorOptions) {
+		opts.strict = true
 	}
 }
 
@@ -192,6 +207,10 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 			return resultSchemaMismatch(displayPath, manifestSchema, schemaVersion)
 		}
 
+		if result, mismatch := v.checkVendoredVersion(displayPath, existingData); mismatch {
+			return result
+		}
+
 		existingHash, err := extractHash(existingData)
 		if err != nil {
 			return resultError(displayPath, err)
@@ -224,7 +243,7 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 }
 
 func (v *Vendor) generateWorkspaceManifest(goWork *GoWorkFile, platforms []string, includePlatforms []string) (int, error) {
-	manifest, err := newWorkspaceManifest(goWork, platforms, includePlatforms)
+	manifest, err := newWorkspaceManifest(goWork, platforms, includePlatforms, v.opts.vendoredVersion)
 	if err != nil {
 		return 0, err
 	}
@@ -317,6 +336,10 @@ func (v *Vendor) processModFile(path string) vendorResult {
 			return resultSchemaMismatch(path, manifestSchema, schemaVersion)
 		}
 
+		if result, mismatch := v.checkVendoredVersion(path, existingData); mismatch {
+			return result
+		}
+
 		existingHash, err := extractHash(existingData)
 		if err != nil {
 			return resultError(path, err)
@@ -349,7 +372,7 @@ func (v *Vendor) processModFile(path string) vendorResult {
 }
 
 func (v *Vendor) generateManifest(goMod *GoModFile, platforms []string, includePlatforms []string) (int, error) {
-	manifest, err := newManifest(goMod, platforms, includePlatforms)
+	manifest, err := newManifest(goMod, platforms, includePlatforms, v.opts.vendoredVersion)
 	if err != nil {
 		return 0, err
 	}
@@ -427,4 +450,39 @@ func (v *Vendor) findWorkspaceAt(path string) *GoWorkFile {
 	}
 
 	return goWork
+}
+
+func (v *Vendor) checkVendoredVersion(path string, data []byte) (vendorResult, bool) {
+	if v.opts.force {
+		return vendorResult{}, false
+	}
+
+	current := v.opts.vendoredVersion
+	if current == "" {
+		return vendorResult{}, false
+	}
+
+	manifest, err := extractVersion(data)
+	if err != nil {
+		return resultError(path, err), true
+	}
+	if manifest == "" || manifest == current {
+		return vendorResult{}, false
+	}
+
+	mv, err1 := semver.NewVersion(manifest)
+	cv, err2 := semver.NewVersion(current)
+	if err1 != nil || err2 != nil {
+		return resultGeneratorMismatch(path, manifest, current), true
+	}
+
+	if mv.Major() != cv.Major() {
+		return resultGeneratorMajorMismatch(path, manifest, current), true
+	}
+
+	if v.opts.strict {
+		return resultDrift(path, current, manifest), true
+	}
+
+	return resultGeneratorMismatch(path, manifest, current), true
 }
