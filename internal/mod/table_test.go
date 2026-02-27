@@ -15,16 +15,23 @@ If this is a private repository, see https://golang.org/doc/faq#git_https for ad
 
 func TestRenderResultsTableForGoMod(t *testing.T) {
 	results := []vendorResult{
-		resultDrift("path/to/drift/go.mod", "sha256-A3tDBEG/zwPthZ+l5TxH8XpVY9FRw/iEQOtMryi9zXg=", "sha256-juCtIr7pvECB2svxXEKFvbdj/vqWUbu5EECe2te0RTI="),
+		resultDriftDetected("path/to/drift/go.mod", []string{
+			"hash: go.mod has changed\n      go.mod:        sha256-A3tDBEG/zwPthZ+l5TxH8XpVY9FRw/iEQOtMryi9zXg=\n      govendor.toml: sha256-juCtIr7pvECB2svxXEKFvbdj/vqWUbu5EECe2te0RTI=",
+		}),
+		resultDriftDetected("path/to/drift-layered/go.mod", []string{
+			"govendor version mismatch: v1.0.0 → v2.0.0 (incompatible major version)",
+			"hash: go.mod has changed\n      go.mod:        sha256-A3tDBEG/zwPthZ+l5TxH8XpVY9FRw/iEQOtMryi9zXg=\n      govendor.toml: sha256-juCtIr7pvECB2svxXEKFvbdj/vqWUbu5EECe2te0RTI=",
+		}),
 		resultError("path/to/error/go.mod", errModuleNotFound),
 		resultGenerated("path/to/generated/go.mod", 10),
-		resultGeneratorMismatch("path/to/generator-mismatch/go.mod", "v0.9.0", "v0.10.0"),
-		resultGeneratorMajorMismatch("path/to/generator-major-mismatch/go.mod", "v1.0.0", "v2.0.0"),
 		resultMissing("path/to/missing/go.mod"),
 		resultNotFound("path/to/notfound/go.mod"),
 		resultOK("path/to/ok/go.mod"),
 		resultSchemaMismatch("path/to/schema-mismatch/go.mod", 1, 2),
 		resultSkipped("path/to/skipped/go.mod"),
+		resultVersionWarning("path/to/warning/go.mod", []string{
+			"govendor version mismatch: v0.9.0 → v0.10.0 (use --check --strict to enforce)",
+		}),
 	}
 
 	got := renderResultsTable(results)
@@ -33,16 +40,23 @@ func TestRenderResultsTableForGoMod(t *testing.T) {
 
 func TestRenderResultsTableForGoWork(t *testing.T) {
 	results := []vendorResult{
-		resultDrift("path/to/drift/go.work", "sha256-A3tDBEG/zwPthZ+l5TxH8XpVY9FRw/iEQOtMryi9zXg=", "sha256-juCtIr7pvECB2svxXEKFvbdj/vqWUbu5EECe2te0RTI="),
+		resultDriftDetected("path/to/drift/go.work", []string{
+			"hash: go.work has changed\n      go.work:       sha256-A3tDBEG/zwPthZ+l5TxH8XpVY9FRw/iEQOtMryi9zXg=\n      govendor.toml: sha256-juCtIr7pvECB2svxXEKFvbdj/vqWUbu5EECe2te0RTI=",
+		}),
+		resultDriftDetected("path/to/drift-layered/go.work", []string{
+			"govendor version mismatch: v1.0.0 → v2.0.0 (incompatible major version)",
+			"hash: go.work has changed\n      go.work:       sha256-A3tDBEG/zwPthZ+l5TxH8XpVY9FRw/iEQOtMryi9zXg=\n      govendor.toml: sha256-juCtIr7pvECB2svxXEKFvbdj/vqWUbu5EECe2te0RTI=",
+		}),
 		resultError("path/to/error/go.work", errModuleNotFound),
 		resultGenerated("path/to/generated/go.work", 10),
-		resultGeneratorMismatch("path/to/generator-mismatch/go.work", "v0.9.0", "v0.10.0"),
-		resultGeneratorMajorMismatch("path/to/generator-major-mismatch/go.work", "v1.0.0", "v2.0.0"),
 		resultMissing("path/to/missing/go.work"),
 		resultNotFound("path/to/notfound/go.work"),
 		resultOK("path/to/ok/go.work"),
 		resultSchemaMismatch("path/to/schema-mismatch/go.work", 1, 2),
 		resultSkipped("path/to/skipped/go.work"),
+		resultVersionWarning("path/to/warning/go.work", []string{
+			"govendor version mismatch: v0.9.0 → v0.10.0 (use --check --strict to enforce)",
+		}),
 	}
 
 	got := renderResultsTable(results)
