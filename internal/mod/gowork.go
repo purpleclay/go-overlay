@@ -37,8 +37,16 @@ func ParseGoWorkFile(path string) (*GoWorkFile, error) {
 		modules = append(modules, use.Path)
 	}
 
+	var goVersion, toolchain string
+	if wf.Go != nil {
+		goVersion = wf.Go.Version
+	}
+	if wf.Toolchain != nil {
+		toolchain = wf.Toolchain.Name
+	}
+
 	dir := filepath.Dir(path)
-	hash, err := computeWorkspaceHash(dir, modules)
+	hash, err := computeWorkspaceHash(dir, modules, goVersion, toolchain)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +65,7 @@ func NewGoWorkFileFromManifest(dir string, config *WorkspaceConfig) (*GoWorkFile
 		modules[i] = strings.TrimPrefix(mod, "./")
 	}
 
-	hash, err := computeWorkspaceHash(dir, modules)
+	hash, err := computeWorkspaceHash(dir, modules, config.Go, config.Toolchain)
 	if err != nil {
 		return nil, err
 	}
@@ -70,8 +78,15 @@ func NewGoWorkFileFromManifest(dir string, config *WorkspaceConfig) (*GoWorkFile
 	}, nil
 }
 
-func computeWorkspaceHash(dir string, modules []string) (string, error) {
+func computeWorkspaceHash(dir string, modules []string, goVersion, toolchain string) (string, error) {
 	h := sha256.New()
+
+	if goVersion != "" {
+		h.Write([]byte("go " + goVersion + "\n"))
+	}
+	if toolchain != "" {
+		h.Write([]byte("toolchain " + toolchain + "\n"))
+	}
 
 	sortedModules := slices.Clone(modules)
 	slices.Sort(sortedModules)

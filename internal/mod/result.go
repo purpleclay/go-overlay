@@ -3,6 +3,7 @@ package mod
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -15,6 +16,7 @@ const (
 	statusDrift     vendorStatus = "drift"
 	statusMissing   vendorStatus = "missing"
 	statusSkipped   vendorStatus = "skipped"
+	statusWarning   vendorStatus = "warning"
 	statusError     vendorStatus = "error"
 )
 
@@ -25,7 +27,7 @@ var (
 )
 
 func (s vendorStatus) IsSuccess() bool {
-	return s == statusOK || s == statusGenerated || s == statusSkipped
+	return s == statusOK || s == statusGenerated || s == statusSkipped || s == statusWarning
 }
 
 func (s vendorStatus) IsFailure() bool {
@@ -38,7 +40,7 @@ func (s vendorStatus) Symbol() string {
 		return greenStyle.Render("✓")
 	case statusDrift, statusMissing, statusError:
 		return redStyle.Render("✗")
-	case statusSkipped:
+	case statusSkipped, statusWarning:
 		return yellowStyle.Render("○")
 	default:
 		return " "
@@ -51,7 +53,7 @@ func (s vendorStatus) Render() string {
 		return greenStyle.Render(string(s))
 	case statusDrift, statusMissing, statusError:
 		return redStyle.Render(string(s))
-	case statusSkipped:
+	case statusSkipped, statusWarning:
 		return yellowStyle.Render(string(s))
 	default:
 		return string(s)
@@ -79,9 +81,8 @@ func resultGenerated(path string, count int) vendorResult {
 	return vendorResult{path: path, status: statusGenerated, message: fmt.Sprintf("generated govendor.toml with %d dependencies", count)}
 }
 
-func resultDrift(path, currentHash, manifestHash string) vendorResult {
-	ft := fileType(path)
-	msg := fmt.Sprintf("%s has changed, run 'govendor' to regenerate\n\n  %-14s %s\n  %-14s %s", ft, ft+":", currentHash, "govendor.toml:", manifestHash)
+func resultSchemaMismatch(path string, manifestSchema, currentSchema int) vendorResult {
+	msg := fmt.Sprintf("govendor.toml uses schema v%d, current govendor requires schema v%d — run 'govendor' to regenerate", manifestSchema, currentSchema)
 	return vendorResult{path: path, status: statusDrift, message: msg}
 }
 
@@ -101,4 +102,29 @@ func resultError(path string, err error) vendorResult {
 func resultNotFound(path string) vendorResult {
 	ft := fileType(path)
 	return vendorResult{path: path, status: statusError, message: fmt.Sprintf("%s does not exist, check path", ft)}
+}
+
+func buildReasonTree(header string, reasons []string) string {
+	var sb strings.Builder
+	sb.WriteString(header)
+	for i, r := range reasons {
+		sb.WriteString("\n  ")
+		if i == len(reasons)-1 {
+			sb.WriteString("└── ")
+		} else {
+			sb.WriteString("├── ")
+		}
+		sb.WriteString(r)
+	}
+	return sb.String()
+}
+
+func resultDriftDetected(path string, reasons []string) vendorResult {
+	msg := buildReasonTree("drift detected, run 'govendor' to regenerate", reasons)
+	return vendorResult{path: path, status: statusDrift, message: msg}
+}
+
+func resultVersionWarning(path string, reasons []string) vendorResult {
+	msg := buildReasonTree("govendor.toml is up to date", reasons)
+	return vendorResult{path: path, status: statusWarning, message: msg}
 }

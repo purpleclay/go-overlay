@@ -1,21 +1,30 @@
-╭───────────────────────────┬─────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ File                      │ Status      │ Message                                                                                               │
-├───────────────────────────┼─────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ path/to/drift/go.work     │ ✗ drift     │ go.work has changed, run 'govendor' to regenerate                                                     │
-│                           │             │                                                                                                       │
-│                           │             │   go.work:       sha256-A3tDBEG/zwPthZ+l5TxH8XpVY9FRw/iEQOtMryi9zXg=                                  │
-│                           │             │   govendor.toml: sha256-juCtIr7pvECB2svxXEKFvbdj/vqWUbu5EECe2te0RTI=                                  │
-│ path/to/error/go.work     │ ✗ error     │ go: github.com/nonexistent/fakerepo@v1.0.0: reading github.com/nonexistent/fakerepo/go.mod            │
-│                           │             │ at revision v1.0.0: git ls-remote -q origin in                                                        │
-│                           │             │ /Users/pthomas/go/pkg/mod/cache/vcs/52aff0ea21d8bd6eb4886c147731870e3188d46b62f672149e0462ee0612afe1: │
-│                           │             │ exit status 128:                                                                                      │
-│                           │             │     fatal: could not read Username for 'https://github.com': terminal prompts disabled                │
-│                           │             │ Confirm the import path was entered correctly.                                                        │
-│                           │             │ If this is a private repository, see https://golang.org/doc/faq#git_https for additional              │
-│                           │             │ information.                                                                                          │
-│ path/to/generated/go.work │ ✓ generated │ generated govendor.toml with 10 dependencies                                                          │
-│ path/to/missing/go.work   │ ✗ missing   │ govendor.toml not found, run govendor to generate                                                     │
-│ path/to/notfound/go.work  │ ✗ error     │ go.work does not exist, check path                                                                    │
-│ path/to/ok/go.work        │ ✓ ok        │ govendor.toml is up to date                                                                           │
-│ path/to/skipped/go.work   │ ○ skipped   │ go.work has no external dependencies                                                                  │
-╰───────────────────────────┴─────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────────┬─────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ File                            │ Status      │ Message                                                                                               │
+├─────────────────────────────────┼─────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ path/to/drift/go.work           │ ✗ drift     │ drift detected, run 'govendor' to regenerate                                                          │
+│                                 │             │   └── hash: go.work has changed                                                                       │
+│                                 │             │       go.work:       sha256-A3tDBEG/zwPthZ+l5TxH8XpVY9FRw/iEQOtMryi9zXg=                              │
+│                                 │             │       govendor.toml: sha256-juCtIr7pvECB2svxXEKFvbdj/vqWUbu5EECe2te0RTI=                              │
+│ path/to/drift-layered/go.work   │ ✗ drift     │ drift detected, run 'govendor' to regenerate                                                          │
+│                                 │             │   ├── govendor version mismatch: v1.0.0 → v2.0.0 (incompatible major version)                         │
+│                                 │             │   └── hash: go.work has changed                                                                       │
+│                                 │             │       go.work:       sha256-A3tDBEG/zwPthZ+l5TxH8XpVY9FRw/iEQOtMryi9zXg=                              │
+│                                 │             │       govendor.toml: sha256-juCtIr7pvECB2svxXEKFvbdj/vqWUbu5EECe2te0RTI=                              │
+│ path/to/error/go.work           │ ✗ error     │ go: github.com/nonexistent/fakerepo@v1.0.0: reading github.com/nonexistent/fakerepo/go.mod            │
+│                                 │             │ at revision v1.0.0: git ls-remote -q origin in                                                        │
+│                                 │             │ /Users/pthomas/go/pkg/mod/cache/vcs/52aff0ea21d8bd6eb4886c147731870e3188d46b62f672149e0462ee0612afe1: │
+│                                 │             │ exit status 128:                                                                                      │
+│                                 │             │     fatal: could not read Username for 'https://github.com': terminal prompts disabled                │
+│                                 │             │ Confirm the import path was entered correctly.                                                        │
+│                                 │             │ If this is a private repository, see https://golang.org/doc/faq#git_https for additional              │
+│                                 │             │ information.                                                                                          │
+│ path/to/generated/go.work       │ ✓ generated │ generated govendor.toml with 10 dependencies                                                          │
+│ path/to/missing/go.work         │ ✗ missing   │ govendor.toml not found, run govendor to generate                                                     │
+│ path/to/notfound/go.work        │ ✗ error     │ go.work does not exist, check path                                                                    │
+│ path/to/ok/go.work              │ ✓ ok        │ govendor.toml is up to date                                                                           │
+│ path/to/schema-mismatch/go.work │ ✗ drift     │ govendor.toml uses schema v1, current govendor requires schema v2 — run 'govendor' to                 │
+│                                 │             │ regenerate                                                                                            │
+│ path/to/skipped/go.work         │ ○ skipped   │ go.work has no external dependencies                                                                  │
+│ path/to/warning/go.work         │ ○ warning   │ govendor.toml is up to date                                                                           │
+│                                 │             │   └── govendor version mismatch: v0.9.0 → v0.10.0 (use --check --strict to enforce)                   │
+╰─────────────────────────────────┴─────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────╯

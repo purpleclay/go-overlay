@@ -40,7 +40,7 @@ func TestManifestWriteTo(t *testing.T) {
 			if len(tt.includePlatforms) > 0 {
 				platforms = append(DefaultPlatforms, tt.includePlatforms...)
 			}
-			manifest, err := newManifest(goMod, platforms, tt.includePlatforms)
+			manifest, err := newManifest(goMod, platforms, tt.includePlatforms, "")
 			require.NoError(t, err)
 
 			var buf bytes.Buffer
@@ -75,7 +75,7 @@ func TestWorkspaceManifestWriteTo(t *testing.T) {
 			if len(tt.includePlatforms) > 0 {
 				platforms = append(DefaultPlatforms, tt.includePlatforms...)
 			}
-			manifest, err := newWorkspaceManifest(goWork, platforms, tt.includePlatforms)
+			manifest, err := newWorkspaceManifest(goWork, platforms, tt.includePlatforms, "")
 			require.NoError(t, err)
 
 			var buf bytes.Buffer

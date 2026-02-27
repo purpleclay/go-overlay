@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/BurntSushi/toml"
+	semver "github.com/Masterminds/semver/v3"
 	"github.com/sourcegraph/conc/pool"
 )
 
@@ -18,13 +19,15 @@ const (
 )
 
 type vendorOptions struct {
-	detectDrift    bool
-	force          bool
-	paths          []string
-	recursive      bool
-	maxDepth       int
-	extraPlatforms []string
-	workspace      bool
+	detectDrift     bool
+	force           bool
+	paths           []string
+	recursive       bool
+	maxDepth        int
+	extraPlatforms  []string
+	workspace       bool
+	vendoredVersion string
+	strict          bool
 }
 
 type VendorOption func(*vendorOptions)
@@ -68,6 +71,18 @@ func WithWorkspace() VendorOption {
 func WithIncludePlatforms(platforms []string) VendorOption {
 	return func(opts *vendorOptions) {
 		opts.extraPlatforms = platforms
+	}
+}
+
+func WithVendoredVersion(version string) VendorOption {
+	return func(opts *vendorOptions) {
+		opts.vendoredVersion = version
+	}
+}
+
+func WithStrict() VendorOption {
+	return func(opts *vendorOptions) {
+		opts.strict = true
 	}
 }
 
@@ -184,25 +199,21 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 	} else if err != nil {
 		return resultError(displayPath, err)
 	} else {
-		existingHash, err := extractHash(existingData)
-		if err != nil {
-			return resultError(displayPath, err)
-		}
-
-		if len(extraPlatforms) == 0 {
-			if existingPlatforms, err := extractPlatforms(existingData); err == nil {
-				extraPlatforms = existingPlatforms
+		if result, drifted := v.checkDrift(displayPath, existingData, goWork.Hash()); drifted {
+			if v.opts.detectDrift || result.status == statusWarning {
+				return result
 			}
-		}
-
-		if !v.opts.force && existingHash == goWork.Hash() {
-			if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
-				return resultOK(displayPath)
+		} else {
+			if len(extraPlatforms) == 0 {
+				if existingPlatforms, err := extractPlatforms(existingData); err == nil {
+					extraPlatforms = existingPlatforms
+				}
 			}
-		}
-
-		if v.opts.detectDrift {
-			return resultDrift(displayPath, goWork.Hash(), existingHash)
+			if !v.opts.force {
+				if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
+					return resultOK(displayPath)
+				}
+			}
 		}
 	}
 
@@ -216,7 +227,7 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 }
 
 func (v *Vendor) generateWorkspaceManifest(goWork *GoWorkFile, platforms []string, includePlatforms []string) (int, error) {
-	manifest, err := newWorkspaceManifest(goWork, platforms, includePlatforms)
+	manifest, err := newWorkspaceManifest(goWork, platforms, includePlatforms, v.opts.vendoredVersion)
 	if err != nil {
 		return 0, err
 	}
@@ -301,25 +312,21 @@ func (v *Vendor) processModFile(path string) vendorResult {
 	} else if err != nil {
 		return resultError(path, err)
 	} else {
-		existingHash, err := extractHash(existingData)
-		if err != nil {
-			return resultError(path, err)
-		}
-
-		if len(extraPlatforms) == 0 {
-			if existingPlatforms, err := extractPlatforms(existingData); err == nil {
-				extraPlatforms = existingPlatforms
+		if result, drifted := v.checkDrift(path, existingData, goMod.Hash()); drifted {
+			if v.opts.detectDrift || result.status == statusWarning {
+				return result
 			}
-		}
-
-		if !v.opts.force && existingHash == goMod.Hash() {
-			if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
-				return resultOK(path)
+		} else {
+			if len(extraPlatforms) == 0 {
+				if existingPlatforms, err := extractPlatforms(existingData); err == nil {
+					extraPlatforms = existingPlatforms
+				}
 			}
-		}
-
-		if v.opts.detectDrift {
-			return resultDrift(path, goMod.Hash(), existingHash)
+			if !v.opts.force {
+				if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
+					return resultOK(path)
+				}
+			}
 		}
 	}
 
@@ -333,7 +340,7 @@ func (v *Vendor) processModFile(path string) vendorResult {
 }
 
 func (v *Vendor) generateManifest(goMod *GoModFile, platforms []string, includePlatforms []string) (int, error) {
-	manifest, err := newManifest(goMod, platforms, includePlatforms)
+	manifest, err := newManifest(goMod, platforms, includePlatforms, v.opts.vendoredVersion)
 	if err != nil {
 		return 0, err
 	}
@@ -411,4 +418,64 @@ func (v *Vendor) findWorkspaceAt(path string) *GoWorkFile {
 	}
 
 	return goWork
+}
+
+func (v *Vendor) checkDrift(path string, data []byte, currentHash string) (vendorResult, bool) {
+	manifestSchema, err := extractSchema(data)
+	if err != nil {
+		return resultError(path, err), true
+	}
+	if manifestSchema != schemaVersion {
+		return resultSchemaMismatch(path, manifestSchema, schemaVersion), true
+	}
+
+	var reasons []string
+	hasDrift := false
+	isWarning := false
+
+	if v.opts.vendoredVersion != "" && !v.opts.force {
+		manifest, err := extractVersion(data)
+		if err != nil {
+			return resultError(path, err), true
+		}
+		if manifest != "" && manifest != v.opts.vendoredVersion {
+			mv, err1 := semver.NewVersion(manifest)
+			cv, err2 := semver.NewVersion(v.opts.vendoredVersion)
+			if err1 != nil || err2 != nil {
+				reasons = append(reasons, fmt.Sprintf("govendor version mismatch: %s → %s (use --check --strict to enforce)", manifest, v.opts.vendoredVersion))
+				isWarning = true
+			} else if mv.Major() != cv.Major() {
+				reasons = append(reasons, fmt.Sprintf("govendor version mismatch: %s → %s (incompatible major version)", manifest, v.opts.vendoredVersion))
+				hasDrift = true
+			} else if v.opts.strict {
+				reasons = append(reasons, fmt.Sprintf("govendor version mismatch: %s → %s", manifest, v.opts.vendoredVersion))
+				hasDrift = true
+			} else {
+				reasons = append(reasons, fmt.Sprintf("govendor version mismatch: %s → %s (use --check --strict to enforce)", manifest, v.opts.vendoredVersion))
+				isWarning = true
+			}
+		}
+	}
+
+	existingHash, err := extractHash(data)
+	if err != nil {
+		return resultError(path, err), true
+	}
+	if existingHash != currentHash {
+		ft := fileType(path)
+		reasons = append(reasons, fmt.Sprintf("hash: %s has changed\n      %-14s %s\n      %-14s %s", ft, ft+":", currentHash, "govendor.toml:", existingHash))
+		hasDrift = true
+	}
+
+	if len(reasons) == 0 {
+		return vendorResult{}, false
+	}
+
+	if hasDrift {
+		return resultDriftDetected(path, reasons), true
+	}
+	if isWarning {
+		return resultVersionWarning(path, reasons), true
+	}
+	return vendorResult{}, false
 }
