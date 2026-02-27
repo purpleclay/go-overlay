@@ -199,37 +199,21 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 	} else if err != nil {
 		return resultError(displayPath, err)
 	} else {
-		manifestSchema, err := extractSchema(existingData)
-		if err != nil {
-			return resultError(displayPath, err)
-		}
-		if manifestSchema != schemaVersion {
-			return resultSchemaMismatch(displayPath, manifestSchema, schemaVersion)
-		}
-
-		if result, mismatch := v.checkVendoredVersion(displayPath, existingData); mismatch {
-			return result
-		}
-
-		existingHash, err := extractHash(existingData)
-		if err != nil {
-			return resultError(displayPath, err)
-		}
-
-		if len(extraPlatforms) == 0 {
-			if existingPlatforms, err := extractPlatforms(existingData); err == nil {
-				extraPlatforms = existingPlatforms
+		if result, drifted := v.checkDrift(displayPath, existingData, goWork.Hash()); drifted {
+			if v.opts.detectDrift || result.status == statusWarning {
+				return result
 			}
-		}
-
-		if !v.opts.force && existingHash == goWork.Hash() {
-			if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
-				return resultOK(displayPath)
+		} else {
+			if len(extraPlatforms) == 0 {
+				if existingPlatforms, err := extractPlatforms(existingData); err == nil {
+					extraPlatforms = existingPlatforms
+				}
 			}
-		}
-
-		if v.opts.detectDrift {
-			return resultDrift(displayPath, goWork.Hash(), existingHash)
+			if !v.opts.force {
+				if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
+					return resultOK(displayPath)
+				}
+			}
 		}
 	}
 
@@ -328,37 +312,21 @@ func (v *Vendor) processModFile(path string) vendorResult {
 	} else if err != nil {
 		return resultError(path, err)
 	} else {
-		manifestSchema, err := extractSchema(existingData)
-		if err != nil {
-			return resultError(path, err)
-		}
-		if manifestSchema != schemaVersion {
-			return resultSchemaMismatch(path, manifestSchema, schemaVersion)
-		}
-
-		if result, mismatch := v.checkVendoredVersion(path, existingData); mismatch {
-			return result
-		}
-
-		existingHash, err := extractHash(existingData)
-		if err != nil {
-			return resultError(path, err)
-		}
-
-		if len(extraPlatforms) == 0 {
-			if existingPlatforms, err := extractPlatforms(existingData); err == nil {
-				extraPlatforms = existingPlatforms
+		if result, drifted := v.checkDrift(path, existingData, goMod.Hash()); drifted {
+			if v.opts.detectDrift || result.status == statusWarning {
+				return result
 			}
-		}
-
-		if !v.opts.force && existingHash == goMod.Hash() {
-			if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
-				return resultOK(path)
+		} else {
+			if len(extraPlatforms) == 0 {
+				if existingPlatforms, err := extractPlatforms(existingData); err == nil {
+					extraPlatforms = existingPlatforms
+				}
 			}
-		}
-
-		if v.opts.detectDrift {
-			return resultDrift(path, goMod.Hash(), existingHash)
+			if !v.opts.force {
+				if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
+					return resultOK(path)
+				}
+			}
 		}
 	}
 
@@ -452,37 +420,62 @@ func (v *Vendor) findWorkspaceAt(path string) *GoWorkFile {
 	return goWork
 }
 
-func (v *Vendor) checkVendoredVersion(path string, data []byte) (vendorResult, bool) {
-	if v.opts.force {
-		return vendorResult{}, false
-	}
-
-	current := v.opts.vendoredVersion
-	if current == "" {
-		return vendorResult{}, false
-	}
-
-	manifest, err := extractVersion(data)
+func (v *Vendor) checkDrift(path string, data []byte, currentHash string) (vendorResult, bool) {
+	manifestSchema, err := extractSchema(data)
 	if err != nil {
 		return resultError(path, err), true
 	}
-	if manifest == "" || manifest == current {
+	if manifestSchema != schemaVersion {
+		return resultSchemaMismatch(path, manifestSchema, schemaVersion), true
+	}
+
+	var reasons []string
+	hasDrift := false
+	isWarning := false
+
+	if v.opts.vendoredVersion != "" && !v.opts.force {
+		manifest, err := extractVersion(data)
+		if err != nil {
+			return resultError(path, err), true
+		}
+		if manifest != "" && manifest != v.opts.vendoredVersion {
+			mv, err1 := semver.NewVersion(manifest)
+			cv, err2 := semver.NewVersion(v.opts.vendoredVersion)
+			if err1 != nil || err2 != nil {
+				reasons = append(reasons, fmt.Sprintf("govendor version mismatch: %s → %s (use --check --strict to enforce)", manifest, v.opts.vendoredVersion))
+				isWarning = true
+			} else if mv.Major() != cv.Major() {
+				reasons = append(reasons, fmt.Sprintf("govendor version mismatch: %s → %s (incompatible major version)", manifest, v.opts.vendoredVersion))
+				hasDrift = true
+			} else if v.opts.strict {
+				reasons = append(reasons, fmt.Sprintf("govendor version mismatch: %s → %s", manifest, v.opts.vendoredVersion))
+				hasDrift = true
+			} else {
+				reasons = append(reasons, fmt.Sprintf("govendor version mismatch: %s → %s (use --check --strict to enforce)", manifest, v.opts.vendoredVersion))
+				isWarning = true
+			}
+		}
+	}
+
+	existingHash, err := extractHash(data)
+	if err != nil {
+		return resultError(path, err), true
+	}
+	if existingHash != currentHash {
+		ft := fileType(path)
+		reasons = append(reasons, fmt.Sprintf("hash: %s has changed\n      %-14s %s\n      %-14s %s", ft, ft+":", currentHash, "govendor.toml:", existingHash))
+		hasDrift = true
+	}
+
+	if len(reasons) == 0 {
 		return vendorResult{}, false
 	}
 
-	mv, err1 := semver.NewVersion(manifest)
-	cv, err2 := semver.NewVersion(current)
-	if err1 != nil || err2 != nil {
-		return resultGeneratorMismatch(path, manifest, current), true
+	if hasDrift {
+		return resultDriftDetected(path, reasons), true
 	}
-
-	if mv.Major() != cv.Major() {
-		return resultGeneratorMajorMismatch(path, manifest, current), true
+	if isWarning {
+		return resultVersionWarning(path, reasons), true
 	}
-
-	if v.opts.strict {
-		return resultDrift(path, current, manifest), true
-	}
-
-	return resultGeneratorMismatch(path, manifest, current), true
+	return vendorResult{}, false
 }
