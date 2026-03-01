@@ -89,6 +89,11 @@ func resultMissing(path string) vendorResult {
 	return vendorResult{path: path, status: statusMissing, message: "govendor.toml not found, run govendor to generate"}
 }
 
+func resultStale(path string) vendorResult {
+	ft := fileType(path)
+	return vendorResult{path: path, status: statusDrift, message: fmt.Sprintf("govendor.toml is stale: %s has no external dependencies, run 'govendor' to remove it", ft)}
+}
+
 func resultSkipped(path string) vendorResult {
 	ft := fileType(path)
 	return vendorResult{path: path, status: statusSkipped, message: fmt.Sprintf("%s has no external dependencies", ft)}
