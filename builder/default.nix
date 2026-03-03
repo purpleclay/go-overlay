@@ -32,17 +32,22 @@
     ;
 
   # Fetch a Go module using `go mod download`.
-  # Supports private modules via GOPRIVATE, GOPROXY, and .netrc.
+  # Supports private modules via GOPRIVATE and a netrc file for authentication.
+  # Pass netrcFile to provide credentials for private module hosts. The file is
+  # copied into the build sandbox's HOME as .netrc so both Go's HTTP client and
+  # git (via libcurl) can authenticate.
   fetchGoModule = {
     goPackagePath,
     version,
     hash, # NAR hash from govendor.toml
     go,
+    netrcFile ? null, # Path to a .netrc file for private module authentication
   }:
     stdenvNoCC.mkDerivation {
       name = "${baseNameOf goPackagePath}_${version}";
       builder = ./fetch.sh;
       inherit goPackagePath version;
+      netrcFile = optionalString (netrcFile != null) netrcFile;
       nativeBuildInputs = [
         cacert
         git
@@ -54,6 +59,8 @@
       outputHash = hash;
       impureEnvVars = [
         "GOPROXY"
+        "GOPRIVATE"
+        "GONOPROXY"
         "http_proxy"
         "https_proxy"
       ];
@@ -123,6 +130,7 @@
     manifest, # Parsed govendor.toml (via builtins.fromTOML)
     src ? null, # Source tree for local module replacements
     localReplaces ? {}, # Map of module path to Nix path for external local replaces
+    netrcFile ? null, # Path to a .netrc file for private module authentication
   }: let
     useSymlinks = lib.versionAtLeast go.version "1.25";
     modules = manifest.mod or {};
@@ -136,7 +144,7 @@
       mapAttrs (
         goPackagePath: meta:
           fetchGoModule {
-            inherit goPackagePath go;
+            inherit goPackagePath go netrcFile;
             inherit (meta) version hash;
           }
       )
@@ -228,15 +236,12 @@
     tags ? [],
     allowGoReference ? false, # When true, disables -trimpath, -buildid= and disallowedReferences
     localReplaces ? {}, # Map of module path to Nix path for external local replaces
+    netrcFile ? null, # Path to a .netrc file for private module authentication
     checkFlags ? [], # Additional flags passed to go test
     excludedPackages ? [], # Packages to exclude from testing
     CGO_ENABLED ? go.CGO_ENABLED,
     GOOS ? go.GOOS,
     GOARCH ? go.GOARCH,
-    GOPROXY ? "off",
-    GOPRIVATE ? "",
-    GOSUMDB ? "off",
-    GONOSUMDB ? "",
     ...
   } @ attrs: let
     # Check for in-tree vendor directory
@@ -276,7 +281,7 @@
       if useManifest
       then
         mkVendorEnv {
-          inherit go manifest src localReplaces;
+          inherit go manifest src localReplaces netrcFile;
         }
       else null;
   in
@@ -296,7 +301,7 @@
         Alternatively, commit a vendor directory using 'go mod vendor'.
     '';
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "localReplaces" "allowGoReference" "checkFlags" "excludedPackages"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "localReplaces" "netrcFile" "allowGoReference" "checkFlags" "excludedPackages"]
         // {
           inherit pname version src;
 
@@ -327,10 +332,7 @@
 
                 export GOCACHE=$TMPDIR/go-cache
                 export GOPATH="$TMPDIR/go"
-                export GOPROXY=${escapeShellArg GOPROXY}
-                export GOPRIVATE=${escapeShellArg GOPRIVATE}
-                export GOSUMDB=${escapeShellArg GOSUMDB}
-                export GONOSUMDB=${escapeShellArg GONOSUMDB}
+                export GOPROXY=off
 
                 # Use in-tree vendor directory as-is
                 chmod -R u+w vendor
@@ -343,10 +345,7 @@
 
                 export GOCACHE=$TMPDIR/go-cache
                 export GOPATH="$TMPDIR/go"
-                export GOPROXY=${escapeShellArg GOPROXY}
-                export GOPRIVATE=${escapeShellArg GOPRIVATE}
-                export GOSUMDB=${escapeShellArg GOSUMDB}
-                export GONOSUMDB=${escapeShellArg GONOSUMDB}
+                export GOPROXY=off
 
                 # Copy vendor environment from manifest
                 rm -rf vendor
@@ -364,7 +363,7 @@
 
                 export GOCACHE=$TMPDIR/go-cache
                 export GOPATH="$TMPDIR/go"
-                export GOPROXY=${escapeShellArg GOPROXY}
+                export GOPROXY=off
 
                 runHook postConfigure
               ''
@@ -463,15 +462,12 @@
     ldflags ? [],
     tags ? [],
     allowGoReference ? false, # When true, disables -trimpath, -buildid= and disallowedReferences
+    netrcFile ? null, # Path to a .netrc file for private module authentication
     checkFlags ? [], # Additional flags passed to go test
     excludedPackages ? [], # Packages to exclude from testing
     CGO_ENABLED ? go.CGO_ENABLED,
     GOOS ? go.GOOS,
     GOARCH ? go.GOARCH,
-    GOPROXY ? "off",
-    GOPRIVATE ? "",
-    GOSUMDB ? "off",
-    GONOSUMDB ? "",
     ...
   } @ attrs: let
     # Check for in-tree vendor directory
@@ -538,7 +534,7 @@
       mapAttrs (
         goPackagePath: meta:
           fetchGoModule {
-            inherit goPackagePath go;
+            inherit goPackagePath go netrcFile;
             inherit (meta) version hash;
           }
       )
@@ -616,7 +612,7 @@
         Alternatively, commit a vendor directory using 'go work vendor'.
     '';
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "GOPROXY" "GOPRIVATE" "GOSUMDB" "GONOSUMDB" "allowGoReference" "checkFlags" "excludedPackages"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "netrcFile" "allowGoReference" "checkFlags" "excludedPackages"]
         // {
           inherit pname version src;
 
@@ -647,10 +643,7 @@
 
                 export GOCACHE=$TMPDIR/go-cache
                 export GOPATH="$TMPDIR/go"
-                export GOPROXY=${escapeShellArg GOPROXY}
-                export GOPRIVATE=${escapeShellArg GOPRIVATE}
-                export GOSUMDB=${escapeShellArg GOSUMDB}
-                export GONOSUMDB=${escapeShellArg GONOSUMDB}
+                export GOPROXY=off
 
                 # Use in-tree vendor directory as-is (from 'go work vendor')
                 chmod -R u+w vendor
@@ -663,10 +656,7 @@
 
                                 export GOCACHE=$TMPDIR/go-cache
                                 export GOPATH="$TMPDIR/go"
-                                export GOPROXY=${escapeShellArg GOPROXY}
-                                export GOPRIVATE=${escapeShellArg GOPRIVATE}
-                                export GOSUMDB=${escapeShellArg GOSUMDB}
-                                export GONOSUMDB=${escapeShellArg GONOSUMDB}
+                                export GOPROXY=off
 
                                 # Generate go.work if not present in source
                                 if [ ! -f go.work ]; then
@@ -691,7 +681,7 @@
 
                 export GOCACHE=$TMPDIR/go-cache
                 export GOPATH="$TMPDIR/go"
-                export GOPROXY=${escapeShellArg GOPROXY}
+                export GOPROXY=off
 
                 runHook postConfigure
               ''

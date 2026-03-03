@@ -37,7 +37,6 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
     - [Local Replace Directives](#local-replace-directives)
     - [External Local Replace Directives](#external-local-replace-directives)
     - [Testing](#testing)
-    - [Proxy Configuration](#proxy-configuration)
     - [Cross-Compilation](#cross-compilation)
   - [buildGoWorkspace](#buildgoworkspace)
     - [In-tree Vendor Mode](#in-tree-vendor-mode-1)
@@ -46,7 +45,6 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
     - [Generating the Manifest](#generating-the-manifest)
     - [Building Multiple Binaries](#building-multiple-binaries)
     - [Testing](#testing-1)
-    - [Proxy Configuration](#proxy-configuration-1)
     - [Cross-Compilation](#cross-compilation-1)
   - [mkVendorEnv](#mkvendorenv)
 - [Building a Go Application](#building-a-go-application)
@@ -479,16 +477,13 @@ buildGoApplication {
 | `tags`             | `[]`                | Build tags                                                 |
 | `allowGoReference` | `false`             | Allow Go toolchain in runtime closure                      |
 | `localReplaces`    | `{}`                | Map of module path to Nix path for external local replaces |
+| `netrcFile`        | `null`              | Path to a `.netrc` file for private module authentication  |
 | `doCheck`          | `false`             | Run tests during the build                                 |
 | `checkFlags`       | `[]`                | Additional flags passed to `go test`                       |
 | `excludedPackages` | `[]`                | Packages to exclude from testing                           |
 | `CGO_ENABLED`      | inherited from `go` | Enable CGO                                                 |
 | `GOOS`             | inherited from `go` | Target operating system                                    |
 | `GOARCH`           | inherited from `go` | Target architecture                                        |
-| `GOPROXY`          | `"off"`             | Go module proxy URL                                        |
-| `GOPRIVATE`        | `""`                | Glob patterns for private modules                          |
-| `GOSUMDB`          | `"off"`             | Checksum database URL                                      |
-| `GONOSUMDB`        | `""`                | Glob patterns to skip checksum verification                |
 
 #### Local Replace Directives
 
@@ -569,25 +564,6 @@ buildGoApplication {
   doCheck = true;
   checkFlags = ["-count=1" "-timeout" "30m"];
   excludedPackages = ["internal/e2e"];
-}
-```
-
-#### Proxy Configuration
-
-By default, `buildGoApplication` sets `GOPROXY=off` and `GOSUMDB=off` since dependencies are vendored. However, you can override these for corporate proxies or private module servers:
-
-```nix
-buildGoApplication {
-  pname = "myapp";
-  version = "1.0.0";
-  src = ./.;
-  go = pkgs.go-bin.latest;
-  modules = ./govendor.toml;
-
-  # Corporate proxy with fallback
-  GOPROXY = "https://proxy.corp.example.com,https://proxy.golang.org,direct";
-  GOPRIVATE = "github.com/myorg/*";
-  GOSUMDB = "sum.golang.org";
 }
 ```
 
@@ -771,40 +747,17 @@ Build each application separately using the same manifest:
 | `ldflags`          | `[]`                | Linker flags                                               |
 | `tags`             | `[]`                | Build tags                                                 |
 | `allowGoReference` | `false`             | Allow Go toolchain in runtime closure                      |
+| `netrcFile`        | `null`              | Path to a `.netrc` file for private module authentication  |
 | `doCheck`          | `false`             | Run tests during the build                                 |
 | `checkFlags`       | `[]`                | Additional flags passed to `go test`                       |
 | `excludedPackages` | `[]`                | Packages to exclude from testing                           |
 | `CGO_ENABLED`      | inherited from `go` | Enable CGO                                                 |
 | `GOOS`             | inherited from `go` | Target operating system                                    |
 | `GOARCH`           | inherited from `go` | Target architecture                                        |
-| `GOPROXY`          | `"off"`             | Go module proxy URL                                        |
-| `GOPRIVATE`        | `""`                | Glob patterns for private modules                          |
-| `GOSUMDB`          | `"off"`             | Checksum database URL                                      |
-| `GONOSUMDB`        | `""`                | Glob patterns to skip checksum verification                |
 
 #### Testing
 
 Tests are disabled by default. Set `doCheck = true` to run `go test` during the build. The `checkFlags` and `excludedPackages` options work the same as in `buildGoApplication`. See [Testing](#testing) for examples.
-
-#### Proxy Configuration
-
-By default, `buildGoWorkspace` sets `GOPROXY=off` and `GOSUMDB=off` since dependencies are vendored. However, you can override these for corporate proxies or private module servers:
-
-```nix
-buildGoWorkspace {
-  pname = "api";
-  version = "1.0.0";
-  src = ./.;
-  go = pkgs.go-bin.latest;
-  modules = ./govendor.toml;
-  subPackages = [ "api" ];
-
-  # Corporate proxy with fallback
-  GOPROXY = "https://proxy.corp.example.com,https://proxy.golang.org,direct";
-  GOPRIVATE = "github.com/myorg/*";
-  GOSUMDB = "sum.golang.org";
-}
-```
 
 #### Cross-Compilation
 
@@ -857,6 +810,7 @@ mkVendorEnv {
 | `manifest`      | required | Parsed govendor.toml (via fromTOML)                        |
 | `src`           | `null`   | Source tree (required if manifest has local modules)       |
 | `localReplaces` | `{}`     | Map of module path to Nix path for external local replaces |
+| `netrcFile`     | `null`   | Path to a `.netrc` file for private module authentication  |
 
 The resulting derivation contains each module at its import path and a `modules.txt` with package listings.
 
@@ -1089,62 +1043,30 @@ Run `govendor` to regenerate the manifest, then commit both files together.
 
 ## Private Modules
 
-go-overlay supports private Go modules through standard Go authentication mechanisms.
-
-### Generating Manifests
-
-When running `govendor`, configure authentication via environment variables or `.netrc`:
+Private module support requires a `~/.netrc` file for authentication and `GOPRIVATE` set as a host environment variable. Pass the `netrcFile` parameter so the file is copied into the build sandbox where both Go and git can read it:
 
 ```bash
-# Set GOPRIVATE to bypass the checksum database
-export GOPRIVATE="github.com/myorg/*,gitlab.mycompany.com/*"
-
-# Configure git to use token authentication
-git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
-
-# Generate manifest
-govendor
+export GOPRIVATE="github.com/myorg/*"
+nix build --impure
 ```
-
-Alternatively, use `~/.netrc`:
-
-```
-machine github.com
-  login oauth2
-  password ghp_xxxxxxxxxxxx
-```
-
-### Building with Private Modules
-
-Configure `buildGoApplication` with the appropriate environment variables:
 
 ```nix
 buildGoApplication {
   pname = "myapp";
   version = "1.0.0";
   src = ./.;
+  modules = ./govendor.toml;
   go = pkgs.go-bin.latest;
 
-  GOPRIVATE = "github.com/myorg/*";
-  GOPROXY = "https://proxy.golang.org,direct";
+  netrcFile = "${builtins.getEnv "HOME"}/.netrc";
 }
 ```
 
-### Using a Private Proxy
+> [!NOTE]
+> `builtins.getEnv` returns an empty string in pure evaluation mode, so the `--impure` flag is required. For projects that manage secrets with [git-crypt](https://github.com/AGWA/git-crypt) or [sops-nix](https://github.com/Mic92/sops-nix), you can reference an encrypted `.netrc` as a relative path (`netrcFile = ./.netrc;`) without `--impure`.
 
-For organizations running Athens, Artifactory, or similar:
-
-```nix
-buildGoApplication {
-  pname = "myapp";
-  version = "1.0.0";
-  src = ./.;
-  go = pkgs.go-bin.latest;
-
-  GOPROXY = "https://athens.mycompany.com";
-  GOSUMDB = "off";
-}
-```
+> [!CAUTION]
+> The `.netrc` file is copied into the Nix store, which is world-readable by default.
 
 ## Using with buildGoModule
 
