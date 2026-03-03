@@ -5,6 +5,13 @@ export HOME=$(mktemp -d)
 export GOPATH="$HOME/go"
 export GOCACHE="$HOME/go-cache"
 
+# If a netrc file was provided, copy it into $HOME/.netrc for authentication.
+# Both Go's HTTP client and git (via libcurl) read ~/.netrc for credentials
+# when accessing private module hosts.
+if [ -n "${netrcFile:-}" ] && [ -f "$netrcFile" ]; then
+  cp "$netrcFile" "$HOME/.netrc"
+fi
+
 # Download the module and get the directory path from JSON output.
 # This handles case-encoded paths correctly (e.g., BurntSushi -> !burnt!sushi).
 # Temporarily disable set -e so we can capture the exit code and print the
