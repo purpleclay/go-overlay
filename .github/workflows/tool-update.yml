@@ -42,17 +42,11 @@ jobs:
         with:
           token: ${{ secrets.token }}
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
         with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Cachix
-        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
-        with:
-          name: purpleclay
-          authToken: "${{ secrets.cachix-token }}"
-          useDaemon: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cachix-token: ${{ secrets.cachix-token }}
 
       - name: Detect Latest Version
         run: |
