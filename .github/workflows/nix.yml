@@ -31,16 +31,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31
-
-      - name: Setup Cachix
-        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
         with:
-          name: purpleclay
-          authToken: "${{ secrets.GH_CACHIX }}"
-          skipPush: true
-          useDaemon: false
+          cachix-token: ${{ secrets.GH_CACHIX }}
 
       - name: Run Alejandra
         run: nix develop -c alejandra --check .
@@ -55,16 +49,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31
-
-      - name: Setup Cachix
-        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
         with:
-          name: purpleclay
-          authToken: "${{ secrets.GH_CACHIX }}"
-          skipPush: true
-          useDaemon: false
+          cachix-token: ${{ secrets.GH_CACHIX }}
 
       - name: Run all checks
         run: nix run github:Mic92/nix-fast-build -- --skip-cached --no-nom --flake .#checks
@@ -86,16 +74,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31
-
-      - name: Setup Cachix
-        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
         with:
-          name: purpleclay
-          authToken: "${{ secrets.GH_CACHIX }}"
-          skipPush: true
-          useDaemon: false
+          cachix-token: ${{ secrets.GH_CACHIX }}
 
       - name: Build ${{ matrix.tool }}
         run: nix build '.#go.tools.${{ matrix.tool }}.latest'
@@ -110,16 +92,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31
-
-      - name: Setup Cachix
-        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
         with:
-          name: purpleclay
-          authToken: "${{ secrets.GH_CACHIX }}"
-          skipPush: true
-          useDaemon: false
+          cachix-token: ${{ secrets.GH_CACHIX }}
 
       - name: Build withDefaultTools
         run: nix build '.#go.withDefaultTools'
@@ -134,16 +110,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31
-
-      - name: Setup Cachix
-        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
         with:
-          name: purpleclay
-          authToken: "${{ secrets.GH_CACHIX }}"
-          skipPush: false
-          useDaemon: false
+          cachix-token: ${{ secrets.GH_CACHIX }}
+          push-to-cachix: "true"
 
       - name: Build Go Toolchain
         run: nix build
@@ -158,16 +129,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31
-
-      - name: Setup Cachix
-        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
         with:
-          name: purpleclay
-          authToken: "${{ secrets.GH_CACHIX }}"
-          skipPush: false
-          useDaemon: false
+          cachix-token: ${{ secrets.GH_CACHIX }}
+          push-to-cachix: "true"
 
       - name: Build goscrape
         run: nix build .#goscrape
@@ -182,16 +148,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31
-
-      - name: Setup Cachix
-        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
         with:
-          name: purpleclay
-          authToken: "${{ secrets.GH_CACHIX }}"
-          skipPush: false
-          useDaemon: false
+          cachix-token: ${{ secrets.GH_CACHIX }}
+          push-to-cachix: "true"
 
       - name: Build goscrapeproxy
         run: nix build .#goscrapeproxy
@@ -206,16 +167,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31
-
-      - name: Setup Cachix
-        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
         with:
-          name: purpleclay
-          authToken: "${{ secrets.GH_CACHIX }}"
-          skipPush: false
-          useDaemon: false
+          cachix-token: ${{ secrets.GH_CACHIX }}
+          push-to-cachix: "true"
 
       - name: Build go-vendor
         run: nix build .#govendor
@@ -230,16 +186,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31
-
-      - name: Setup Cachix
-        uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
         with:
-          name: purpleclay
-          authToken: "${{ secrets.GH_CACHIX }}"
-          skipPush: true
-          useDaemon: false
+          cachix-token: ${{ secrets.GH_CACHIX }}
 
       - name: Build and run in-tree vendor integration test
         run: |

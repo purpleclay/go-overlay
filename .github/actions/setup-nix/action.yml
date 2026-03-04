@@ -1,0 +1,31 @@
+name: Setup Nix
+description: Install Nix and optionally configure Cachix
+
+inputs:
+  github-token:
+    description: "GitHub token passed to install-nix-action"
+    required: false
+  cachix-token:
+    description: "Cachix auth token. If provided, Cachix is configured"
+    required: false
+  push-to-cachix:
+    description: "Whether to push store paths to Cachix"
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Install Nix
+      uses: cachix/install-nix-action@19effe9fe722874e6d46dd7182e4b8b7a43c4a99 # v31
+      with:
+        github_access_token: ${{ inputs.github-token }}
+
+    - name: Setup Cachix
+      if: inputs.cachix-token != ''
+      uses: cachix/cachix-action@3ba601ff5bbb07c7220846facfa2cd81eeee15a1 # v16
+      with:
+        name: purpleclay
+        authToken: ${{ inputs.cachix-token }}
+        skipPush: ${{ inputs.push-to-cachix != 'true' }}
+        useDaemon: false
