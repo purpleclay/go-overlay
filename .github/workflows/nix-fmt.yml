@@ -1,0 +1,38 @@
+name: nix-fmt
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "*.nix"
+      - "**/*.nix"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "*.nix"
+      - "**/*.nix"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  alejandra:
+    runs-on: ubuntu-24.04
+    if: github.actor != 'renovate[bot]'
+    name: check formatting
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          cachix-token: ${{ secrets.GH_CACHIX }}
+
+      - name: Run Alejandra
+        run: nix develop -c alejandra --check .

@@ -24,21 +24,6 @@ concurrency:
 permissions:
   contents: write
 jobs:
-  alejandra:
-    runs-on: ubuntu-24.04
-    if: github.actor != 'renovate[bot]'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
-        with:
-          cachix-token: ${{ secrets.GH_CACHIX }}
-
-      - name: Run Alejandra
-        run: nix develop -c alejandra --check .
-
   checks:
     runs-on: ${{ matrix.os }}
     name: checks / ${{ matrix.os }}
