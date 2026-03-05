@@ -101,10 +101,7 @@
       in
         with pkgs; {
           checks =
-            {
-              inherit pre-commit-check;
-            }
-            // libTests
+            libTests
             // integrationTests;
 
           devShells.default = mkShell {

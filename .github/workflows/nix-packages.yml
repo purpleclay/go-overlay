@@ -1,0 +1,132 @@
+name: nix-packages
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "goscrape.nix"
+      - "goscrapeproxy.nix"
+      - "govendor.nix"
+      - "cmd/**"
+      - "internal/**"
+      - "go.mod"
+      - "go.sum"
+      - "govendor.toml"
+      - "builder/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "goscrape.nix"
+      - "goscrapeproxy.nix"
+      - "govendor.nix"
+      - "cmd/**"
+      - "internal/**"
+      - "go.mod"
+      - "go.sum"
+      - "govendor.toml"
+      - "builder/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-24.04
+    name: detect changes
+    outputs:
+      shared: ${{ steps.changes.outputs.shared }}
+      goscrape: ${{ steps.changes.outputs.goscrape }}
+      goscrapeproxy: ${{ steps.changes.outputs.goscrapeproxy }}
+      govendor: ${{ steps.changes.outputs.govendor }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Detect changed packages
+        uses: dorny/paths-filter@668c092af3649c4b664c54e4b704aa46782f6f7c # v3
+        id: changes
+        with:
+          filters: |
+            shared:
+              - 'go.mod'
+              - 'go.sum'
+              - 'govendor.toml'
+              - 'internal/**'
+              - 'builder/**'
+            goscrape:
+              - 'goscrape.nix'
+              - 'cmd/goscrape/**'
+            goscrapeproxy:
+              - 'goscrapeproxy.nix'
+              - 'cmd/goscrapeproxy/**'
+            govendor:
+              - 'govendor.nix'
+              - 'cmd/govendor/**'
+
+  build-goscrape:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.goscrape == 'true' || needs.detect-changes.outputs.shared == 'true'
+    runs-on: ${{ matrix.os }}
+    name: build-goscrape / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          cachix-token: ${{ secrets.GH_CACHIX }}
+          push-to-cachix: "true"
+
+      - name: Build goscrape
+        run: nix build .#goscrape
+
+  build-goscrapeproxy:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.goscrapeproxy == 'true' || needs.detect-changes.outputs.shared == 'true'
+    runs-on: ${{ matrix.os }}
+    name: build-goscrapeproxy / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          cachix-token: ${{ secrets.GH_CACHIX }}
+          push-to-cachix: "true"
+
+      - name: Build goscrapeproxy
+        run: nix build .#goscrapeproxy
+
+  build-govendor:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.govendor == 'true' || needs.detect-changes.outputs.shared == 'true'
+    runs-on: ${{ matrix.os }}
+    name: build-govendor / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          cachix-token: ${{ secrets.GH_CACHIX }}
+          push-to-cachix: "true"
+
+      - name: Build govendor
+        run: nix build .#govendor
