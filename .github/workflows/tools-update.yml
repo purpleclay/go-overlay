@@ -1,0 +1,133 @@
+name: tools-update
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: "Tool to update (blank = all)"
+        required: false
+        type: choice
+        options:
+          - ""
+          - delve
+          - gofumpt
+          - golangci-lint
+          - gopls
+          - govulncheck
+          - staticcheck
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-24.04
+    name: setup
+    outputs:
+      matrix: ${{ steps.matrix.outputs.tools }}
+    steps:
+      - name: Build tool matrix
+        id: matrix
+        run: |
+          tools='[
+            { "name": "delve", "module": "github.com/go-delve/delve", "sub-packages": "cmd/dlv" },
+            { "name": "gofumpt", "module": "mvdan.cc/gofumpt", "sub-packages": "." },
+            { "name": "golangci-lint", "module": "github.com/golangci/golangci-lint/v2", "sub-packages": "cmd/golangci-lint" },
+            { "name": "gopls", "module": "golang.org/x/tools/gopls", "sub-packages": "." },
+            { "name": "govulncheck", "module": "golang.org/x/vuln", "sub-packages": "cmd/govulncheck" },
+            { "name": "staticcheck", "module": "honnef.co/go/tools", "sub-packages": "cmd/staticcheck" }
+          ]'
+
+          if [ -n "${{ inputs.tool }}" ]; then
+            tools=$(echo "$tools" | jq -c --arg name "${{ inputs.tool }}" '[.[] | select(.name == $name)]')
+          fi
+
+          echo "tools=$(echo "$tools" | jq -c)" >> "$GITHUB_OUTPUT"
+
+  update:
+    needs: setup
+    runs-on: ubuntu-24.04
+    name: update / ${{ matrix.tool.name }}
+    strategy:
+      matrix:
+        tool: ${{ fromJSON(needs.setup.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          token: ${{ secrets.GH_NSV }}
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cachix-token: ${{ secrets.GH_CACHIX }}
+
+      - name: Detect Latest Version
+        id: detect
+        run: |
+          version=$(nix run .#goscrapeproxy -- detect ${{ matrix.tool.module }})
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check and Generate Manifest
+        id: generate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_NSV }}
+        run: |
+          version="${{ steps.detect.outputs.version }}"
+          name="${{ matrix.tool.name }}"
+          manifest="manifests/${name}/${version#v}.nix"
+          branch="nix-tool-${name}-${version#v}"
+
+          if [ -f "$manifest" ]; then
+            echo "Manifest already exists for ${name} ${version}"
+            exit 0
+          fi
+
+          if gh pr list --head "$branch" --state open --json number --jq 'length' | grep -q '[1-9]'; then
+            echo "PR already exists for ${name} ${version}"
+            exit 0
+          fi
+
+          nix run .#goscrapeproxy -- generate ${{ matrix.tool.module }} \
+            --sub-packages ${{ matrix.tool.sub-packages }} \
+            --versions "${version}" \
+            --output "manifests/${name}"
+
+          echo "generated=true" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "manifest=${manifest}" >> "$GITHUB_OUTPUT"
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+      - name: GPG Import
+        if: steps.generate.outputs.generated == 'true'
+        env:
+          GPG_PRIVATE_KEY: "${{ secrets.GPG_PRIVATE_KEY }}"
+          GPG_PASSPHRASE: "${{ secrets.GPG_PASSPHRASE }}"
+        run: nix run github:purpleclay/gpg-import
+
+      - name: Create PR
+        if: steps.generate.outputs.generated == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_NSV }}
+        run: |
+          name="${{ matrix.tool.name }}"
+          version="${{ steps.generate.outputs.version }}"
+          manifest="${{ steps.generate.outputs.manifest }}"
+          branch="${{ steps.generate.outputs.branch }}"
+
+          git checkout -b "$branch"
+          git add "$manifest"
+          git commit -m "chore: generated nix manifest for ${name} ${version#v}"
+          git push -u origin "$branch"
+
+          gh pr create \
+            --title "chore: add ${name} ${version#v} manifest" \
+            --body "Auto-generated nix manifest for ${name} ${version}." \
+            --base main \
+            --head "$branch"
+
+          gh pr merge --auto --squash "$branch"
