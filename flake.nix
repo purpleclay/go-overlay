@@ -33,6 +33,13 @@
       overlays.default = overlay;
       overlays.go-overlay = overlay;
 
+      templates = {
+        default = {
+          path = ./templates/default;
+          description = "A basic Go application using go-overlay";
+        };
+      };
+
       lib = {
         mkGoBin = pkgs:
           import ./lib {
@@ -50,7 +57,10 @@
 
         devBuildInputs = with pkgs; [
           alejandra
-          ((go-bin.fromGoMod ./go.mod).withTools ["gofumpt" "golangci-lint"])
+          ((go-bin.fromGoMod ./go.mod).withTools [
+            "gofumpt"
+            "golangci-lint"
+          ])
           nil
           self.packages.${system}.govendor
           typos
@@ -76,6 +86,7 @@
               excludes = [
                 "testdata/"
                 "test/"
+                "templates/"
               ];
               pass_filenames = true;
             };
