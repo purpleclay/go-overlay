@@ -4,6 +4,10 @@ on:
     - cron: "0 */4 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   go-update:
     runs-on: ubuntu-24.04
@@ -27,31 +31,47 @@ jobs:
           PREV=$(nix run .#goscrape -- detect "$PREV_MINOR")
           echo "GO_VERSIONS=$LATEST $PREV" >> $GITHUB_ENV
 
-      - name: Check and Generate Manifests
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          for version in ${{ env.GO_VERSIONS }}; do
-            if [ ! -f "manifests/go/${version}.nix" ]; then
-              nix run .#goscrape -- generate "$version" --output manifests/go
-              echo "MANIFESTS_GENERATED=true" >> $GITHUB_ENV
-            fi
-          done
-
       - name: GPG Import
         env:
           GPG_PRIVATE_KEY: "${{ secrets.GPG_PRIVATE_KEY }}"
           GPG_PASSPHRASE: "${{ secrets.GPG_PASSPHRASE }}"
         run: nix run github:purpleclay/gpg-import
 
-      - name: Commit and Push Manifests
-        if: ${{ env.MANIFESTS_GENERATED == 'true' }}
+      - name: Generate Manifests and Create PRs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_NSV }}
         run: |
           for version in ${{ env.GO_VERSIONS }}; do
             manifest="manifests/go/${version}.nix"
-            if git status --porcelain "$manifest" | grep -q .; then
-              git add "$manifest"
-              git commit -m "chore: generated nix manifest for go release ${version}"
+
+            if [ -f "$manifest" ]; then
+              echo "Manifest already exists for ${version}"
+              continue
             fi
+
+            branch="nix-go-${version}"
+
+            # Skip if a PR already exists for this version
+            if gh pr list --head "$branch" --state open --json number --jq 'length' | grep -q '[1-9]'; then
+              echo "PR already exists for ${version}"
+              continue
+            fi
+
+            nix run .#goscrape -- generate "$version" --output manifests/go
+
+            git checkout -b "$branch"
+            git add "$manifest"
+            git commit -m "chore: generated nix manifest for go release ${version}"
+            git push -u origin "$branch"
+
+            gh pr create \
+              --title "chore: add go ${version} manifest" \
+              --body "Auto-generated nix manifest for Go release ${version}." \
+              --base main \
+              --head "$branch"
+
+            gh pr merge --auto --squash "$branch"
+
+            # Return to main for the next version
+            git checkout main
           done
-          git push
