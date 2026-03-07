@@ -21,29 +21,6 @@ permissions:
   contents: read
   pull-requests: read
 jobs:
-  gofumpt:
-    runs-on: ubuntu-24.04
-    if: github.actor != 'renovate[bot]'
-    name: gofumpt
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          cachix-token: ${{ secrets.GH_CACHIX }}
-
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Format Check
-        run: nix develop -c gofumpt -l .
-
   golangci-lint:
     runs-on: ubuntu-24.04
     if: github.actor != 'renovate[bot]'
@@ -57,12 +34,6 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cachix-token: ${{ secrets.GH_CACHIX }}
-
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
-        with:
-          go-version-file: go.mod
-          cache: true
 
       - name: Lint
         run: nix develop -c golangci-lint run
@@ -80,12 +51,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cachix-token: ${{ secrets.GH_CACHIX }}
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
       - name: Run tests
         run: nix develop -c go test ./...
 
@@ -101,12 +66,6 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cachix-token: ${{ secrets.GH_CACHIX }}
-
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
-        with:
-          go-version-file: go.mod
-          cache: true
 
       - name: Build
         run: nix develop -c go build ./...

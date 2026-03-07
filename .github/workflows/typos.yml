@@ -3,9 +3,25 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "LICENSE"
+      - ".github/stale.yml"
+      - ".github/renovate.json"
+      - ".github/CODEOWNERS"
+      - ".zed/**"
+      - "manifests/**"
+      - "CODE_OF_CONDUCT.md"
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - "LICENSE"
+      - ".github/stale.yml"
+      - ".github/renovate.json"
+      - ".github/CODEOWNERS"
+      - ".zed/**"
+      - "manifests/**"
+      - "CODE_OF_CONDUCT.md"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

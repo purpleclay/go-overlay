@@ -4,13 +4,11 @@ on:
     branches:
       - main
     paths:
-      - "*.nix"
       - "**/*.nix"
   pull_request:
     branches:
       - main
     paths:
-      - "*.nix"
       - "**/*.nix"
 
 concurrency:
