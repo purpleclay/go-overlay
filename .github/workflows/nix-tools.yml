@@ -39,46 +39,67 @@ jobs:
     runs-on: ubuntu-24.04
     name: detect changes
     outputs:
+      tools: ${{ steps.filter.outputs.tools }}
+      has-tools: ${{ steps.filter.outputs.has-tools }}
       shared: ${{ steps.changes.outputs.shared }}
-      delve: ${{ steps.changes.outputs.delve }}
-      gofumpt: ${{ steps.changes.outputs.gofumpt }}
-      golangci-lint: ${{ steps.changes.outputs.golangci-lint }}
-      gopls: ${{ steps.changes.outputs.gopls }}
-      govulncheck: ${{ steps.changes.outputs.govulncheck }}
-      staticcheck: ${{ steps.changes.outputs.staticcheck }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Detect changed tools
+      - name: Generate filters
+        id: gen-filters
+        run: |
+          tools='["delve","gofumpt","golangci-lint","gopls","govulncheck","staticcheck"]'
+
+          filters="shared:"
+          filters="$filters
+            - 'lib/tool-manifests.nix'
+            - 'lib/mk-go-tool.nix'
+            - 'lib/mk-tool-set.nix'"
+          for name in $(echo "$tools" | jq -r '.[]'); do
+            filters="$filters
+          ${name}:
+            - 'manifests/${name}/**'"
+          done
+
+          {
+            echo "filters<<EOF"
+            echo "$filters"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "tools=$tools" >> "$GITHUB_OUTPUT"
+
+      - name: Detect changed paths
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
         id: changes
         with:
-          filters: |
-            shared:
-              - 'lib/tool-manifests.nix'
-              - 'lib/mk-go-tool.nix'
-              - 'lib/mk-tool-set.nix'
-            delve:
-              - 'manifests/delve/**'
-            gofumpt:
-              - 'manifests/gofumpt/**'
-            golangci-lint:
-              - 'manifests/golangci-lint/**'
-            gopls:
-              - 'manifests/gopls/**'
-            govulncheck:
-              - 'manifests/govulncheck/**'
-            staticcheck:
-              - 'manifests/staticcheck/**'
+          filters: ${{ steps.gen-filters.outputs.filters }}
 
-  build-delve:
+      - name: Filter changed tools
+        id: filter
+        run: |
+          all_tools='${{ steps.gen-filters.outputs.tools }}'
+          changes='${{ steps.changes.outputs.changes }}'
+          shared=$(echo "$changes" | jq 'any(. == "shared")')
+
+          if [ "$shared" == "true" ]; then
+            tools="$all_tools"
+          else
+            tools=$(echo "$all_tools" | jq -c --argjson changes "$changes" \
+              '[.[] | select(. as $n | $changes | any(. == $n))]')
+          fi
+
+          echo "tools=$tools" >> "$GITHUB_OUTPUT"
+          echo "has-tools=$(echo "$tools" | jq 'length > 0')" >> "$GITHUB_OUTPUT"
+
+  build:
     needs: detect-changes
-    if: needs.detect-changes.outputs.delve == 'true' || needs.detect-changes.outputs.shared == 'true'
+    if: needs.detect-changes.outputs.has-tools == 'true'
     runs-on: ${{ matrix.os }}
-    name: build / delve / ${{ matrix.os }}
+    name: build / ${{ matrix.tool }} / ${{ matrix.os }}
     strategy:
       matrix:
+        tool: ${{ fromJSON(needs.detect-changes.outputs.tools) }}
         os: [ubuntu-24.04, macos-15]
     steps:
       - name: Checkout
@@ -89,108 +110,8 @@ jobs:
         with:
           cachix-token: ${{ secrets.GH_CACHIX }}
 
-      - name: Build delve
-        run: nix build '.#go.tools.delve.latest'
-
-  build-gofumpt:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.gofumpt == 'true' || needs.detect-changes.outputs.shared == 'true'
-    runs-on: ${{ matrix.os }}
-    name: build / gofumpt / ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-24.04, macos-15]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
-        with:
-          cachix-token: ${{ secrets.GH_CACHIX }}
-
-      - name: Build gofumpt
-        run: nix build '.#go.tools.gofumpt.latest'
-
-  build-golangci-lint:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.golangci-lint == 'true' || needs.detect-changes.outputs.shared == 'true'
-    runs-on: ${{ matrix.os }}
-    name: build / golangci-lint / ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-24.04, macos-15]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
-        with:
-          cachix-token: ${{ secrets.GH_CACHIX }}
-
-      - name: Build golangci-lint
-        run: nix build '.#go.tools.golangci-lint.latest'
-
-  build-gopls:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.gopls == 'true' || needs.detect-changes.outputs.shared == 'true'
-    runs-on: ${{ matrix.os }}
-    name: build / gopls / ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-24.04, macos-15]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
-        with:
-          cachix-token: ${{ secrets.GH_CACHIX }}
-
-      - name: Build gopls
-        run: nix build '.#go.tools.gopls.latest'
-
-  build-govulncheck:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.govulncheck == 'true' || needs.detect-changes.outputs.shared == 'true'
-    runs-on: ${{ matrix.os }}
-    name: build / govulncheck / ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-24.04, macos-15]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
-        with:
-          cachix-token: ${{ secrets.GH_CACHIX }}
-
-      - name: Build govulncheck
-        run: nix build '.#go.tools.govulncheck.latest'
-
-  build-staticcheck:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.staticcheck == 'true' || needs.detect-changes.outputs.shared == 'true'
-    runs-on: ${{ matrix.os }}
-    name: build / staticcheck / ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-24.04, macos-15]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
-        with:
-          cachix-token: ${{ secrets.GH_CACHIX }}
-
-      - name: Build staticcheck
-        run: nix build '.#go.tools.staticcheck.latest'
+      - name: Build ${{ matrix.tool }}
+        run: nix build '.#go.tools.${{ matrix.tool }}.latest'
 
   build-with-default-tools:
     needs: detect-changes
