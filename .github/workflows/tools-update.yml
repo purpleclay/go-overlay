@@ -1,7 +1,7 @@
 name: tools-update
 on:
   schedule:
-    - cron: "0 */4 * * *"
+    - cron: "0 */6 * * *"
   workflow_dispatch:
     inputs:
       tool:
