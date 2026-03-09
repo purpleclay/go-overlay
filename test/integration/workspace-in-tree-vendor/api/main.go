@@ -1,11 +1,14 @@
 package main
 
 import (
+	"fmt"
+
 	"example.com/shared"
-	"github.com/fatih/color"
+	"github.com/rs/xid"
 )
 
 func main() {
 	msg := shared.Hello()
-	color.Green(msg)
+	id := xid.New()
+	fmt.Println(msg, id.String())
 }
