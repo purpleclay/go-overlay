@@ -34,4 +34,10 @@
   integration-workspace-no-gowork = import ./workspace-no-gowork {
     inherit pkgs go;
   };
+  integration-in-tree-vendor = import ./in-tree-vendor {
+    inherit pkgs go;
+  };
+  integration-workspace-in-tree-vendor = import ./workspace-in-tree-vendor {
+    inherit pkgs go;
+  };
 }

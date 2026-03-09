@@ -1,0 +1,6 @@
+## workspace
+# example.com/shared v0.0.0 => ./shared
+## explicit; go 1.22
+# github.com/rs/xid v1.6.0
+## explicit; go 1.16
+github.com/rs/xid

@@ -1,7 +1,12 @@
 package main
 
-import "github.com/fatih/color"
+import (
+	"fmt"
+
+	"github.com/rs/xid"
+)
 
 func main() {
-	color.Green("in-tree vendor test")
+	id := xid.New()
+	fmt.Println("in-tree vendor test:", id.String())
 }
