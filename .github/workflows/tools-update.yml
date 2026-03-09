@@ -121,7 +121,7 @@ jobs:
 
           git checkout -b "$branch"
           git add "$manifest"
-          git commit -m "chore: generated nix manifest for ${name} ${version#v}"
+          git commit -s -m "chore: generated nix manifest for ${name} ${version#v}"
           git push -u origin "$branch"
 
           gh pr create \
