@@ -34,6 +34,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cachix-token: ${{ secrets.GH_CACHIX }}
+          push-to-cachix: "true"
 
       - name: Lint
         run: nix develop -c golangci-lint run
@@ -50,9 +51,10 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cachix-token: ${{ secrets.GH_CACHIX }}
+          push-to-cachix: "true"
 
       - name: Run tests
-        run: nix develop -c go test ./...
+        run: nix develop -c go test -short -race -vet=off -shuffle=on ./...
 
   build:
     runs-on: ubuntu-24.04
@@ -66,6 +68,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cachix-token: ${{ secrets.GH_CACHIX }}
+          push-to-cachix: "true"
 
       - name: Build
         run: nix develop -c go build ./...

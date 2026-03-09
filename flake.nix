@@ -97,7 +97,10 @@
           pkgs.go-bin.versions;
 
         libTests = import ./test {inherit pkgs;};
-        integrationTests = import ./test/integration {inherit pkgs;};
+        integrationTests = import ./test/integration {
+          inherit pkgs;
+          go = pkgs.go-bin.fromGoMod ./go.mod;
+        };
       in
         with pkgs; {
           checks =
