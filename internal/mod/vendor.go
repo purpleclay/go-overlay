@@ -285,16 +285,15 @@ func (v *Vendor) processModFile(path string) vendorResult {
 		return resultError(path, err)
 	}
 
-	if !goMod.HasDependencies() {
-		return resultSkipped(path)
-	}
-
 	vendorPath := filepath.Join(goMod.Dir(), vendorFile)
 	existingData, err := os.ReadFile(vendorPath)
 
 	extraPlatforms := v.opts.extraPlatforms
 
 	if os.IsNotExist(err) {
+		if !goMod.HasDependencies() {
+			return resultSkipped(path)
+		}
 		if v.opts.detectDrift {
 			return resultMissing(path)
 		}
