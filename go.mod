@@ -9,8 +9,8 @@ require (
 	github.com/muesli/reflow v0.3.0
 	github.com/nix-community/go-nix v0.0.0-20250101154619-4bdde671e0a1
 	github.com/purpleclay/chomp v0.7.0
-	github.com/purpleclay/x/cli v0.7.0
-	github.com/purpleclay/x/theme v0.3.0
+	github.com/purpleclay/x/cli v0.7.1
+	github.com/purpleclay/x/theme v0.3.1
 	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
@@ -20,7 +20,7 @@ require (
 )
 
 require (
-	charm.land/lipgloss/v2 v2.0.1 // indirect
+	charm.land/lipgloss/v2 v2.0.2 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/carapace-sh/carapace v1.11.2 // indirect
 	github.com/carapace-sh/carapace-shlex v1.1.1 // indirect
