@@ -1,5 +1,5 @@
-charm.land/lipgloss/v2 v2.0.1 h1:6Xzrn49+Py1Um5q/wZG1gWgER2+7dUyZ9XMEufqPSys=
-charm.land/lipgloss/v2 v2.0.1/go.mod h1:KjPle2Qd3YmvP1KL5OMHiHysGcNwq6u83MUjYkFvEkM=
+charm.land/lipgloss/v2 v2.0.2 h1:xFolbF8JdpNkM2cEPTfXEcW1p6NRzOWTSamRfYEw8cs=
+charm.land/lipgloss/v2 v2.0.2/go.mod h1:KjPle2Qd3YmvP1KL5OMHiHysGcNwq6u83MUjYkFvEkM=
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/aymanbagabas/go-osc52/v2 v2.0.1 h1:HwpRHbFMcZLEVr42D4p7XBqjyuxQH5SMiErDT4WkJ2k=
@@ -77,10 +77,10 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/purpleclay/chomp v0.7.0 h1:0uvN0kORhGsoH+SRuqytPBId2++A3PGEJaIlEpiPYAM=
 github.com/purpleclay/chomp v0.7.0/go.mod h1:LFdzw8cqsEPc1W9KtjhcmlKBWI4t3XTve4iSw5IH22c=
-github.com/purpleclay/x/cli v0.7.0 h1:0cNUbJOUuSyVpDKcfPzqjW8xv1Kq9TQmYXVN3/0q3OI=
-github.com/purpleclay/x/cli v0.7.0/go.mod h1:dMEFPossfEv7rQnkisLKs9/CAMLWlKWg0NgLhfHi5yg=
-github.com/purpleclay/x/theme v0.3.0 h1:/EYd8TrZAO/bAfEc1uRYbHpAuK+kJrhiDlF20gs5GcY=
-github.com/purpleclay/x/theme v0.3.0/go.mod h1:A4ed6bUDJoUgZvYbKVh/VxVbcnHNYmGkvW6x+Osn7XQ=
+github.com/purpleclay/x/cli v0.7.1 h1:RcTwALQXRARzAGoCU4KcVgJ8p3HwER+k0UVw1oXfqns=
+github.com/purpleclay/x/cli v0.7.1/go.mod h1:gFY1GZ87P+Vk1N3lOmB3APtOlQnXaDeZggNyspJCRv8=
+github.com/purpleclay/x/theme v0.3.1 h1:tZvO59TDGdpoK+Vlfe1J3f71u3D2HD2JcsZCDBDmMyc=
+github.com/purpleclay/x/theme v0.3.1/go.mod h1:XstI/vTBjTdMWdIXuJJDpzTpmw7tSXez14kBdXfq6Uw=
 github.com/rivo/uniseg v0.1.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=
