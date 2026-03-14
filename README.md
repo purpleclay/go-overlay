@@ -22,6 +22,7 @@ A Nix overlay for Go development. Pure[^1], reproducible[^2], and auto-updated[^
 - [Why it exists?](#why-it-exists)
 - [Quick Start](#quick-start)
 - [Installation](#installation)
+- [Templates](#templates)
 - [Library Functions](#library-functions)
 - [Go Tools](#go-tools)
   - [`withTools`](#withtools)
@@ -225,6 +226,22 @@ let
   };
 in
 pkgs.go-bin.latest
+```
+
+## Templates
+
+go-overlay provides a Nix flake template to quickly bootstrap new Go projects with a dev shell, builder, and vendored dependencies pre-configured.
+
+Create a new project directory from the template:
+
+```bash
+nix flake new -t github:purpleclay/go-overlay my-app
+```
+
+Or initialize a template inside an existing directory:
+
+```bash
+nix flake init -t github:purpleclay/go-overlay
 ```
 
 ## Library Functions
