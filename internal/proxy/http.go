@@ -12,7 +12,9 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-const baseURL = "https://proxy.golang.org"
+const defaultBaseURL = "https://proxy.golang.org"
+
+var baseURL = defaultBaseURL
 
 var httpClient = &http.Client{
 	Timeout: 5 * time.Second,
