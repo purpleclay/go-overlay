@@ -7,6 +7,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func latestVersion(versions []string, module string) (string, error) {
+	if len(versions) == 0 {
+		return "", fmt.Errorf("no versions found for module %s", module)
+	}
+	return versions[len(versions)-1], nil
+}
+
 func newDetectCmd() *cobra.Command {
 	var prefix string
 
@@ -34,11 +41,12 @@ func newDetectCmd() *cobra.Command {
 				return err
 			}
 
-			if len(versions) == 0 {
-				return fmt.Errorf("no versions found for module %s", args[0])
+			latest, err := latestVersion(versions, args[0])
+			if err != nil {
+				return err
 			}
 
-			fmt.Fprint(cmd.OutOrStdout(), versions[len(versions)-1])
+			fmt.Fprint(cmd.OutOrStdout(), latest)
 			return nil
 		},
 	}
