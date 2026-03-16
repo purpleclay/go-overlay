@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"html/template"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/purpleclay/chomp"
 	"github.com/purpleclay/go-overlay/internal/github"
+	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/purpleclay/go-overlay/internal/scrape"
+	"github.com/purpleclay/go-overlay/internal/version"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
 )
@@ -176,22 +177,15 @@ func newGenerateCmd() *cobra.Command {
 				versions = append(versions, latestVersion)
 			} else {
 				for _, arg := range args {
-					version := arg
-					if strings.HasSuffix(arg, "*") {
-						allVersions, err := listVersions(page, strings.TrimSuffix(version, "*"))
+					if prefix, ok := version.TrimGlob(arg); ok {
+						allVersions, err := listVersions(page, prefix)
 						if err != nil {
 							return err
 						}
 						versions = append(versions, allVersions...)
 					} else {
-						versions = append(versions, version)
+						versions = append(versions, arg)
 					}
-				}
-			}
-
-			if outputDir != "" {
-				if err := os.MkdirAll(outputDir, 0o755); err != nil {
-					return fmt.Errorf("failed to create output directory: %w", err)
 				}
 			}
 
@@ -224,14 +218,8 @@ func newGenerateCmd() *cobra.Command {
 			})
 
 			for _, s := range results {
-				if outputDir != "" {
-					filename := s.Filename()
-					path := filepath.Join(outputDir, filename)
-					if err := os.WriteFile(path, []byte(s.String()), 0o644); err != nil {
-						return err
-					}
-				} else {
-					fmt.Fprintf(cmd.OutOrStdout(), "%s", s.String())
+				if err := manifest.Write(s, outputDir, cmd.OutOrStdout()); err != nil {
+					return err
 				}
 			}
 

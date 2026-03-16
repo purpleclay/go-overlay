@@ -16,8 +16,10 @@ import (
 	"time"
 
 	"github.com/nix-community/go-nix/pkg/nar"
+	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/purpleclay/go-overlay/internal/mod"
 	"github.com/purpleclay/go-overlay/internal/proxy"
+	"github.com/purpleclay/go-overlay/internal/version"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
 )
@@ -199,15 +201,16 @@ func resolveVersions(module string, patterns []string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(all) == 0 {
-			return nil, fmt.Errorf("no versions found for module %s", module)
+		latest, err := version.Latest(all, module)
+		if err != nil {
+			return nil, err
 		}
-		return all[len(all)-1:], nil
+		return []string{latest}, nil
 	}
 
 	var versions []string
 	for _, pattern := range patterns {
-		if before, ok := strings.CutSuffix(pattern, "*"); ok {
+		if before, ok := version.TrimGlob(pattern); ok {
 			prefix := strings.TrimPrefix(before, "v")
 			matched, err := proxy.ListVersions(module, prefix)
 			if err != nil {
@@ -263,12 +266,6 @@ func newGenerateCmd() *cobra.Command {
 				return err
 			}
 
-			if outputDir != "" {
-				if err := os.MkdirAll(outputDir, 0o755); err != nil {
-					return fmt.Errorf("failed to create output directory: %w", err)
-				}
-			}
-
 			p := pool.NewWithResults[*toolManifest]().WithMaxGoroutines(4).WithErrors()
 
 			for _, ver := range versions {
@@ -287,13 +284,8 @@ func newGenerateCmd() *cobra.Command {
 			})
 
 			for _, m := range results {
-				if outputDir != "" {
-					path := filepath.Join(outputDir, m.Filename())
-					if err := os.WriteFile(path, []byte(m.String()), 0o644); err != nil {
-						return err
-					}
-				} else {
-					fmt.Fprint(cmd.OutOrStdout(), m.String())
+				if err := manifest.Write(m, outputDir, cmd.OutOrStdout()); err != nil {
+					return err
 				}
 			}
 
