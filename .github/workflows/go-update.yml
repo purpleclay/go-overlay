@@ -26,9 +26,9 @@ jobs:
 
       - name: Detect Latest Go Versions
         run: |
-          LATEST=$(nix run .#goscrape -- detect)
+          LATEST=$(nix run .#goscrape -- go-dev detect)
           PREV_MINOR="1.$(($(echo "$LATEST" | cut -d. -f2) - 1))"
-          PREV=$(nix run .#goscrape -- detect "$PREV_MINOR")
+          PREV=$(nix run .#goscrape -- go-dev detect "$PREV_MINOR")
           echo "GO_VERSIONS=$LATEST $PREV" >> $GITHUB_ENV
 
       - name: GPG Import
@@ -57,7 +57,7 @@ jobs:
               continue
             fi
 
-            nix run .#goscrape -- generate "$version" --output manifests/go
+            nix run .#goscrape -- go-dev generate "$version" --output manifests/go
 
             git checkout -b "$branch"
             git add "$manifest"
