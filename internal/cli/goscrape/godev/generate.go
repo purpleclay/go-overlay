@@ -1,4 +1,4 @@
-package goscrape
+package godev
 
 import (
 	"bytes"
@@ -146,19 +146,19 @@ func newGenerateCmd() *cobra.Command {
 		`,
 		Example: `
 		# Generate manifest for the latest available version and write to stdout
-		goscrape generate
+		goscrape go-dev generate
 
 		# Generate manifest for a specified version of Golang
-		goscrape generate go1.20.13
+		goscrape go-dev generate go1.20.13
 
   		# Generate manifests for multiple versions
-    	goscrape generate 1.20.13 1.21.6 1.22.0
+    	goscrape go-dev generate 1.20.13 1.21.6 1.22.0
 
      	# Generate manifests for all minor versions of a major version
-      	goscrape generate 1.23*
+      	goscrape go-dev generate 1.23*
 
        	# Generate manifests and write to directory
-        goscrape generate 1.21.6 --output ./manifests/go
+        goscrape go-dev generate 1.21.6 --output ./manifests/go
         `,
 		SilenceUsage:  true,
 		SilenceErrors: true,

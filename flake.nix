@@ -133,11 +133,6 @@
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
                 commit = self.rev or "unknown";
               };
-              goscrapeproxy = import ./goscrapeproxy.nix {
-                inherit (pkgs) buildGoApplication;
-                go = pkgs.go-bin.fromGoModStrict ./go.mod;
-                commit = self.rev or "unknown";
-              };
               govendor = import ./govendor.nix {
                 inherit (pkgs) buildGoApplication;
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
@@ -160,17 +155,6 @@
             program = "${self.packages.${system}.goscrape}/bin/goscrape";
             meta = {
               description = "A tool for scraping Go toolchains from https://go.dev/dl/";
-              homepage = "https://github.com/purpleclay/go-overlay";
-              license = licenses.mit;
-              maintainers = with lib.maintainers; [purpleclay];
-            };
-          };
-
-          apps.goscrapeproxy = {
-            type = "app";
-            program = "${self.packages.${system}.goscrapeproxy}/bin/goscrapeproxy";
-            meta = {
-              description = "A tool for scraping Go tool releases from the Go module proxy";
               homepage = "https://github.com/purpleclay/go-overlay";
               license = licenses.mit;
               maintainers = with lib.maintainers; [purpleclay];

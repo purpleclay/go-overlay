@@ -1,4 +1,4 @@
-package goscrapeproxy
+package modproxy
 
 import (
 	"fmt"
@@ -9,23 +9,33 @@ import (
 )
 
 func newDetectCmd() *cobra.Command {
-	var prefix string
+	var (
+		prefix string
+		all    bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "detect MODULE",
 		Short: "Detect the latest version of a Go module from the module proxy",
 		Long: `
-		Queries the Go module proxy (https://proxy.golang.org) and detects the
-		latest semver-tagged version of the given module. An optional prefix flag
-		can restrict detection to a specific version line.
+		Queries the Go module proxy (https://proxy.golang.org) and detects versions
+		of the given module. By default, returns the latest semver-tagged version.
+		Use --all to list all available versions. An optional prefix flag can restrict
+		results to a specific version line.
 		`,
 		Example: `
 		# Detect the latest version of govulncheck
-  		goscrapeproxy detect golang.org/x/vuln
+		goscrape mod-proxy detect golang.org/x/vuln
 
-    	# Detect the latest 1.0.x version
-     	goscrapeproxy detect golang.org/x/vuln --prefix 1.0
-      	`,
+		# Detect the latest 1.0.x version
+		goscrape mod-proxy detect golang.org/x/vuln --prefix 1.0
+
+		# List all versions of govulncheck
+		goscrape mod-proxy detect golang.org/x/vuln --all
+
+		# List all 1.1.x versions
+		goscrape mod-proxy detect golang.org/x/vuln --prefix 1.1 --all
+		`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.ExactArgs(1),
@@ -33,6 +43,13 @@ func newDetectCmd() *cobra.Command {
 			versions, err := proxy.ListVersions(args[0], prefix)
 			if err != nil {
 				return err
+			}
+
+			if all {
+				for _, v := range versions {
+					fmt.Fprintln(cmd.OutOrStdout(), v)
+				}
+				return nil
 			}
 
 			latest, err := version.Latest(versions, args[0])
@@ -46,5 +63,6 @@ func newDetectCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&prefix, "prefix", "p", "", "filter versions by prefix (e.g. 1.1)")
+	cmd.Flags().BoolVar(&all, "all", false, "list all available versions instead of just the latest")
 	return cmd
 }

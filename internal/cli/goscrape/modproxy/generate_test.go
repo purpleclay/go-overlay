@@ -1,4 +1,4 @@
-package goscrapeproxy
+package modproxy
 
 import (
 	"testing"

@@ -1,4 +1,4 @@
-package goscrape
+package godev
 
 import (
 	"os"

@@ -5,7 +5,6 @@ on:
       - main
     paths:
       - "goscrape.nix"
-      - "goscrapeproxy.nix"
       - "govendor.nix"
       - "cmd/**"
       - "internal/**"
@@ -18,7 +17,6 @@ on:
       - main
     paths:
       - "goscrape.nix"
-      - "goscrapeproxy.nix"
       - "govendor.nix"
       - "cmd/**"
       - "internal/**"
@@ -41,7 +39,6 @@ jobs:
     outputs:
       shared: ${{ steps.changes.outputs.shared }}
       goscrape: ${{ steps.changes.outputs.goscrape }}
-      goscrapeproxy: ${{ steps.changes.outputs.goscrapeproxy }}
       govendor: ${{ steps.changes.outputs.govendor }}
     steps:
       - name: Checkout
@@ -61,9 +58,6 @@ jobs:
             goscrape:
               - 'goscrape.nix'
               - 'cmd/goscrape/**'
-            goscrapeproxy:
-              - 'goscrapeproxy.nix'
-              - 'cmd/goscrapeproxy/**'
             govendor:
               - 'govendor.nix'
               - 'cmd/govendor/**'
@@ -88,27 +82,6 @@ jobs:
 
       - name: Build goscrape
         run: nix build .#goscrape
-
-  build-goscrapeproxy:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.goscrapeproxy == 'true' || needs.detect-changes.outputs.shared == 'true'
-    runs-on: ${{ matrix.os }}
-    name: build-goscrapeproxy / ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-24.04, macos-15]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
-        with:
-          cachix-token: ${{ secrets.GH_CACHIX }}
-          push-to-cachix: "true"
-
-      - name: Build goscrapeproxy
-        run: nix build .#goscrapeproxy
 
   build-govendor:
     needs: detect-changes
