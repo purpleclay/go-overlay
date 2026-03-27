@@ -350,9 +350,18 @@ func (f *GoModFile) resolveLocalModules(pkgsByMod map[string][]string) ([]GoModu
 				return GoModule{}, fmt.Errorf("failed to resolve local module path %s: %w", repl.LocalPath, err)
 			}
 
+			tracked, err := gitTrackedFiles(localDir)
+			if err != nil {
+				return GoModule{}, fmt.Errorf("failed to list git tracked files for local module %s: %w", repl.LocalPath, err)
+			}
+
 			h := sha256.New()
 			if err := nar.DumpPathFilter(h, localDir, func(path string, _ nar.NodeType) bool {
-				return strings.ToLower(filepath.Base(path)) != ".ds_store"
+				if strings.ToLower(filepath.Base(path)) == ".ds_store" {
+					return false
+				}
+				_, ok := tracked[path]
+				return ok
 			}); err != nil {
 				return GoModule{}, fmt.Errorf("failed to hash local module %s: %w", repl.LocalPath, err)
 			}
@@ -386,4 +395,27 @@ func (f *GoModFile) resolveLocalModules(pkgsByMod map[string][]string) ([]GoModu
 	}
 
 	return p.Wait()
+}
+
+func gitTrackedFiles(dir string) (map[string]struct{}, error) {
+	out, err := exec([]string{"git", "ls-files"}, dir)
+	if err != nil {
+		return nil, err
+	}
+
+	tracked := make(map[string]struct{})
+	tracked[dir] = struct{}{}
+
+	for rel := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
+		if rel == "" {
+			continue
+		}
+		abs := filepath.Join(dir, rel)
+		tracked[abs] = struct{}{}
+		for parent := filepath.Dir(abs); parent != dir; parent = filepath.Dir(parent) {
+			tracked[parent] = struct{}{}
+		}
+	}
+
+	return tracked, nil
 }
