@@ -28,6 +28,10 @@ func TestManifestWriteTo(t *testing.T) {
 			name: "local-replace",
 			dir:  "testdata/local-replace",
 		},
+		{
+			name: "remote-replace",
+			dir:  "testdata/remote-replace",
+		},
 	}
 
 	for _, tt := range tests {
