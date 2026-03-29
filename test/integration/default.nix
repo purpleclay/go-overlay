@@ -17,6 +17,9 @@
   integration-local-replace-external = import ./local-replace-external {
     inherit pkgs go;
   };
+  integration-remote-replace = import ./remote-replace {
+    inherit pkgs go;
+  };
   integration-stdlib-only = import ./stdlib-only {
     inherit pkgs go;
   };

@@ -68,9 +68,14 @@
 
   # Generate modules.txt entry for a single module
   mkModuleEntry = goPackagePath: meta: let
+    # A remote path replacement has replaced set to a *different* module path.
+    # Local replacements also set replaced (to the same path) alongside local.
+    isRemoteReplace = (meta ? replaced) && meta.replaced != goPackagePath;
     header =
       if meta ? local
       then "# ${goPackagePath} ${meta.version} => ${meta.local}"
+      else if isRemoteReplace
+      then "# ${goPackagePath} ${meta.version} => ${meta.replaced} ${meta.version}"
       else "# ${goPackagePath} ${meta.version}";
     explicit =
       if meta.go or "" != ""
@@ -139,12 +144,19 @@
     remoteModules = lib.filterAttrs (_: meta: !(meta ? local)) modules;
     localModules = lib.filterAttrs (_: meta: meta ? local) modules;
 
-    # Fetch remote modules only
+    # Fetch remote modules only.
+    # For remote path replacements (replace A => B version), govendor hashes the
+    # replacement module B, so we must fetch B — not A — to match the stored hash.
+    # The result is still keyed by the original path A so it lands in vendor/A/.
     sources =
       mapAttrs (
         goPackagePath: meta:
           fetchGoModule {
-            inherit goPackagePath go netrcFile;
+            goPackagePath =
+              if (meta ? replaced) && meta.replaced != goPackagePath
+              then meta.replaced
+              else goPackagePath;
+            inherit go netrcFile;
             inherit (meta) version hash;
           }
       )
@@ -161,6 +173,12 @@
     # ## explicit; go X.Y
     # package/path1
     # # module/path => ./local/path
+    #
+    # Format for remote path replacements (Go requires both lines):
+    # # module/path version => replacement/path version
+    # ## explicit; go X.Y
+    # package/path1
+    # # module/path => replacement/path version
     modulesTxt = let
       moduleEntries = concatMapStringsSep "\n" (
         goPackagePath: mkModuleEntry goPackagePath modules.${goPackagePath}
@@ -172,8 +190,19 @@
           meta = localModules.${goPackagePath};
         in "# ${goPackagePath} => ${meta.local}"
       ) (builtins.attrNames localModules);
+
+      # Generate trailing replacement markers for remote path replacements.
+      # A remote replace has replaced set to a *different* module path (no local field).
+      remoteReplaceModules = lib.filterAttrs (goPackagePath: meta: (meta ? replaced) && meta.replaced != goPackagePath) modules;
+      remoteTrailers = concatMapStringsSep "\n" (
+        goPackagePath: let
+          meta = remoteReplaceModules.${goPackagePath};
+        in "# ${goPackagePath} => ${meta.replaced} ${meta.version}"
+      ) (builtins.attrNames remoteReplaceModules);
     in
-      moduleEntries + optionalString (localTrailers != "") ("\n" + localTrailers);
+      moduleEntries
+      + optionalString (localTrailers != "") ("\n" + localTrailers)
+      + optionalString (remoteTrailers != "") ("\n" + remoteTrailers);
 
     # Generate copy commands for remote modules
     # (e.g., go.opentelemetry.io/otel and go.opentelemetry.io/otel/trace)

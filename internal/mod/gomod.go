@@ -305,7 +305,7 @@ func (f *GoModFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[s
 			return GoModule{
 				Path:         path,
 				Version:      meta.Version,
-				Packages:     pkgsByMod[meta.Path],
+				Packages:     pkgsByMod[path],
 				Hash:         hash,
 				GoVersion:    goVersion,
 				ReplacedPath: replacedPath,
