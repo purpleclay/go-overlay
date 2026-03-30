@@ -681,29 +681,28 @@
               ''
               else if useManifest
               then ''
-                                runHook preConfigure
+                runHook preConfigure
 
-                                export GOCACHE=$TMPDIR/go-cache
-                                export GOPATH="$TMPDIR/go"
-                                export GOPROXY=off
+                export GOCACHE=$TMPDIR/go-cache
+                export GOPATH="$TMPDIR/go"
+                export GOPROXY=off
 
-                                # Generate go.work if not present in source
-                                if [ ! -f go.work ]; then
-                                  cat > go.work << 'EOF'
-                ${goWorkContent}EOF
-                                fi
+                # Generate go.work if not present in source
+                if [ ! -f go.work ]; then
+                  printf '%s' ${escapeShellArg goWorkContent} > go.work
+                fi
 
-                                # Copy vendor environment with external deps
-                                # Workspace modules stay in source tree - Go resolves them via modules.txt
-                                rm -rf vendor
-                                ${
+                # Copy vendor environment with external deps
+                # Workspace modules stay in source tree - Go resolves them via modules.txt
+                rm -rf vendor
+                ${
                   if vendorEnv.useSymlinks
                   then "cp --no-preserve=mode -rs ${vendorEnv} vendor"
                   else "cp -r --reflink=auto ${vendorEnv} vendor"
                 }
-                                chmod -R u+w vendor
+                chmod -R u+w vendor
 
-                                runHook postConfigure
+                runHook postConfigure
               ''
               else ''
                 runHook preConfigure
