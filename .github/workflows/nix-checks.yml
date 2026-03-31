@@ -10,6 +10,7 @@ on:
       - "lib/**"
       - "builder/**"
       - "test/**"
+      - "examples/**"
       - "govendor.toml"
   pull_request:
     branches:
@@ -21,6 +22,7 @@ on:
       - "lib/**"
       - "builder/**"
       - "test/**"
+      - "examples/**"
       - "govendor.toml"
 
 concurrency:

@@ -1,2 +1,2 @@
 [files]
-extend-exclude = ["manifests/"]
+extend-exclude = ["manifests/", "**/vendor/", "**/govendor.toml", "**/go.mod"]

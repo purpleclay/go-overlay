@@ -1,0 +1,104 @@
+{{define "index.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mood Check-in</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+  <style>
+    body { transition: background-color 0.5s ease; }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 10px;
+      border-radius: 5px;
+      background: linear-gradient(to right, #dc2626, #c026d3, #6366f1, #3b82f6, #06b6d4, #10b981, #4ade80);
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: white;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: white;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+      border: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center gap-10 p-8" style="background-color:{{.BgColor}};">
+
+  {{if .AlreadyCheckedIn}}
+
+  <div class="w-full text-center">
+    <p class="text-8xl font-bold text-white">{{.Name}}</p>
+    <p class="text-white/65 italic text-xl mt-4 max-w-md mx-auto">"{{.Anecdote}}"</p>
+    <p class="text-white/35 text-sm mt-8">You've already checked in today. See you tomorrow.</p>
+  </div>
+
+  {{else}}
+
+  <div class="w-full text-center">
+    <p class="text-sm uppercase tracking-widest text-white/40 mb-4">What is your Mood today?</p>
+    <p id="moodName" class="text-8xl font-bold text-white">Meh</p>
+    <p id="moodAnecdote" class="text-white/65 italic text-xl mt-4 max-w-md mx-auto">"Floating through the day on a cloud of pure indifference. Deeply, profoundly okay."</p>
+  </div>
+
+  <div class="w-full max-w-md rounded-2xl p-6 shadow-2xl" style="background:rgba(255,255,255,0.1);backdrop-filter:blur(12px);">
+    <input
+      type="range"
+      id="slider"
+      min="1" max="11" value="6"
+      oninput="onSlide(this.value)"
+    />
+    <div class="flex justify-between text-white/40 text-xs mt-2 px-1">
+      <span>Volcanic</span>
+      <span>Transcendent</span>
+    </div>
+
+    <input type="hidden" id="scoreInput" name="score" value="6">
+
+    <button
+      hx-get="/rate"
+      hx-include="#scoreInput"
+      class="w-full py-3 rounded-xl font-bold text-lg mt-6"
+      style="background:white;color:#111;"
+    >
+      Submit
+    </button>
+  </div>
+
+  {{end}}
+
+  {{if not .AlreadyCheckedIn}}
+  <script>
+    const moods = {{.MoodsJSON}};
+
+    function onSlide(value) {
+      const score = parseInt(value);
+      const mood = moods[score];
+      document.getElementById('scoreInput').value = score;
+      document.getElementById('moodName').textContent = mood.Label;
+      document.getElementById('moodAnecdote').textContent = '"' + mood.Anecdote + '"';
+      document.body.style.backgroundColor = mood.Color;
+    }
+  </script>
+  {{end}}
+</body>
+</html>
+{{end}}
