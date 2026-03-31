@@ -1,0 +1,4 @@
+!api/*.yaml
+!static/*
+!index.html
+gen/

@@ -1,0 +1,51 @@
+openapi: "3.0.0"
+info:
+  title: catto
+  version: "0.1.0"
+  description: Find out what cat you deserve, based on the vowels in your name
+paths:
+  /suggest:
+    get:
+      summary: Suggest a cat breed based on your name
+      operationId: suggestBreed
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Your name
+      responses:
+        "200":
+          description: A cat breed suggestion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Suggestion"
+        "400":
+          description: Name parameter is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    Suggestion:
+      type: object
+      required:
+        - breed
+        - reason
+      properties:
+        breed:
+          type: string
+          example: Siamese
+        reason:
+          type: string
+          example: will talk at you until one of you gives up
+    Error:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string

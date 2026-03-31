@@ -84,6 +84,7 @@
               entry = "${self.packages.${system}.govendor}/bin/govendor --check";
               files = "(^|/)go\\.(mod|work)$";
               excludes = [
+                "examples/"
                 "testdata/"
                 "test/"
                 "templates/"
@@ -108,7 +109,7 @@
           pkgs.go-bin.versions;
 
         libTests = import ./test {inherit pkgs;};
-        integrationTests = import ./test/integration {
+        examples = import ./examples {
           inherit pkgs;
           go = pkgs.go-bin.fromGoMod ./go.mod;
         };
@@ -116,7 +117,7 @@
         with pkgs; {
           checks =
             libTests
-            // integrationTests;
+            // (pkgs.lib.filterAttrs (name: _: pkgs.lib.hasPrefix "example-" name) examples);
 
           devShells.default = mkShell {
             inherit (pre-commit-check) shellHook;
@@ -125,6 +126,7 @@
 
           packages =
             versionedPackages
+            // examples
             // {
               default = pkgs.go-bin.latest;
               go = pkgs.go-bin.latest;

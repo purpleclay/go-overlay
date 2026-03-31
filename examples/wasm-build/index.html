@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Word Counter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg:      '#0f172a',
+            surface: '#1e293b',
+            border:  '#334155',
+            muted:   '#94a3b8',
+          }
+        }
+      }
+    }
+  </script>
+  <script src="wasm_exec.js"></script>
+  <script>
+    const go = new Go();
+    WebAssembly.instantiateStreaming(fetch("wordcount.wasm"), go.importObject).then(result => {
+      go.run(result.instance);
+    });
+
+    function update(textarea) {
+      if (typeof analyseText === "undefined") return;
+      const stats = analyseText(textarea.value);
+      document.getElementById("words").textContent = stats.words;
+      document.getElementById("lines").textContent = stats.lines;
+      document.getElementById("chars").textContent = stats.chars;
+    }
+  </script>
+</head>
+<body class="min-h-screen bg-bg text-white flex items-start justify-center pt-16 px-4">
+  <div class="w-full max-w-2xl">
+    <h1 class="text-3xl font-bold mb-1">Word Counter</h1>
+    <p class="text-muted text-sm mb-6">Character count uses Unicode grapheme clusters — emoji count as one character.</p>
+
+    <textarea
+      class="w-full h-48 text-base resize-y bg-surface border-2 border-border rounded-lg p-3 text-white placeholder-muted focus:outline-none focus:border-indigo-500"
+      placeholder="Start typing..."
+      oninput="update(this)"
+    ></textarea>
+
+    <div class="grid grid-cols-3 gap-4 mt-4">
+      <div class="bg-indigo-600 rounded-lg p-4">
+        <div class="text-4xl font-bold tabular-nums" id="words">0</div>
+        <div class="text-indigo-200 text-xs uppercase tracking-widest mt-1">words</div>
+      </div>
+      <div class="bg-emerald-600 rounded-lg p-4">
+        <div class="text-4xl font-bold tabular-nums" id="lines">0</div>
+        <div class="text-emerald-200 text-xs uppercase tracking-widest mt-1">lines</div>
+      </div>
+      <div class="bg-amber-600 rounded-lg p-4">
+        <div class="text-4xl font-bold tabular-nums" id="chars">0</div>
+        <div class="text-amber-200 text-xs uppercase tracking-widest mt-1">characters</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
