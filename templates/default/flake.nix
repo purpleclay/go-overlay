@@ -4,7 +4,10 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+
     go-overlay.url = "github:purpleclay/go-overlay";
+    go-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    go-overlay.inputs.flake-utils.follows = "flake-utils";
   };
 
   outputs = {
