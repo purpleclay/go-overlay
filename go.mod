@@ -16,7 +16,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/mod v0.34.0
 	gotest.tools/v3 v3.5.2
-	mvdan.cc/sh/v3 v3.13.0
+	mvdan.cc/sh/v3 v3.13.1
 )
 
 require (
@@ -53,6 +53,6 @@ require (
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/term v0.40.0 // indirect
+	golang.org/x/term v0.41.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
