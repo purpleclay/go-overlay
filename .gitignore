@@ -9,6 +9,7 @@
 !.zed/*
 !.github/**/*
 !typos.toml
+!docs/*.md
 
 !flake.lock
 !flake.nix
