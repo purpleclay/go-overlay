@@ -33,3 +33,9 @@ pkgs.buildGoWorkspace {
 ```
 
 `lib.cleanSourceWith` filters the source tree before it enters the Nix sandbox. Removing `go.work` causes `buildGoWorkspace` to generate one from the `[workspace]` section of `govendor.toml`. Use this pattern for projects that deliberately don't commit `go.work` — the manifest carries the workspace metadata so Nix builds remain reproducible.
+
+During the build, `buildGoWorkspace` logs which path was taken:
+
+```shell
+go-overlay: generating go.work from govendor.toml
+```

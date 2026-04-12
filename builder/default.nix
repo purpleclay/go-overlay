@@ -674,6 +674,8 @@
                 export GOPATH="$TMPDIR/go"
                 export GOPROXY=off
 
+                echo "go-overlay: using committed vendor/ directory"
+
                 # Use in-tree vendor directory as-is (from 'go work vendor')
                 chmod -R u+w vendor
 
@@ -689,7 +691,10 @@
 
                 # Generate go.work if not present in source
                 if [ ! -f go.work ]; then
+                  echo "go-overlay: generating go.work from govendor.toml"
                   printf '%s' ${escapeShellArg goWorkContent} > go.work
+                else
+                  echo "go-overlay: using go.work from source tree"
                 fi
 
                 # Copy vendor environment with external deps
