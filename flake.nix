@@ -1,5 +1,5 @@
 {
-  description = "Nix overlay for Go development. Pure, reproducible, auto-updated";
+  description = "A complete Go development environment for Nix. Toolchains, tools, and builders — pure, reproducible, and auto-updated";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
