@@ -8,23 +8,26 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
     gomod2nix.url = "github:nix-community/gomod2nix";
   };
 
-  outputs = { nixpkgs, gomod2nix, ... }:
-    let
-      pkgs = import nixpkgs {
-        system = "x86_64-linux";
-        overlays = [ gomod2nix.overlays.default ];
-      };
-    in {
-      packages.default = pkgs.buildGoApplication {
-        pname = "myapp";
-        version = "1.0.0";
-        src = ./.;
-        modules = ./gomod2nix.toml;
-      };
-    };
+  outputs = { nixpkgs, flake-utils, gomod2nix, ... }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ gomod2nix.overlays.default ];
+        };
+      in {
+        packages.default = pkgs.buildGoApplication {
+          pname = "myapp";
+          version = "1.0.0";
+          src = ./.;
+          modules = ./gomod2nix.toml;
+        };
+      }
+    );
 }
 ```
 
@@ -38,25 +41,27 @@ gomod2nix generate
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
     go-overlay.url = "github:purpleclay/go-overlay";
   };
 
-  outputs = { nixpkgs, go-overlay, ... }:
-    let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs {
-        inherit system;
-        overlays = [ go-overlay.overlays.default ];
-      };
-    in {
-      packages.default = pkgs.buildGoApplication {
-        pname = "myapp";
-        version = "1.0.0";
-        src = ./.;
-        go = pkgs.go-bin.fromGoMod ./go.mod;
-        modules = ./govendor.toml;
-      };
-    };
+  outputs = { nixpkgs, flake-utils, go-overlay, ... }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ go-overlay.overlays.default ];
+        };
+      in {
+        packages.default = pkgs.buildGoApplication {
+          pname = "myapp";
+          version = "1.0.0";
+          src = ./.;
+          go = pkgs.go-bin.fromGoMod ./go.mod;
+          modules = ./govendor.toml;
+        };
+      }
+    );
 }
 ```
 
@@ -78,19 +83,24 @@ govendor
 
 ```nix
 {
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
 
-  outputs = { nixpkgs, ... }:
-    let
-      pkgs = nixpkgs.legacyPackages.x86_64-linux;
-    in {
-      packages.default = pkgs.buildGoModule {
-        pname = "myapp";
-        version = "1.0.0";
-        src = ./.;
-        vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-      };
-    };
+  outputs = { nixpkgs, flake-utils, ... }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+      in {
+        packages.default = pkgs.buildGoModule {
+          pname = "myapp";
+          version = "1.0.0";
+          src = ./.;
+          vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+        };
+      }
+    );
 }
 ```
 
@@ -100,25 +110,27 @@ govendor
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
     go-overlay.url = "github:purpleclay/go-overlay";
   };
 
-  outputs = { nixpkgs, go-overlay, ... }:
-    let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs {
-        inherit system;
-        overlays = [ go-overlay.overlays.default ];
-      };
-    in {
-      packages.default = pkgs.buildGoApplication {
-        pname = "myapp";
-        version = "1.0.0";
-        src = ./.;
-        go = pkgs.go-bin.fromGoMod ./go.mod;
-        modules = ./govendor.toml;
-      };
-    };
+  outputs = { nixpkgs, flake-utils, go-overlay, ... }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ go-overlay.overlays.default ];
+        };
+      in {
+        packages.default = pkgs.buildGoApplication {
+          pname = "myapp";
+          version = "1.0.0";
+          src = ./.;
+          go = pkgs.go-bin.fromGoMod ./go.mod;
+          modules = ./govendor.toml;
+        };
+      }
+    );
 }
 ```
 
