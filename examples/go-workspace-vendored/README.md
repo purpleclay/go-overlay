@@ -27,3 +27,9 @@ pkgs.buildGoWorkspace {
 ```
 
 The `vendor/` directory is generated with `go work vendor` rather than `go mod vendor`, and is committed alongside the source. When no `modules` parameter is provided, `buildGoWorkspace` detects the vendor directory automatically and uses it in place of a `govendor.toml` manifest.
+
+During the build, `buildGoWorkspace` logs which path was taken:
+
+```shell
+go-overlay: using committed vendor/ directory
+```
