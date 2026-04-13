@@ -1,0 +1,50 @@
+name: nix-template
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - "builder/**"
+      - "templates/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+      - "builder/**"
+      - "templates/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  template:
+    runs-on: ${{ matrix.os }}
+    name: template / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          cachix-token: ${{ secrets.GH_CACHIX }}
+
+      - name: Scaffold default template
+        run: nix flake new -t .#default /tmp/go-overlay-template
+
+      - name: Build template
+        run: nix build --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-template
+
+      - name: Verify dev shell
+        run: nix develop --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-template --command go version
