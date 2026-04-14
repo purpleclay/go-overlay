@@ -2,7 +2,19 @@
 
 Full option tables and API documentation for go-overlay.
 
-## Library Functions
+- [Selecting a Go Version](#selecting-a-go-version)
+- [Go Tools](#go-tools)
+  - [`withDefaultTools`](#withdefaulttools)
+  - [`withTools`](#withtools)
+  - [Individual Tool Access](#individual-tool-access)
+- [Builder Functions](#builder-functions)
+  - [`buildGoApplication`](#buildgoapplication)
+  - [`buildGoWorkspace`](#buildgoworkspace)
+  - [`mkVendorEnv`](#mkvendorenv)
+- [Cross-Compilation](#cross-compilation)
+- [Traditional Nix Installation](#traditional-nix-installation)
+
+## Selecting a Go Version
 
 ### `go-bin.latest`
 
@@ -167,7 +179,7 @@ govendor --include-platform=freebsd/amd64
 
 The additional platforms are persisted in `govendor.toml` and automatically used on subsequent runs. See the [cross-compile example](../examples/cross-compile/).
 
-## Traditional Nix
+## Traditional Nix Installation
 
 For users not using flakes, go-overlay can be imported directly as an overlay.
 

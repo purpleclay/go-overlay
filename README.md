@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://github.com/purpleclay/go-overlay/raw/main/docs/static/go-overlay.png" width="240px" />
+  <img src="https://github.com/purpleclay/go-overlay/raw/main/docs/static/go-overlay.png" alt="go-overlay logo" width="220px" />
   <h1>go-overlay</h1>
   <p>A complete Go development environment for Nix.<br>Toolchains, tools, and builders — pure, reproducible, and auto-updated.</p>
   <img alt="Nix" src="https://img.shields.io/badge/Nix-5277C3?logo=nixos&logoColor=white" />
@@ -8,83 +8,153 @@
   <a href="https://github.com/purpleclay/go-overlay/actions/workflows/go-update.yml"><img alt="Go Update" src="https://github.com/purpleclay/go-overlay/actions/workflows/go-update.yml/badge.svg" /></a>
 </div>
 <br>
-<br>
 
-- **100+ Go versions** from 1.17 to latest, including release candidates.
-- **New releases within 4 hours** of appearing on [go.dev](https://go.dev/dl/).
-- **Go tools pinned to your toolchain** — govulncheck, gopls, golangci-lint, and more.
-- **No `vendorHash`** — dependencies are tracked per-module with NAR hashes.
-- **Workspace support** — build from `go.work` monorepos.
-- **Private modules** — standard Go authentication via `.netrc`.
-- **Unpatched Go binaries** — direct from [go.dev](https://go.dev/dl/), not rebuilt by Nix.
+- **100+ Go versions** — from 1.17 to latest, including release candidates, <u>updated within 4 hours</u> of a new release on [go.dev](https://go.dev/dl/).
+- **No stale `vendorHash`** — dependencies are pinned per-module with NAR hashes. Change a dep, re-run `govendor`. No hash archaeology.
+- **Workspace support** — build multi-module `go.work` monorepos reproducibly. Neither `buildGoModule` nor gomod2nix can do this.
+- **Go tools pinned to your toolchain** — govulncheck, gopls, golangci-lint, and more, <u>updated within 6 hours</u> of release and version-locked to your selected Go version with a clear error if incompatible.
+- **Private modules** — standard Go authentication via `.netrc`, no custom infrastructure required.
 
-## Quick Start
+## Getting Started
 
 ### Try Go without installing anything
 
 ```bash
 nix run github:purpleclay/go-overlay -- version
-# go version go1.25.5 linux/amd64
+# go version go1.26.2 linux/amd64
 ```
 
-### Start a new project
+### Create a new project
 
-The template bootstraps a flake with a dev shell, builder, and vendored dependencies:
+The template bootstraps a new project with a dev shell, builder, and drift detection pre-configured:
 
 ```bash
 nix flake new -t github:purpleclay/go-overlay my-app
-cd my-app
-nix develop
+cd my-app && nix develop
 ```
 
-### Add to an existing project
+### Onboard an existing project
 
-```bash
-nix flake init -t github:purpleclay/go-overlay
-```
+#### 1. Add the flake input
 
-## Installation
-
-Add go-overlay to your flake inputs and apply the overlay:
+Add go-overlay to your `flake.nix` inputs and apply the overlay:
 
 ```nix
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
     go-overlay.url = "github:purpleclay/go-overlay";
   };
 
-  outputs = { nixpkgs, go-overlay, ... }:
-    let
-      pkgs = import nixpkgs {
-        system = "x86_64-linux";
-        overlays = [ go-overlay.overlays.default ];
-      };
-    in {
-      devShells.default = pkgs.mkShell {
-        buildInputs = [ pkgs.go-bin.latest ];
-      };
-    };
+  outputs = { nixpkgs, flake-utils, go-overlay, ... }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ go-overlay.overlays.default ];
+        };
+      in { ... }
+    );
 }
 ```
 
 > [!TIP]
-> For traditional Nix (non-flake) installation options, see [Reference](docs/reference.md#traditional-nix).
+> Not using flakes? See the [traditional Nix installation guide](docs/reference.md#traditional-nix-installation).
 
-## Choosing a Go Version
+#### 2. Add govendor to your dev shell
+
+`govendor` generates and maintains the dependency manifest used during builds:
 
 ```nix
-pkgs.go-bin.latest              # Absolute latest, including RCs
-pkgs.go-bin.latestStable        # Latest stable release
-pkgs.go-bin.versions."1.22.3"   # Pinned to an exact version
-pkgs.go-bin.fromGoMod ./go.mod  # Auto-select from go.mod
+devShells.default = pkgs.mkShell {
+  buildInputs = [
+    go-overlay.packages.${system}.govendor
+  ];
+};
 ```
 
-`fromGoMod` reads the `toolchain` directive if present, otherwise resolves the latest patch for the `go` directive. For strict version matching that fails on mismatch, use `fromGoModStrict`.
+#### 3. Generate and commit the manifest
+
+```bash
+govendor
+```
+
+This creates a `govendor.toml` with NAR hashes for all dependencies. Commit it to your repository.
+
+> [!IMPORTANT]
+> Re-run `govendor` whenever you add, remove, or upgrade a dependency. Use `govendor --check` in CI to catch drift before it reaches production.
+
+#### 4. Build
+
+Create a `default.nix` file to define your package:
+
+```nix
+{ pkgs, go }:
+pkgs.buildGoApplication {
+  inherit go;
+  pname = "my-app";
+  version = "0.1.0";
+  src = ./.;
+  modules = ./govendor.toml;
+}
+```
+
+Then wire it into your `flake.nix` outputs:
+
+```nix
+let
+  go = pkgs.go-bin.fromGoMod ./go.mod;
+in {
+  packages.default = pkgs.callPackage ./default.nix { inherit go; };
+}
+```
+
+> [!TIP]
+> `fromGoMod` auto-selects the Go version from your `go.mod`. For other version selection options, see the [reference guide](docs/reference.md#selecting-a-go-version).
+
+And then build it:
+
+```bash
+nix build
+```
+
+That's it. No stale `vendorHash` to fix after every dependency change. 👋
+
+## Examples
+
+Not sure how to configure a specific feature? Each example is a self-contained, buildable project — find the pattern you need and use it as a starting point.
+
+| Example                                                      | Features                                               |
+| :----------------------------------------------------------- | :----------------------------------------------------- |
+| [hello-world](examples/hello-world/)                         | stdlib-only, no manifest                               |
+| [http-chi-server](examples/http-chi-server/)                 | External deps, `modules`                               |
+| [cobra-cli](examples/cobra-cli/)                             | `ldflags`, `subPackages`, `doCheck`, version injection |
+| [cross-compile](examples/cross-compile/)                     | `GOOS`, `GOARCH`, `CGO_ENABLED`                        |
+| [build-tags](examples/build-tags/)                           | `tags` parameter                                       |
+| [local-replaces](examples/local-replaces/)                   | Local replace directives, `localReplaces`              |
+| [oapi-codegen](examples/oapi-codegen/)                       | `tool` directive, `preBuild` code generation           |
+| [sqlc-codegen](examples/sqlc-codegen/)                       | `nativeBuildInputs`, `preBuild` code generation        |
+| [vendored](examples/vendored/)                               | Committed `vendor/` directory                          |
+| [go-workspace](examples/go-workspace/)                       | `buildGoWorkspace`, `go.work`, `subPackages`           |
+| [go-workspace-inferred](examples/go-workspace-inferred/)     | `buildGoWorkspace`, inferred `go.work`                 |
+| [go-workspace-vendored](examples/go-workspace-vendored/)     | `buildGoWorkspace`, committed `vendor/`                |
+| [wasm-build](examples/wasm-build/)                           | `mkVendorEnv` + `stdenv.mkDerivation`                  |
+| [nixpkgs-build-go-module](examples/nixpkgs-build-go-module/) | `buildGoModule.override` with go-overlay toolchain     |
+
+Build or run any example directly:
+
+```bash
+# pattern: nix build .#example-<name>
+nix build .#example-cobra-cli
+nix run .#example-cobra-cli
+```
 
 ## Go Tools
 
-Pin Go ecosystem tools to your selected toolchain. Tools are accessed directly from the Go derivation:
+Every Go toolchain derivation includes version-locked tools — `gopls`, `golangci-lint`, `govulncheck`, `delve`, and more — pinned to your selected Go version and updated within 6 hours of a new release.
+
+Add them all to your dev shell with a single attribute:
 
 ```nix
 let
@@ -92,186 +162,70 @@ let
 in {
   devShells.default = pkgs.mkShell {
     buildInputs = [
-      # Option 1: curated defaults (delve, gopls, golangci-lint, ...)
       go.withDefaultTools
-
-      # Option 2: pick your own
-      (go.withTools [ "govulncheck" "gofumpt" ])
-
-      # Option 3: individual access
-      go.tools.govulncheck.latest
     ];
   };
 }
 ```
 
-Available tools: `delve`, `gofumpt`, `golangci-lint`, `gopls`, `govulncheck`, `staticcheck`. Incompatible versions throw with a clear error message suggesting the latest compatible version.
-
-## Building a Go Application
-
-### 1. Add govendor to your dev shell
-
-```nix
-devShells.default = pkgs.mkShell {
-  buildInputs = [
-    pkgs.go-bin.fromGoMod ./go.mod
-    go-overlay.packages.${system}.govendor
-  ];
-};
-```
-
-### 2. Generate the manifest
-
-```bash
-govendor
-```
-
-This creates a `govendor.toml` with NAR hashes for all dependencies. Commit it to your repository. Re-run whenever dependencies change.
-
-### 3. Build
-
-```nix
-pkgs.buildGoApplication {
-  pname = "my-app";
-  version = "1.0.0";
-  src = ./.;
-  go = pkgs.go-bin.fromGoMod ./go.mod;
-  modules = ./govendor.toml;
-}
-```
-
-That's it. No `vendorHash`, no patched Go binary.
-
-> [!TIP]
-> Use `govendor --check` in CI to detect manifest drift. See [Detecting Drift with Git Hooks](#detecting-drift-with-git-hooks) for automated checks.
-
-## Builder Functions
-
-go-overlay provides three builder functions. For full option tables, see [Reference](docs/reference.md).
-
-### `buildGoApplication`
-
-Build a single-module Go application. Supports [in-tree vendor](examples/vendor/) or [manifest mode](examples/http-server/). Handles [local replace directives](examples/library/), [cross-compilation](examples/cross-compile/), [build tags](examples/build-tags/), [testing](examples/http-server/), and [code generation](examples/codegen/).
-
-```nix
-pkgs.buildGoApplication {
-  pname = "myapp";
-  version = "1.0.0";
-  src = ./.;
-  go = pkgs.go-bin.fromGoMod ./go.mod;
-  modules = ./govendor.toml;
-  subPackages = [ "cmd/myapp" ];
-  ldflags = [ "-s" "-w" ];
-  doCheck = true;
-}
-```
-
-### `buildGoWorkspace`
-
-Build applications from a [Go workspace](https://go.dev/doc/tutorial/workspaces) (`go.work`). Each binary is built separately using the same manifest. See the [monorepo example](examples/monorepo/).
-
-```nix
-pkgs.buildGoWorkspace {
-  pname = "api";
-  version = "1.0.0";
-  src = ./.;
-  go = pkgs.go-bin.fromGoMod ./go.mod;
-  modules = ./govendor.toml;
-  subPackages = [ "api" ];
-}
-```
-
-> [!NOTE]
-> go-overlay uses the `[workspace]` section in `govendor.toml` to generate `go.work` during the build if one isn't present in the source tree. You don't need to commit `go.work` — the manifest is the single source of truth.
-
-### `mkVendorEnv`
-
-Lower-level function for custom build workflows. Creates a vendor directory from a manifest for use with `stdenv.mkDerivation`. See the [custom-build example](examples/custom-build/).
+For selecting specific tools or pinning versions, see the [Go Tools reference](docs/reference.md#go-tools).
 
 ## Detecting Drift with Git Hooks
 
 Use [cachix/git-hooks.nix](https://github.com/cachix/git-hooks.nix) to check for manifest drift on commit:
 
 ```nix
-pre-commit-check = git-hooks.lib.${system}.run {
-  src = ./.;
-  hooks.govendor = {
-    enable = true;
-    name = "govendor";
-    entry = "${go-overlay.packages.${system}.govendor}/bin/govendor --check";
-    files = "(^|/)go\\.(mod|work)$";
-    pass_filenames = true;
+let
+  pre-commit-check = git-hooks.lib.${system}.run {
+    src = ./.;
+    hooks.govendor = {
+      enable = true;
+      name = "govendor";
+      entry = "${go-overlay.packages.${system}.govendor}/bin/govendor --check";
+      files = "(^|/)go\\.(mod|work)$";
+      pass_filenames = true;
+    };
   };
-};
+in {
+  devShells.default = pkgs.mkShell {
+    inherit (pre-commit-check) shellHook;
+    buildInputs = pre-commit-check.enabledPackages;
+  };
+}
 ```
 
-## Private Modules
+## Private Go Modules
 
 Pass a `.netrc` file into the build sandbox for authentication:
 
 ```nix
+{ pkgs, go }:
 pkgs.buildGoApplication {
+  inherit go;
   pname = "myapp";
   version = "1.0.0";
   src = ./.;
-  go = pkgs.go-bin.latest;
   modules = ./govendor.toml;
   netrcFile = "${builtins.getEnv "HOME"}/.netrc";
 }
 ```
+
+> [!NOTE]
+> `builtins.getEnv` reads from the host environment, outside the Nix sandbox, so it requires `--impure`. This approach uses your shared `~/.netrc` file — credentials are not stored in the repo. If you prefer to keep a `.netrc` inside the source root, consider encrypting it with [git-crypt](https://github.com/AGWA/git-crypt) or [sops-nix](https://github.com/Mic92/sops-nix).
 
 ```bash
 export GOPRIVATE="github.com/myorg/*"
 nix build --impure
 ```
 
-`builtins.getEnv` requires `--impure`. For pure builds, use [git-crypt](https://github.com/AGWA/git-crypt) or [sops-nix](https://github.com/Mic92/sops-nix) and reference the encrypted file as a relative path (`netrcFile = ./.netrc;`).
-
 > [!CAUTION]
 > The `.netrc` file is copied into the Nix store, which is world-readable by default.
 
-## Using with buildGoModule
-
-Override nixpkgs' Go toolchain when using `buildGoModule`:
-
-```nix
-(pkgs.buildGoModule.override { go = pkgs.go-bin.versions."1.22.3"; }) {
-  pname = "my-app";
-  version = "1.0.0";
-  src = ./.;
-  vendorHash = "sha256-...";
-}
-```
-
-> [!WARNING]
-> Passing `go` as a build argument does **not** work — you must use `.override`.
-
-## Examples
-
-The [examples/](examples/) directory contains self-contained Go projects demonstrating each feature. Every example can be built with `nix build .#example-<name>`.
-
-| Example                                  | Features                                    |
-| :--------------------------------------- | :------------------------------------------ |
-| [hello](examples/hello/)                 | stdlib-only, no manifest                    |
-| [http-server](examples/http-server/)     | External deps, `doCheck`                    |
-| [cli](examples/cli/)                     | `ldflags`, `subPackages`, version injection |
-| [cross-compile](examples/cross-compile/) | `GOOS`, `GOARCH`, `CGO_ENABLED`             |
-| [build-tags](examples/build-tags/)       | `tags` parameter                            |
-| [library](examples/library/)             | Local replace, `localReplaces`              |
-| [codegen](examples/codegen/)             | Go 1.25 `tool` directive, `preBuild`        |
-| [vendor](examples/vendor/)               | Committed `vendor/` directory               |
-| [monorepo](examples/monorepo/)           | `buildGoWorkspace`, `go.work`               |
-| [custom-build](examples/custom-build/)   | `mkVendorEnv` + `stdenv.mkDerivation`       |
-
-## Documentation
+## Further Reading
 
 - [reference.md](docs/reference.md) — Full option tables for all builder functions, library functions, and traditional Nix installation.
-- [govendor-toml-v2.md](docs/govendor-toml-v2.md) — `govendor.toml` v2 reference.
+- [govendor-toml-v2.md](docs/govendor-toml-v2.md) — `govendor.toml` schema reference.
 - [migrating.md](docs/migrating.md) — Migration guides from gomod2nix and buildGoModule.
-
-## Used By
-
-- [devenv](https://github.com/cachix/devenv) — Fast, declarative, reproducible developer environments.
 
 ---
 
