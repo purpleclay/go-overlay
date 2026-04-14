@@ -3,7 +3,7 @@
   "extends": ["github>purpleclay/renovate-config"],
   "packageRules": [
     {
-      "matchFileNames": ["**/testdata/**", "**/test/**"],
+      "matchFileNames": ["**/testdata/**", "**/test/**", "examples/**"],
       "enabled": false
     }
   ]
