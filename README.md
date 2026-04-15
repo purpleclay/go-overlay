@@ -196,7 +196,10 @@ in {
 
 ## Private Go Modules
 
-Pass a `.netrc` file into the build sandbox for authentication:
+Private modules require two things: bypassing the public proxy, and credentials to authenticate with the private host. Set `GOPRIVATE` to route around the proxy and `netrcFile` to provide credentials:
+
+> [!TIP]
+> `GOPRIVATE` implicitly sets `GONOPROXY` and `GONOSUMDB` — you only need to set all three explicitly if you require different values for each.
 
 ```nix
 { pkgs, go }:
@@ -207,19 +210,19 @@ pkgs.buildGoApplication {
   src = ./.;
   modules = ./govendor.toml;
   netrcFile = "${builtins.getEnv "HOME"}/.netrc";
+  GOPRIVATE = "<your-private-host>/*";
 }
 ```
 
 > [!NOTE]
-> `builtins.getEnv` reads from the host environment, outside the Nix sandbox, so it requires `--impure`. This approach uses your shared `~/.netrc` file — credentials are not stored in the repo. If you prefer to keep a `.netrc` inside the source root, consider encrypting it with [git-crypt](https://github.com/AGWA/git-crypt) or [sops-nix](https://github.com/Mic92/sops-nix).
+> `builtins.getEnv "HOME"` reads the host environment to locate `~/.netrc` — this is why `--impure` is required. The file contents are read at eval time and passed into the build sandbox. Credentials are not stored in the repo. If you prefer to keep a `.netrc` inside the source root, consider encrypting it with [git-crypt](https://github.com/AGWA/git-crypt) or [sops-nix](https://github.com/Mic92/sops-nix).
 
 ```bash
-export GOPRIVATE="github.com/myorg/*"
 nix build --impure
 ```
 
 > [!CAUTION]
-> The `.netrc` file is copied into the Nix store, which is world-readable by default.
+> The `.netrc` contents are embedded in the derivation, which is stored in the Nix store. The Nix store is world-readable by default.
 
 ## Further Reading
 

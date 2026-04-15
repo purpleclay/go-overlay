@@ -5,16 +5,13 @@ export HOME=$(mktemp -d)
 export GOPATH="$HOME/go"
 export GOCACHE="$HOME/go-cache"
 
-# If a netrc file was provided, copy it into $HOME/.netrc for authentication.
+# If netrc credentials were provided, write them into $HOME/.netrc for authentication.
 # Both Go's HTTP client and git (via libcurl) read ~/.netrc for credentials
 # when accessing private module hosts.
-if [ -n "${netrcFile:-}" ]; then
-  if [ -f "$netrcFile" ]; then
-    cp "$netrcFile" "$HOME/.netrc"
-    echo "go-overlay: netrc credentials loaded from $netrcFile"
-  else
-    echo "go-overlay: warning: netrcFile was set but '$netrcFile' is missing or not a regular file — proceeding without credentials" >&2
-  fi
+if [ -n "${NETRC_CONTENT:-}" ]; then
+  printf '%s' "$NETRC_CONTENT" > "$HOME/.netrc"
+  chmod 600 "$HOME/.netrc"
+  echo "go-overlay: netrc credentials loaded"
 fi
 
 # Download the module and get the directory path from JSON output.
