@@ -15,12 +15,4 @@ pkgs.buildGoWorkspace {
   # which one to build.
   subPackages = ["server"];
   doCheck = true;
-
-  # ./... does not resolve from the workspace root — use ./mood/... to target
-  # the module directory directly.
-  checkPhase = ''
-    runHook preCheck
-    go test ./mood/...
-    runHook postCheck
-  '';
 }
