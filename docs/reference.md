@@ -119,6 +119,9 @@ Build a single-module Go application using vendored dependencies.
 | `allowGoReference` | `false`             | Allow Go toolchain in runtime closure                      |
 | `localReplaces`    | `{}`                | Map of module path to Nix path for external local replaces |
 | `netrcFile`        | `null`              | Path to a `.netrc` file for private module authentication  |
+| `GOPRIVATE`        | `""`                | Module path prefixes to bypass the proxy and checksum DB   |
+| `GONOSUMDB`        | `""`                | Module path prefixes to bypass the checksum DB only        |
+| `GONOPROXY`        | `""`                | Module path prefixes to bypass the proxy only              |
 | `doCheck`          | `false`             | Run tests during the build                                 |
 | `checkFlags`       | `[]`                | Additional flags passed to `go test`                       |
 | `excludedPackages` | `[]`                | Packages to exclude from testing                           |
@@ -142,6 +145,9 @@ Build applications from a Go workspace (`go.work`).
 | `tags`             | `[]`                | Build tags                                                 |
 | `allowGoReference` | `false`             | Allow Go toolchain in runtime closure                      |
 | `netrcFile`        | `null`              | Path to a `.netrc` file for private module authentication  |
+| `GOPRIVATE`        | `""`                | Module path prefixes to bypass the proxy and checksum DB   |
+| `GONOSUMDB`        | `""`                | Module path prefixes to bypass the checksum DB only        |
+| `GONOPROXY`        | `""`                | Module path prefixes to bypass the proxy only              |
 | `doCheck`          | `false`             | Run tests during the build                                 |
 | `checkFlags`       | `[]`                | Additional flags passed to `go test`                       |
 | `excludedPackages` | `[]`                | Packages to exclude from testing                           |
@@ -160,6 +166,9 @@ Create a vendor directory with `modules.txt` from a parsed `govendor.toml` manif
 | `src`           | `null`   | Source tree (required if manifest has local modules)       |
 | `localReplaces` | `{}`     | Map of module path to Nix path for external local replaces |
 | `netrcFile`     | `null`   | Path to a `.netrc` file for private module authentication  |
+| `GOPRIVATE`     | `""`     | Module path prefixes to bypass the proxy and checksum DB   |
+| `GONOSUMDB`     | `""`     | Module path prefixes to bypass the checksum DB only        |
+| `GONOPROXY`     | `""`     | Module path prefixes to bypass the proxy only              |
 
 ## Cross-Compilation
 

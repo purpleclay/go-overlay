@@ -27,6 +27,7 @@
     concatMapStringsSep
     concatStringsSep
     escapeShellArg
+    optionalAttrs
     optionalString
     pathExists
     ;
@@ -42,29 +43,33 @@
     hash, # NAR hash from govendor.toml
     go,
     netrcFile ? null, # Path to a .netrc file for private module authentication
+    GOPRIVATE ? "", # Comma-separated list of module path prefixes to bypass proxy and checksum DB
+    GONOSUMDB ? "", # Comma-separated list of module path prefixes to bypass checksum DB
+    GONOPROXY ? "", # Comma-separated list of module path prefixes to bypass proxy
   }:
-    stdenvNoCC.mkDerivation {
-      name = "${baseNameOf goPackagePath}_${version}";
-      builder = ./fetch.sh;
-      inherit goPackagePath version;
-      netrcFile = optionalString (netrcFile != null) netrcFile;
-      nativeBuildInputs = [
-        cacert
-        git
-        go
-        jq
-      ];
-      outputHashMode = "recursive";
-      outputHashAlgo = null;
-      outputHash = hash;
-      impureEnvVars = [
-        "GOPROXY"
-        "GOPRIVATE"
-        "GONOPROXY"
-        "http_proxy"
-        "https_proxy"
-      ];
-    };
+    stdenvNoCC.mkDerivation (
+      {
+        name = "${baseNameOf goPackagePath}_${version}";
+        builder = ./fetch.sh;
+        inherit goPackagePath version;
+        nativeBuildInputs = [
+          cacert
+          git
+          go
+          jq
+        ];
+        outputHashMode = "recursive";
+        outputHashAlgo = null;
+        outputHash = hash;
+        impureEnvVars = lib.fetchers.proxyImpureEnvVars ++ ["GOPROXY"];
+      }
+      // optionalAttrs (GOPRIVATE != "") {inherit GOPRIVATE;}
+      // optionalAttrs (GONOSUMDB != "") {inherit GONOSUMDB;}
+      // optionalAttrs (GONOPROXY != "") {inherit GONOPROXY;}
+      // optionalAttrs (netrcFile != null) {
+        NETRC_CONTENT = readFile netrcFile;
+      }
+    );
 
   # Generate modules.txt entry for a single module
   mkModuleEntry = goPackagePath: meta: let
@@ -136,6 +141,9 @@
     src ? null, # Source tree for local module replacements
     localReplaces ? {}, # Map of module path to Nix path for external local replaces
     netrcFile ? null, # Path to a .netrc file for private module authentication
+    GOPRIVATE ? "", # Comma-separated list of module path prefixes to bypass proxy and checksum DB
+    GONOSUMDB ? "", # Comma-separated list of module path prefixes to bypass checksum DB
+    GONOPROXY ? "", # Comma-separated list of module path prefixes to bypass proxy
   }: let
     useSymlinks = lib.versionAtLeast go.version "1.25";
     modules = manifest.mod or {};
@@ -156,7 +164,7 @@
               if (meta ? replaced) && meta.replaced != goPackagePath
               then meta.replaced
               else goPackagePath;
-            inherit go netrcFile;
+            inherit go netrcFile GOPRIVATE GONOSUMDB GONOPROXY;
             inherit (meta) version hash;
           }
       )
@@ -266,6 +274,9 @@
     allowGoReference ? false, # When true, disables -trimpath, -buildid= and disallowedReferences
     localReplaces ? {}, # Map of module path to Nix path for external local replaces
     netrcFile ? null, # Path to a .netrc file for private module authentication
+    GOPRIVATE ? "", # Comma-separated list of module path prefixes to bypass proxy and checksum DB
+    GONOSUMDB ? "", # Comma-separated list of module path prefixes to bypass checksum DB
+    GONOPROXY ? "", # Comma-separated list of module path prefixes to bypass proxy
     checkFlags ? [], # Additional flags passed to go test
     excludedPackages ? [], # Packages to exclude from testing
     CGO_ENABLED ? go.CGO_ENABLED,
@@ -310,7 +321,7 @@
       if useManifest
       then
         mkVendorEnv {
-          inherit go manifest src localReplaces netrcFile;
+          inherit go manifest src localReplaces netrcFile GOPRIVATE GONOSUMDB GONOPROXY;
         }
       else null;
   in
@@ -330,7 +341,7 @@
         Alternatively, commit a vendor directory using 'go mod vendor'.
     '';
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "localReplaces" "netrcFile" "allowGoReference" "checkFlags" "excludedPackages"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "localReplaces" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages"]
         // {
           inherit pname version src;
 
@@ -492,6 +503,9 @@
     tags ? [],
     allowGoReference ? false, # When true, disables -trimpath, -buildid= and disallowedReferences
     netrcFile ? null, # Path to a .netrc file for private module authentication
+    GOPRIVATE ? "", # Comma-separated list of module path prefixes to bypass proxy and checksum DB
+    GONOSUMDB ? "", # Comma-separated list of module path prefixes to bypass checksum DB
+    GONOPROXY ? "", # Comma-separated list of module path prefixes to bypass proxy
     checkFlags ? [], # Additional flags passed to go test
     excludedPackages ? [], # Packages to exclude from testing
     CGO_ENABLED ? go.CGO_ENABLED,
@@ -563,7 +577,7 @@
       mapAttrs (
         goPackagePath: meta:
           fetchGoModule {
-            inherit goPackagePath go netrcFile;
+            inherit goPackagePath go netrcFile GOPRIVATE GONOSUMDB GONOPROXY;
             inherit (meta) version hash;
           }
       )
@@ -641,7 +655,7 @@
         Alternatively, commit a vendor directory using 'go work vendor'.
     '';
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "netrcFile" "allowGoReference" "checkFlags" "excludedPackages"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages"]
         // {
           inherit pname version src;
 
