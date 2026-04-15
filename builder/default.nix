@@ -763,12 +763,17 @@
           doCheck = attrs.doCheck or false;
 
           checkPhase = let
+            # In workspace mode, go test ./... does not expand across module boundaries.
+            # Instead, derive test targets from the workspace modules listed in go.work.
+            # Falls back to subPackages if no workspace config is present (in-tree vendor mode).
+            workspaceTestTargets =
+              if workspaceConfig != null
+              then concatMapStringsSep " " (mod: "${mod}/...") (workspaceConfig.modules or [])
+              else concatMapStringsSep " " (p: "./${p}/...") subPackages;
             testPackages =
               if excludedPackages == []
-              then concatMapStringsSep " " (p: "./${p}/...") subPackages
-              else
-                "$(go list ${concatMapStringsSep " " (p: "./${p}/...") subPackages}"
-                + " | grep -v ${concatMapStringsSep " | grep -v " (p: escapeShellArg p) excludedPackages})";
+              then workspaceTestTargets
+              else "$(go list ${workspaceTestTargets} | grep -v ${concatMapStringsSep " | grep -v " (p: escapeShellArg p) excludedPackages})";
           in
             attrs.checkPhase or ''
               runHook preCheck
