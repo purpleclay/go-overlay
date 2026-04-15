@@ -11,7 +11,6 @@ export GOCACHE="$HOME/go-cache"
 if [ -n "${NETRC_CONTENT:-}" ]; then
   printf '%s' "$NETRC_CONTENT" > "$HOME/.netrc"
   chmod 600 "$HOME/.netrc"
-  echo "go-overlay: netrc credentials loaded"
 fi
 
 # Download the module and get the directory path from JSON output.
