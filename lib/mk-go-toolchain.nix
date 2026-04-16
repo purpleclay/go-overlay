@@ -25,8 +25,8 @@
         inherit (stdenv.targetPlatform.go) GOOS GOARCH;
         CGO_ENABLED =
           if stdenv.targetPlatform.isWasi || (stdenv.targetPlatform.isPower64 && stdenv.targetPlatform.isBigEndian)
-          then 0
-          else 1;
+          then "0"
+          else "1";
 
         # Go binary distributions are pre-built and statically linked
         dontBuild = true;
