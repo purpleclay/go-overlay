@@ -357,6 +357,7 @@
               inherit GOOS GOARCH CGO_ENABLED;
 
               GO111MODULE = "on";
+              GOTOOLCHAIN = "local";
               GOFLAGS =
                 optionalString useVendor "-mod=vendor"
                 + optionalString (!allowGoReference) (optionalString useVendor " " + "-trimpath");
@@ -671,6 +672,7 @@
               inherit GOOS GOARCH CGO_ENABLED;
 
               GO111MODULE = "on";
+              GOTOOLCHAIN = "local";
               GOFLAGS =
                 lib.optionalString useVendor "-mod=vendor"
                 + lib.optionalString (!allowGoReference) (lib.optionalString useVendor " " + "-trimpath");

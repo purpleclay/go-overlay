@@ -40,6 +40,7 @@ in
     env = {
       inherit (go) GOOS GOARCH CGO_ENABLED;
       GO111MODULE = "on";
+      GOTOOLCHAIN = "local";
       GOFLAGS = "-mod=vendor -trimpath";
       GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
     };
