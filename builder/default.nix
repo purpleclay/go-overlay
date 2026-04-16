@@ -341,9 +341,11 @@
         Alternatively, commit a vendor directory using 'go mod vendor'.
     '';
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "localReplaces" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "localReplaces" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages" "meta"]
         // {
           inherit pname version src;
+
+          meta = attrs.meta or {};
 
           nativeBuildInputs =
             (attrs.nativeBuildInputs or [])
@@ -656,9 +658,11 @@
         Alternatively, commit a vendor directory using 'go work vendor'.
     '';
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages" "meta"]
         // {
           inherit pname version src;
+
+          meta = attrs.meta or {};
 
           nativeBuildInputs =
             (attrs.nativeBuildInputs or [])

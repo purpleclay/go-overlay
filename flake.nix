@@ -131,12 +131,12 @@
               default = pkgs.go-bin.latest;
               go = pkgs.go-bin.latest;
               goscrape = import ./goscrape.nix {
-                inherit (pkgs) buildGoApplication;
+                inherit (pkgs) lib buildGoApplication;
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
                 commit = self.rev or "unknown";
               };
               govendor = import ./govendor.nix {
-                inherit (pkgs) buildGoApplication;
+                inherit (pkgs) lib buildGoApplication;
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
                 commit = self.rev or "unknown";
               };
