@@ -256,6 +256,109 @@
       cp "$modulesTxtPath" "$out/modules.txt"
     '';
 
+  # Shared derivation attributes used by both buildGoApplication and buildGoWorkspace.
+  # Captures the env setup, build, check, and install phases that are identical
+  # between the two builders. Builder-specific pieces (configurePhase, test targets,
+  # and passthru) are pre-computed by each builder and passed in.
+  mkCommonAttrs = {
+    attrs,
+    go,
+    allowGoReference,
+    ldflags,
+    tags,
+    GOOS,
+    GOARCH,
+    CGO_ENABLED,
+    useVendor,
+    subPackages,
+    checkFlags,
+    testPackages, # pre-computed test target string (differs between app and workspace)
+    configurePhase, # builder-specific configure phase (pre-computed with attrs fallback)
+    passthru, # builder-specific passthru attrs
+  }: {
+    meta = attrs.meta or {};
+
+    nativeBuildInputs =
+      (attrs.nativeBuildInputs or [])
+      ++ [go];
+
+    env =
+      attrs.env or {}
+      // {
+        inherit GOOS GOARCH CGO_ENABLED;
+
+        GO111MODULE = "on";
+        GOTOOLCHAIN = "local";
+        GOFLAGS =
+          optionalString useVendor "-mod=vendor"
+          + optionalString (!allowGoReference) (optionalString useVendor " " + "-trimpath");
+        GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
+      };
+
+    inherit configurePhase;
+
+    strictDeps = true;
+
+    buildPhase = let
+      allLdflags =
+        if allowGoReference
+        then ldflags
+        else ["-buildid="] ++ ldflags;
+    in
+      attrs.buildPhase or ''
+        runHook preBuild
+
+        buildFlags=(
+          -v
+          -p $NIX_BUILD_CORES
+          ${optionalString (allLdflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " allLdflags)}"}
+          ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
+        )
+
+        for pkg in ${concatStringsSep " " subPackages}; do
+          echo "Building $pkg"
+          go install "''${buildFlags[@]}" "./$pkg"
+        done
+
+        runHook postBuild
+      '';
+
+    doCheck = attrs.doCheck or false;
+
+    checkPhase =
+      attrs.checkPhase or ''
+        runHook preCheck
+
+        export GOFLAGS=''${GOFLAGS//-trimpath/}
+
+        go test \
+          -v \
+          -p $NIX_BUILD_CORES \
+          -vet=off \
+          ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"} \
+          ${optionalString (checkFlags != []) (concatStringsSep " " checkFlags)} \
+          ${testPackages}
+
+        runHook postCheck
+      '';
+
+    installPhase =
+      attrs.installPhase or ''
+        runHook preInstall
+
+        mkdir -p $out
+        if [ -d "$GOPATH/bin" ]; then
+          cp -r "$GOPATH/bin" $out/
+        fi
+
+        runHook postInstall
+      '';
+
+    disallowedReferences = lib.optional (!allowGoReference) go;
+
+    passthru = (attrs.passthru or {}) // passthru;
+  };
+
   # Build a Go application using vendored dependencies.
   # Supports two modes:
   # 1. In-tree vendor: If modules is null and src contains vendor/, use it directly
@@ -324,6 +427,61 @@
           inherit go manifest src localReplaces netrcFile GOPRIVATE GONOSUMDB GONOPROXY;
         }
       else null;
+
+    configurePhase =
+      attrs.configurePhase
+      or (
+        if useInTreeVendor
+        then ''
+          runHook preConfigure
+
+          export GOCACHE=$TMPDIR/go-cache
+          export GOPATH="$TMPDIR/go"
+          export GOPROXY=off
+
+          # Use in-tree vendor directory as-is
+          chmod -R u+w vendor
+
+          runHook postConfigure
+        ''
+        else if useManifest
+        then ''
+          runHook preConfigure
+
+          export GOCACHE=$TMPDIR/go-cache
+          export GOPATH="$TMPDIR/go"
+          export GOPROXY=off
+
+          # Copy vendor environment from manifest
+          rm -rf vendor
+          ${
+            if vendorEnv.useSymlinks
+            then "cp --no-preserve=mode -rs ${vendorEnv} vendor"
+            else "cp -r --reflink=auto ${vendorEnv} vendor"
+          }
+          chmod -R u+w vendor
+
+          runHook postConfigure
+        ''
+        else ''
+          runHook preConfigure
+
+          export GOCACHE=$TMPDIR/go-cache
+          export GOPATH="$TMPDIR/go"
+          export GOPROXY=off
+
+          runHook postConfigure
+        ''
+      );
+
+    testPackages =
+      if excludedPackages == []
+      then concatMapStringsSep " " (p: "./${p}/...") subPackages
+      else
+        "$(go list ${concatMapStringsSep " " (p: "./${p}/...") subPackages}"
+        + " | grep -F -v -- ${concatMapStringsSep " | grep -F -v -- " (p: escapeShellArg p) excludedPackages})";
+
+    passthru = {inherit go vendorEnv;};
   in
     assert (useVendor || !hasGoSum)
     || throw ''
@@ -344,147 +502,10 @@
         builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "localReplaces" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages" "meta"]
         // {
           inherit pname version src;
-
-          meta = attrs.meta or {};
-
-          nativeBuildInputs =
-            (attrs.nativeBuildInputs or [])
-            ++ [
-              go
-            ];
-
-          env =
-            attrs.env or {}
-            // {
-              inherit GOOS GOARCH CGO_ENABLED;
-
-              GO111MODULE = "on";
-              GOTOOLCHAIN = "local";
-              GOFLAGS =
-                optionalString useVendor "-mod=vendor"
-                + optionalString (!allowGoReference) (optionalString useVendor " " + "-trimpath");
-              GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
-            };
-
-          configurePhase =
-            attrs.configurePhase
-          or (
-              if useInTreeVendor
-              then ''
-                runHook preConfigure
-
-                export GOCACHE=$TMPDIR/go-cache
-                export GOPATH="$TMPDIR/go"
-                export GOPROXY=off
-
-                # Use in-tree vendor directory as-is
-                chmod -R u+w vendor
-
-                runHook postConfigure
-              ''
-              else if useManifest
-              then ''
-                runHook preConfigure
-
-                export GOCACHE=$TMPDIR/go-cache
-                export GOPATH="$TMPDIR/go"
-                export GOPROXY=off
-
-                # Copy vendor environment from manifest
-                rm -rf vendor
-                ${
-                  if vendorEnv.useSymlinks
-                  then "cp --no-preserve=mode -rs ${vendorEnv} vendor"
-                  else "cp -r --reflink=auto ${vendorEnv} vendor"
-                }
-                chmod -R u+w vendor
-
-                runHook postConfigure
-              ''
-              else ''
-                runHook preConfigure
-
-                export GOCACHE=$TMPDIR/go-cache
-                export GOPATH="$TMPDIR/go"
-                export GOPROXY=off
-
-                runHook postConfigure
-              ''
-            );
-
-          strictDeps = true;
-
-          buildPhase = let
-            allLdflags =
-              if allowGoReference
-              then ldflags
-              else ["-buildid="] ++ ldflags;
-          in
-            attrs.buildPhase or ''
-              runHook preBuild
-
-              buildFlags=(
-                -v
-                -p $NIX_BUILD_CORES
-                ${optionalString (allLdflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " allLdflags)}"}
-                ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
-              )
-
-              for pkg in ${concatStringsSep " " subPackages}; do
-                echo "Building $pkg"
-                go install "''${buildFlags[@]}" "./$pkg"
-              done
-
-              runHook postBuild
-            '';
-
-          doCheck = attrs.doCheck or false;
-
-          checkPhase = let
-            testPackages =
-              if excludedPackages == []
-              then concatMapStringsSep " " (p: "./${p}/...") subPackages
-              else
-                "$(go list ${concatMapStringsSep " " (p: "./${p}/...") subPackages}"
-                + " | grep -v ${concatMapStringsSep " | grep -v " (p: escapeShellArg p) excludedPackages})";
-          in
-            attrs.checkPhase or ''
-              runHook preCheck
-
-              export GOFLAGS=''${GOFLAGS//-trimpath/}
-
-              go test \
-                -v \
-                -p $NIX_BUILD_CORES \
-                -vet=off \
-                ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"} \
-                ${optionalString (checkFlags != []) (concatStringsSep " " checkFlags)} \
-                ${testPackages}
-
-              runHook postCheck
-            '';
-
-          installPhase =
-            attrs.installPhase or ''
-              runHook preInstall
-
-              mkdir -p $out
-              if [ -d "$GOPATH/bin" ]; then
-                cp -r "$GOPATH/bin" $out/
-              fi
-
-              runHook postInstall
-            '';
-
-          disallowedReferences = lib.optional (!allowGoReference) go;
-
-          passthru =
-            {inherit go;}
-            // (
-              if vendorEnv != null
-              then {inherit vendorEnv;}
-              else {}
-            );
+        }
+        // mkCommonAttrs {
+          inherit attrs go allowGoReference ldflags tags GOOS GOARCH CGO_ENABLED;
+          inherit useVendor subPackages checkFlags testPackages configurePhase passthru;
         }
       );
 
@@ -556,7 +577,16 @@
 
     workspaceConfig =
       if manifest != null
-      then manifest.workspace or null
+      then
+        if manifest ? workspace
+        then manifest.workspace
+        else
+          throw ''
+            buildGoWorkspace: govendor.toml at ${toString modules} has no [workspace] section.
+
+              Regenerate it from your go.work by running:
+                govendor
+          ''
       else null;
 
     # Generate go.work content from manifest workspace config
@@ -641,6 +671,78 @@
           ))
         .overrideAttrs (_: {passthru = {inherit useSymlinks;};})
       else null;
+
+    configurePhase =
+      attrs.configurePhase
+      or (
+        if useInTreeVendor
+        then ''
+          runHook preConfigure
+
+          export GOCACHE=$TMPDIR/go-cache
+          export GOPATH="$TMPDIR/go"
+          export GOPROXY=off
+
+          echo "go-overlay: using committed vendor/ directory"
+
+          # Use in-tree vendor directory as-is (from 'go work vendor')
+          chmod -R u+w vendor
+
+          runHook postConfigure
+        ''
+        else if useManifest
+        then ''
+          runHook preConfigure
+
+          export GOCACHE=$TMPDIR/go-cache
+          export GOPATH="$TMPDIR/go"
+          export GOPROXY=off
+
+          # Generate go.work if not present in source
+          if [ ! -f go.work ]; then
+            echo "go-overlay: generating go.work from govendor.toml"
+            printf '%s' ${escapeShellArg goWorkContent} > go.work
+          else
+            echo "go-overlay: using go.work from source tree"
+          fi
+
+          # Copy vendor environment with external deps
+          # Workspace modules stay in source tree - Go resolves them via modules.txt
+          rm -rf vendor
+          ${
+            if vendorEnv.useSymlinks
+            then "cp --no-preserve=mode -rs ${vendorEnv} vendor"
+            else "cp -r --reflink=auto ${vendorEnv} vendor"
+          }
+          chmod -R u+w vendor
+
+          runHook postConfigure
+        ''
+        else ''
+          runHook preConfigure
+
+          export GOCACHE=$TMPDIR/go-cache
+          export GOPATH="$TMPDIR/go"
+          export GOPROXY=off
+
+          runHook postConfigure
+        ''
+      );
+
+    # In workspace mode, go test ./... does not expand across module boundaries.
+    # Instead, derive test targets from the workspace modules listed in go.work.
+    # Falls back to subPackages if no workspace config is present (in-tree vendor mode).
+    workspaceTestTargets =
+      if workspaceConfig != null
+      then concatMapStringsSep " " (mod: "${mod}/...") (workspaceConfig.modules or [])
+      else concatMapStringsSep " " (p: "./${p}/...") subPackages;
+
+    testPackages =
+      if excludedPackages == []
+      then workspaceTestTargets
+      else "$(go list ${workspaceTestTargets} | grep -F -v -- ${concatMapStringsSep " | grep -F -v -- " (p: escapeShellArg p) excludedPackages})";
+
+    passthru = {inherit go vendorEnv workspaceConfig;};
   in
     assert (useVendor || !hasGoSum)
     || throw ''
@@ -661,168 +763,10 @@
         builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages" "meta"]
         // {
           inherit pname version src;
-
-          meta = attrs.meta or {};
-
-          nativeBuildInputs =
-            (attrs.nativeBuildInputs or [])
-            ++ [
-              go
-            ];
-
-          env =
-            attrs.env or {}
-            // {
-              inherit GOOS GOARCH CGO_ENABLED;
-
-              GO111MODULE = "on";
-              GOTOOLCHAIN = "local";
-              GOFLAGS =
-                lib.optionalString useVendor "-mod=vendor"
-                + lib.optionalString (!allowGoReference) (lib.optionalString useVendor " " + "-trimpath");
-              GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
-            };
-
-          configurePhase =
-            attrs.configurePhase
-            or (
-              if useInTreeVendor
-              then ''
-                runHook preConfigure
-
-                export GOCACHE=$TMPDIR/go-cache
-                export GOPATH="$TMPDIR/go"
-                export GOPROXY=off
-
-                echo "go-overlay: using committed vendor/ directory"
-
-                # Use in-tree vendor directory as-is (from 'go work vendor')
-                chmod -R u+w vendor
-
-                runHook postConfigure
-              ''
-              else if useManifest
-              then ''
-                runHook preConfigure
-
-                export GOCACHE=$TMPDIR/go-cache
-                export GOPATH="$TMPDIR/go"
-                export GOPROXY=off
-
-                # Generate go.work if not present in source
-                if [ ! -f go.work ]; then
-                  echo "go-overlay: generating go.work from govendor.toml"
-                  printf '%s' ${escapeShellArg goWorkContent} > go.work
-                else
-                  echo "go-overlay: using go.work from source tree"
-                fi
-
-                # Copy vendor environment with external deps
-                # Workspace modules stay in source tree - Go resolves them via modules.txt
-                rm -rf vendor
-                ${
-                  if vendorEnv.useSymlinks
-                  then "cp --no-preserve=mode -rs ${vendorEnv} vendor"
-                  else "cp -r --reflink=auto ${vendorEnv} vendor"
-                }
-                chmod -R u+w vendor
-
-                runHook postConfigure
-              ''
-              else ''
-                runHook preConfigure
-
-                export GOCACHE=$TMPDIR/go-cache
-                export GOPATH="$TMPDIR/go"
-                export GOPROXY=off
-
-                runHook postConfigure
-              ''
-            );
-
-          strictDeps = true;
-
-          buildPhase = let
-            allLdflags =
-              if allowGoReference
-              then ldflags
-              else ["-buildid="] ++ ldflags;
-          in
-            attrs.buildPhase or ''
-              runHook preBuild
-
-              buildFlags=(
-                -v
-                -p $NIX_BUILD_CORES
-                ${optionalString (allLdflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " allLdflags)}"}
-                ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
-              )
-
-              for pkg in ${concatStringsSep " " subPackages}; do
-                echo "Building $pkg"
-                go install "''${buildFlags[@]}" "./$pkg"
-              done
-
-              runHook postBuild
-            '';
-
-          doCheck = attrs.doCheck or false;
-
-          checkPhase = let
-            # In workspace mode, go test ./... does not expand across module boundaries.
-            # Instead, derive test targets from the workspace modules listed in go.work.
-            # Falls back to subPackages if no workspace config is present (in-tree vendor mode).
-            workspaceTestTargets =
-              if workspaceConfig != null
-              then concatMapStringsSep " " (mod: "${mod}/...") (workspaceConfig.modules or [])
-              else concatMapStringsSep " " (p: "./${p}/...") subPackages;
-            testPackages =
-              if excludedPackages == []
-              then workspaceTestTargets
-              else "$(go list ${workspaceTestTargets} | grep -v ${concatMapStringsSep " | grep -v " (p: escapeShellArg p) excludedPackages})";
-          in
-            attrs.checkPhase or ''
-              runHook preCheck
-
-              export GOFLAGS=''${GOFLAGS//-trimpath/}
-
-              go test \
-                -v \
-                -p $NIX_BUILD_CORES \
-                -vet=off \
-                ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"} \
-                ${optionalString (checkFlags != []) (concatStringsSep " " checkFlags)} \
-                ${testPackages}
-
-              runHook postCheck
-            '';
-
-          installPhase =
-            attrs.installPhase or ''
-              runHook preInstall
-
-              mkdir -p $out
-              if [ -d "$GOPATH/bin" ]; then
-                cp -r "$GOPATH/bin" $out/
-              fi
-
-              runHook postInstall
-            '';
-
-          disallowedReferences = lib.optional (!allowGoReference) go;
-
-          passthru =
-            {inherit go;}
-            // (
-              if vendorEnv != null
-              then {inherit vendorEnv;}
-              else {}
-            )
-            // (
-              if workspaceConfig != null
-              then {inherit workspaceConfig;}
-              else {}
-            );
+        }
+        // mkCommonAttrs {
+          inherit attrs go allowGoReference ldflags tags GOOS GOARCH CGO_ENABLED;
+          inherit useVendor subPackages checkFlags testPackages configurePhase passthru;
         }
       );
 in {
