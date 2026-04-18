@@ -144,6 +144,7 @@ Build applications from a Go workspace (`go.work`).
 | `ldflags`          | `[]`                | Linker flags                                               |
 | `tags`             | `[]`                | Build tags                                                 |
 | `allowGoReference` | `false`             | Allow Go toolchain in runtime closure                      |
+| `localReplaces`    | `{}`                | Map of module path to Nix path for external local replaces |
 | `netrcFile`        | `null`              | Path to a `.netrc` file for private module authentication  |
 | `GOPRIVATE`        | `""`                | Module path prefixes to bypass the proxy and checksum DB   |
 | `GONOSUMDB`        | `""`                | Module path prefixes to bypass the checksum DB only        |
