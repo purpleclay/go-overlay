@@ -526,6 +526,7 @@
     ldflags ? [],
     tags ? [],
     allowGoReference ? false, # When true, disables -trimpath, -buildid= and disallowedReferences
+    localReplaces ? {}, # Map of module path to Nix path for external local replaces
     netrcFile ? null, # Path to a .netrc file for private module authentication
     GOPRIVATE ? "", # Comma-separated list of module path prefixes to bypass proxy and checksum DB
     GONOSUMDB ? "", # Comma-separated list of module path prefixes to bypass checksum DB
@@ -601,9 +602,18 @@
         + "\n)\n"
       else null;
 
-    # Modules with hash are fetched, modules without hash are workspace deps
-    remoteModules = lib.filterAttrs (_: meta: meta ? hash && meta.hash != "") allModules;
-    workspaceDepModules = lib.filterAttrs (_: meta: !(meta ? hash) || meta.hash == "") allModules;
+    # Workspace member paths (e.g. ["./mood" "./server"]) — used to distinguish
+    # workspace-internal modules from external local replaces in the manifest.
+    workspaceMemberPaths =
+      if workspaceConfig != null
+      then workspaceConfig.modules or []
+      else [];
+
+    # Modules with hash are fetched; workspace deps have no hash;
+    # local replaces have a local field that is NOT a workspace member path.
+    remoteModules = lib.filterAttrs (_: meta: meta ? hash && meta.hash != "" && !(meta ? local)) allModules;
+    workspaceDepModules = lib.filterAttrs (_: meta: (!(meta ? hash) || meta.hash == "") && (!(meta ? local) || builtins.elem meta.local workspaceMemberPaths)) allModules;
+    localWorkspaceModules = lib.filterAttrs (_: meta: (meta ? local) && !(builtins.elem meta.local workspaceMemberPaths)) allModules;
 
     # Fetch remote modules only
     externalSources =
@@ -616,16 +626,31 @@
       )
       remoteModules;
 
+    # Resolve local module sources - either from localReplaces or src-relative paths
+    localModuleSources =
+      mapAttrs (
+        goPackagePath: meta:
+          if localReplaces ? ${goPackagePath}
+          then localReplaces.${goPackagePath}
+          else if src != null
+          then "${src}/${meta.local}"
+          else throw "go-overlay: Local module '${goPackagePath}' not found in localReplaces and no 'src' provided"
+      )
+      localWorkspaceModules;
+
     # Generate modules.txt content for workspace
     # Format (from `go work vendor`):
     #   ## workspace
     #   # github.com/workspace/dep v0.1.0
     #   ## explicit; go 1.22
+    #   # github.com/external/local-lib v0.0.0 => ../local-lib
+    #   ## explicit; go 1.21
     #   # github.com/external/dep v1.0.0
     #   ## explicit; go 1.18
     #   github.com/external/dep
+    #   # github.com/external/local-lib => ../local-lib
     modulesTxt = let
-      # Workspace dependency entries (no hash, resolved from source tree)
+      # Workspace dependency entries (no hash, no local field — resolved from source tree)
       workspaceDepEntries = concatMapStringsSep "\n" (
         modPath: let
           meta = workspaceDepModules.${modPath};
@@ -638,14 +663,30 @@
           header + "\n" + explicit
       ) (builtins.attrNames workspaceDepModules);
 
+      # Local replace entries (copied into vendor, listed with => ./path format)
+      localEntries = concatMapStringsSep "\n" (
+        modPath: mkModuleEntry modPath localWorkspaceModules.${modPath}
+      ) (builtins.attrNames localWorkspaceModules);
+
+      # Trailing replacement markers for local modules (required by Go toolchain)
+      localTrailers = concatMapStringsSep "\n" (
+        modPath: let
+          meta = localWorkspaceModules.${modPath};
+        in "# ${modPath} => ${meta.local}"
+      ) (builtins.attrNames localWorkspaceModules);
+
       # Remote module entries (with hash, fetched from registry)
       remoteEntries = concatMapStringsSep "\n" (
         goPackagePath: mkModuleEntry goPackagePath remoteModules.${goPackagePath}
       ) (builtins.attrNames remoteModules);
     in
-      "## workspace\n" + workspaceDepEntries + optionalString (remoteEntries != "") ("\n" + remoteEntries);
+      "## workspace\n"
+      + workspaceDepEntries
+      + optionalString (localEntries != "") ("\n" + localEntries)
+      + optionalString (remoteEntries != "") ("\n" + remoteEntries)
+      + optionalString (localTrailers != "") ("\n" + localTrailers);
 
-    # Create vendor environment with remote deps only
+    # Create vendor environment with remote and local deps
     # Workspace module deps are not copied - they stay in the source tree
     useSymlinks = lib.versionAtLeast go.version "1.25";
 
@@ -655,12 +696,17 @@
         (runCommand "workspace-vendor-env" {
             passAsFile = ["modulesTxt"];
             inherit modulesTxt;
+            localReplaceSrcs = lib.attrValues localReplaces;
           } (
             ''
               mkdir -p $out
             ''
             + mkModuleCopyCommands {
               sources = externalSources;
+              inherit useSymlinks;
+            }
+            + mkModuleCopyCommands {
+              sources = localModuleSources;
               inherit useSymlinks;
             }
             + ''
@@ -760,7 +806,7 @@
         Alternatively, commit a vendor directory using 'go work vendor'.
     '';
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages" "meta"]
+        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "localReplaces" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages" "meta"]
         // {
           inherit pname version src;
         }
