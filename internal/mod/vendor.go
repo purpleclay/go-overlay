@@ -184,25 +184,40 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 	} else if err != nil {
 		return resultError(displayPath, err)
 	} else {
-		existingHash, err := extractHash(existingData)
+		manifestSchema, err := extractSchema(existingData)
 		if err != nil {
 			return resultError(displayPath, err)
 		}
-
-		if len(extraPlatforms) == 0 {
-			if existingPlatforms, err := extractPlatforms(existingData); err == nil {
-				extraPlatforms = existingPlatforms
+		if manifestSchema != schemaVersion {
+			if v.opts.detectDrift {
+				return resultSchemaMismatch(displayPath, manifestSchema, schemaVersion)
 			}
-		}
-
-		if !v.opts.force && existingHash == goWork.Hash() {
-			if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
-				return resultOK(displayPath)
+			if len(extraPlatforms) == 0 {
+				if existingPlatforms, err := extractPlatforms(existingData); err == nil {
+					extraPlatforms = existingPlatforms
+				}
 			}
-		}
+		} else {
+			existingHash, err := extractHash(existingData)
+			if err != nil {
+				return resultError(displayPath, err)
+			}
 
-		if v.opts.detectDrift {
-			return resultDrift(displayPath, goWork.Hash(), existingHash)
+			if len(extraPlatforms) == 0 {
+				if existingPlatforms, err := extractPlatforms(existingData); err == nil {
+					extraPlatforms = existingPlatforms
+				}
+			}
+
+			if !v.opts.force && existingHash == goWork.Hash() {
+				if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
+					return resultOK(displayPath)
+				}
+			}
+
+			if v.opts.detectDrift {
+				return resultDrift(displayPath, goWork.Hash(), existingHash)
+			}
 		}
 	}
 
@@ -300,25 +315,40 @@ func (v *Vendor) processModFile(path string) vendorResult {
 	} else if err != nil {
 		return resultError(path, err)
 	} else {
-		existingHash, err := extractHash(existingData)
+		manifestSchema, err := extractSchema(existingData)
 		if err != nil {
 			return resultError(path, err)
 		}
-
-		if len(extraPlatforms) == 0 {
-			if existingPlatforms, err := extractPlatforms(existingData); err == nil {
-				extraPlatforms = existingPlatforms
+		if manifestSchema != schemaVersion {
+			if v.opts.detectDrift {
+				return resultSchemaMismatch(path, manifestSchema, schemaVersion)
 			}
-		}
-
-		if !v.opts.force && existingHash == goMod.Hash() {
-			if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
-				return resultOK(path)
+			if len(extraPlatforms) == 0 {
+				if existingPlatforms, err := extractPlatforms(existingData); err == nil {
+					extraPlatforms = existingPlatforms
+				}
 			}
-		}
+		} else {
+			existingHash, err := extractHash(existingData)
+			if err != nil {
+				return resultError(path, err)
+			}
 
-		if v.opts.detectDrift {
-			return resultDrift(path, goMod.Hash(), existingHash)
+			if len(extraPlatforms) == 0 {
+				if existingPlatforms, err := extractPlatforms(existingData); err == nil {
+					extraPlatforms = existingPlatforms
+				}
+			}
+
+			if !v.opts.force && existingHash == goMod.Hash() {
+				if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
+					return resultOK(path)
+				}
+			}
+
+			if v.opts.detectDrift {
+				return resultDrift(path, goMod.Hash(), existingHash)
+			}
 		}
 	}
 
