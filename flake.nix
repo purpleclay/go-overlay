@@ -38,6 +38,10 @@
           path = ./templates/default;
           description = "A basic Go application using go-overlay";
         };
+        workspace = {
+          path = ./templates/workspace;
+          description = "A Go workspace (go.work) application using go-overlay";
+        };
       };
 
       lib = {
