@@ -805,6 +805,14 @@
 
         Alternatively, commit a vendor directory using 'go work vendor'.
     '';
+    assert (!(useVendor && (useManifest || pathExists (src + "/go.work"))) || lib.versionAtLeast go.version "1.22")
+    || throw ''
+      buildGoWorkspace: vendoring in workspace mode (go.work present) requires Go 1.22 or later.
+
+      Go ${go.version} does not support -mod=vendor when a go.work file is present.
+
+        Upgrade to Go 1.22 or later, or remove the vendor directory.
+    '';
       stdenv.mkDerivation (
         builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "localReplaces" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages" "meta"]
         // {
