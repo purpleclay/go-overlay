@@ -103,6 +103,16 @@ func (m *VendorManifest) WriteTo(w io.Writer) (int64, error) {
 	return int64(n), nil
 }
 
+func extractSchema(data []byte) (int, error) {
+	var manifest struct {
+		Schema int `toml:"schema"`
+	}
+	if err := toml.Unmarshal(data, &manifest); err != nil {
+		return 0, err
+	}
+	return manifest.Schema, nil
+}
+
 func extractHash(data []byte) (string, error) {
 	var manifest struct {
 		Hash string `toml:"hash"`
