@@ -275,6 +275,7 @@
     testPackages, # pre-computed test target string (differs between app and workspace)
     configurePhase, # builder-specific configure phase (pre-computed with attrs fallback)
     passthru, # builder-specific passthru attrs
+    GOWORK ? null, # when set, overrides workspace mode (e.g. "off" for buildGoApplication)
   }: {
     meta = attrs.meta or {};
 
@@ -283,7 +284,7 @@
       ++ [go];
 
     env =
-      attrs.env or {}
+      (attrs.env or {})
       // {
         inherit GOOS GOARCH CGO_ENABLED;
 
@@ -293,7 +294,8 @@
           optionalString useVendor "-mod=vendor"
           + optionalString (!allowGoReference) (optionalString useVendor " " + "-trimpath");
         GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
-      };
+      }
+      // lib.optionalAttrs (GOWORK != null) {inherit GOWORK;};
 
     inherit configurePhase;
 
@@ -506,6 +508,7 @@
         // mkCommonAttrs {
           inherit attrs go allowGoReference ldflags tags GOOS GOARCH CGO_ENABLED;
           inherit useVendor subPackages checkFlags testPackages configurePhase passthru;
+          GOWORK = "off";
         }
       );
 
