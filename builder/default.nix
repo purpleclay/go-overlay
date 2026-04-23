@@ -256,6 +256,28 @@
       cp "$modulesTxtPath" "$out/modules.txt"
     '';
 
+  # Builder-owned parameters stripped from attrs before passing to stdenv.mkDerivation.
+  # Shared between buildGoApplication and buildGoWorkspace to prevent drift.
+  commonRemovedAttrs = [
+    "modules"
+    "subPackages"
+    "ldflags"
+    "tags"
+    "GOOS"
+    "GOARCH"
+    "CGO_ENABLED"
+    "localReplaces"
+    "netrcFile"
+    "GOPRIVATE"
+    "GONOSUMDB"
+    "GONOPROXY"
+    "allowGoReference"
+    "checkFlags"
+    "extraGoFlags"
+    "excludedPackages"
+    "meta"
+  ];
+
   # Shared derivation attributes used by both buildGoApplication and buildGoWorkspace.
   # Captures the env setup, build, check, and install phases that are identical
   # between the two builders. Builder-specific pieces (configurePhase, test targets,
@@ -272,94 +294,109 @@
     useVendor,
     subPackages,
     checkFlags,
+    extraGoFlags ? [], # additional flags appended to the computed GOFLAGS
     testPackages, # pre-computed test target string (differs between app and workspace)
     configurePhase, # builder-specific configure phase (pre-computed with attrs fallback)
     passthru, # builder-specific passthru attrs
-    GOWORK ? null, # when set, overrides workspace mode (e.g. "off" for buildGoApplication)
-  }: {
-    meta = attrs.meta or {};
+    GOWORK ? null, # when set, enforces workspace mode behaviour (e.g. "off" for buildGoApplication)
+  }: let
+    userEnv = attrs.env or {};
+    computedGoFlags =
+      optionalString useVendor "-mod=vendor"
+      + optionalString (!allowGoReference) (optionalString useVendor " " + "-trimpath")
+      + optionalString (extraGoFlags != []) (
+        optionalString (useVendor || !allowGoReference) " "
+        + concatStringsSep " " extraGoFlags
+      );
+  in
+    assert !(extraGoFlags != [] && userEnv ? GOFLAGS)
+    || throw "go-overlay: extraGoFlags cannot be combined with attrs.env.GOFLAGS; use one or the other"; {
+      meta = attrs.meta or {};
 
-    nativeBuildInputs =
-      (attrs.nativeBuildInputs or [])
-      ++ [go];
+      nativeBuildInputs =
+        (attrs.nativeBuildInputs or [])
+        ++ [go];
 
-    env =
-      (attrs.env or {})
-      // {
-        inherit GOOS GOARCH CGO_ENABLED;
+      env =
+        # Defaults: correct for most builds, overridable via attrs.env
+        {
+          GOFLAGS = computedGoFlags;
+          GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
+        }
+        # User env: overrides defaults, cannot override required vars below
+        // userEnv
+        # Required invariants: always enforced, never overridable
+        // {
+          inherit GOOS GOARCH CGO_ENABLED;
+          GO111MODULE = "on";
+          GOTOOLCHAIN = "local";
+          GOPROXY = "off";
+        }
+        // lib.optionalAttrs (GOWORK != null) {inherit GOWORK;};
 
-        GO111MODULE = "on";
-        GOTOOLCHAIN = "local";
-        GOFLAGS =
-          optionalString useVendor "-mod=vendor"
-          + optionalString (!allowGoReference) (optionalString useVendor " " + "-trimpath");
-        GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
-      }
-      // lib.optionalAttrs (GOWORK != null) {inherit GOWORK;};
+      inherit configurePhase;
 
-    inherit configurePhase;
+      strictDeps = true;
 
-    strictDeps = true;
+      buildPhase = let
+        allLdflags =
+          if allowGoReference
+          then ldflags
+          else ["-buildid="] ++ ldflags;
+      in
+        attrs.buildPhase or ''
+          runHook preBuild
 
-    buildPhase = let
-      allLdflags =
-        if allowGoReference
-        then ldflags
-        else ["-buildid="] ++ ldflags;
-    in
-      attrs.buildPhase or ''
-        runHook preBuild
+          buildFlags=(
+            -v
+            -p $NIX_BUILD_CORES
+            ${optionalString (allLdflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " allLdflags)}"}
+            ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
+          )
 
-        buildFlags=(
-          -v
-          -p $NIX_BUILD_CORES
-          ${optionalString (allLdflags != []) "-ldflags=${escapeShellArg (concatStringsSep " " allLdflags)}"}
-          ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"}
-        )
+          for pkg in ${concatStringsSep " " subPackages}; do
+            echo "Building $pkg"
+            go install "''${buildFlags[@]}" "./$pkg"
+          done
 
-        for pkg in ${concatStringsSep " " subPackages}; do
-          echo "Building $pkg"
-          go install "''${buildFlags[@]}" "./$pkg"
-        done
+          runHook postBuild
+        '';
 
-        runHook postBuild
-      '';
+      doCheck = attrs.doCheck or false;
 
-    doCheck = attrs.doCheck or false;
+      checkPhase =
+        attrs.checkPhase or ''
+          runHook preCheck
 
-    checkPhase =
-      attrs.checkPhase or ''
-        runHook preCheck
+          export GOFLAGS=''${GOFLAGS//-trimpath/}
 
-        export GOFLAGS=''${GOFLAGS//-trimpath/}
+          go test \
+            -v \
+            -p $NIX_BUILD_CORES \
+            -vet=off \
+            ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"} \
+            ${optionalString (checkFlags != []) (concatStringsSep " " checkFlags)} \
+            ${testPackages}
 
-        go test \
-          -v \
-          -p $NIX_BUILD_CORES \
-          -vet=off \
-          ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"} \
-          ${optionalString (checkFlags != []) (concatStringsSep " " checkFlags)} \
-          ${testPackages}
+          runHook postCheck
+        '';
 
-        runHook postCheck
-      '';
+      installPhase =
+        attrs.installPhase or ''
+          runHook preInstall
 
-    installPhase =
-      attrs.installPhase or ''
-        runHook preInstall
+          mkdir -p $out
+          if [ -d "$GOPATH/bin" ]; then
+            cp -r "$GOPATH/bin" $out/
+          fi
 
-        mkdir -p $out
-        if [ -d "$GOPATH/bin" ]; then
-          cp -r "$GOPATH/bin" $out/
-        fi
+          runHook postInstall
+        '';
 
-        runHook postInstall
-      '';
+      disallowedReferences = lib.optional (!allowGoReference) go;
 
-    disallowedReferences = lib.optional (!allowGoReference) go;
-
-    passthru = (attrs.passthru or {}) // passthru;
-  };
+      passthru = (attrs.passthru or {}) // passthru;
+    };
 
   # Build a Go application using vendored dependencies.
   # Supports two modes:
@@ -383,6 +420,7 @@
     GONOSUMDB ? "", # Comma-separated list of module path prefixes to bypass checksum DB
     GONOPROXY ? "", # Comma-separated list of module path prefixes to bypass proxy
     checkFlags ? [], # Additional flags passed to go test
+    extraGoFlags ? [], # Additional flags appended to the computed GOFLAGS
     excludedPackages ? [], # Packages to exclude from testing
     CGO_ENABLED ? go.CGO_ENABLED,
     GOOS ? go.GOOS,
@@ -439,7 +477,6 @@
 
           export GOCACHE=$TMPDIR/go-cache
           export GOPATH="$TMPDIR/go"
-          export GOPROXY=off
 
           # Use in-tree vendor directory as-is
           chmod -R u+w vendor
@@ -452,7 +489,6 @@
 
           export GOCACHE=$TMPDIR/go-cache
           export GOPATH="$TMPDIR/go"
-          export GOPROXY=off
 
           # Copy vendor environment from manifest
           rm -rf vendor
@@ -470,7 +506,6 @@
 
           export GOCACHE=$TMPDIR/go-cache
           export GOPATH="$TMPDIR/go"
-          export GOPROXY=off
 
           runHook postConfigure
         ''
@@ -501,13 +536,13 @@
         Alternatively, commit a vendor directory using 'go mod vendor'.
     '';
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "localReplaces" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages" "meta"]
+        builtins.removeAttrs attrs commonRemovedAttrs
         // {
           inherit pname version src;
         }
         // mkCommonAttrs {
           inherit attrs go allowGoReference ldflags tags GOOS GOARCH CGO_ENABLED;
-          inherit useVendor subPackages checkFlags testPackages configurePhase passthru;
+          inherit useVendor subPackages checkFlags extraGoFlags testPackages configurePhase passthru;
           GOWORK = "off";
         }
       );
@@ -535,6 +570,7 @@
     GONOSUMDB ? "", # Comma-separated list of module path prefixes to bypass checksum DB
     GONOPROXY ? "", # Comma-separated list of module path prefixes to bypass proxy
     checkFlags ? [], # Additional flags passed to go test
+    extraGoFlags ? [], # Additional flags appended to the computed GOFLAGS
     excludedPackages ? [], # Packages to exclude from testing
     CGO_ENABLED ? go.CGO_ENABLED,
     GOOS ? go.GOOS,
@@ -730,7 +766,6 @@
 
           export GOCACHE=$TMPDIR/go-cache
           export GOPATH="$TMPDIR/go"
-          export GOPROXY=off
 
           echo "go-overlay: using committed vendor/ directory"
 
@@ -745,7 +780,6 @@
 
           export GOCACHE=$TMPDIR/go-cache
           export GOPATH="$TMPDIR/go"
-          export GOPROXY=off
 
           # Generate go.work if not present in source
           if [ ! -f go.work ]; then
@@ -772,7 +806,6 @@
 
           export GOCACHE=$TMPDIR/go-cache
           export GOPATH="$TMPDIR/go"
-          export GOPROXY=off
 
           runHook postConfigure
         ''
@@ -817,13 +850,13 @@
         Upgrade to Go 1.22 or later, or remove the vendor directory.
     '';
       stdenv.mkDerivation (
-        builtins.removeAttrs attrs ["modules" "subPackages" "ldflags" "tags" "GOOS" "GOARCH" "CGO_ENABLED" "localReplaces" "netrcFile" "GOPRIVATE" "GONOSUMDB" "GONOPROXY" "allowGoReference" "checkFlags" "excludedPackages" "meta"]
+        builtins.removeAttrs attrs commonRemovedAttrs
         // {
           inherit pname version src;
         }
         // mkCommonAttrs {
           inherit attrs go allowGoReference ldflags tags GOOS GOARCH CGO_ENABLED;
-          inherit useVendor subPackages checkFlags testPackages configurePhase passthru;
+          inherit useVendor subPackages checkFlags extraGoFlags testPackages configurePhase passthru;
         }
       );
 in {
