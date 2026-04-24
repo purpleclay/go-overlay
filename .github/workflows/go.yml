@@ -3,12 +3,14 @@ on:
   push:
     branches:
       - main
+      - v1
     paths:
       - "**.go"
       - "go.mod"
   pull_request:
     branches:
       - main
+      - v1
     paths:
       - "**.go"
       - "go.mod"

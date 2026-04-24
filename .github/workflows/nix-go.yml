@@ -3,11 +3,13 @@ on:
   push:
     branches:
       - main
+      - v1
     paths:
       - "manifests/go/**"
   pull_request:
     branches:
       - main
+      - v1
     paths:
       - "manifests/go/**"
 

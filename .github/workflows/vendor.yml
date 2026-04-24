@@ -1,7 +1,7 @@
 name: govendor
 on:
   pull_request:
-    branches: [main]
+    branches: [main, v1]
     paths: ["**/go.mod", "**/go.sum"]
 
 jobs:
