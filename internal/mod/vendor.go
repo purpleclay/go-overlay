@@ -91,7 +91,11 @@ func (v *Vendor) VendorFiles() error {
 	}
 
 	if !v.opts.recursive {
-		if goWork := v.findWorkspace(); goWork != nil {
+		path := "."
+		if len(v.opts.paths) > 0 {
+			path = v.opts.paths[0]
+		}
+		if goWork := v.findWorkspaceAt(path); goWork != nil {
 			return v.processWorkspace(goWork)
 		}
 	}
@@ -120,41 +124,6 @@ func (v *Vendor) VendorFiles() error {
 	}
 
 	return nil
-}
-
-func (v *Vendor) findWorkspace() *GoWorkFile {
-	path := "."
-	if len(v.opts.paths) > 0 {
-		path = v.opts.paths[0]
-	}
-
-	workPath := filepath.Join(path, goWorkFile)
-	if _, err := os.Stat(workPath); err == nil {
-		goWork, err := ParseGoWorkFile(workPath)
-		if err == nil {
-			return goWork
-		}
-	}
-
-	vendorPath := filepath.Join(path, vendorFile)
-	data, err := os.ReadFile(vendorPath)
-	if err != nil {
-		return nil
-	}
-
-	var manifest struct {
-		Workspace *WorkspaceConfig `toml:"workspace"`
-	}
-	if err := toml.Unmarshal(data, &manifest); err != nil || manifest.Workspace == nil {
-		return nil
-	}
-
-	goWork, err := NewGoWorkFileFromManifest(path, manifest.Workspace)
-	if err != nil {
-		return nil
-	}
-
-	return goWork
 }
 
 func (v *Vendor) processWorkspace(goWork *GoWorkFile) error {
