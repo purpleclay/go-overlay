@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/nix-community/go-nix/pkg/nar"
+	"github.com/purpleclay/go-overlay/internal/resolve"
 	"github.com/sourcegraph/conc/pool"
 	"golang.org/x/mod/modfile"
 )
@@ -278,13 +279,10 @@ func (f *GoModFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[s
 
 	for _, meta := range downloads {
 		p.Go(func() (GoModule, error) {
-			h := sha256.New()
-			if err := nar.DumpPath(h, meta.Dir); err != nil {
-				return GoModule{}, err
+			hash, err := resolve.NARHash(meta.Dir)
+			if err != nil {
+				return GoModule{}, fmt.Errorf("failed to hash downloaded module %s@%s: %w", meta.Path, meta.Version, err)
 			}
-
-			digest := h.Sum(nil)
-			hash := "sha256-" + base64.StdEncoding.EncodeToString(digest)
 
 			var goVersion string
 			if meta.GoMod != "" {
@@ -355,19 +353,16 @@ func (f *GoModFile) resolveLocalModules(pkgsByMod map[string][]string) ([]GoModu
 				return GoModule{}, fmt.Errorf("failed to list git tracked files for local module %s: %w", repl.LocalPath, err)
 			}
 
-			h := sha256.New()
-			if err := nar.DumpPathFilter(h, localDir, func(path string, _ nar.NodeType) bool {
+			hash, err := resolve.NARHashFiltered(localDir, func(path string, _ nar.NodeType) bool {
 				if strings.ToLower(filepath.Base(path)) == ".ds_store" {
 					return false
 				}
 				_, ok := tracked[path]
 				return ok
-			}); err != nil {
+			})
+			if err != nil {
 				return GoModule{}, fmt.Errorf("failed to hash local module %s: %w", repl.LocalPath, err)
 			}
-
-			digest := h.Sum(nil)
-			hash := "sha256-" + base64.StdEncoding.EncodeToString(digest)
 
 			var goVersion string
 			localGoMod := filepath.Join(localDir, "go.mod")
