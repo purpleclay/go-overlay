@@ -15,6 +15,7 @@ import (
 
 	"github.com/nix-community/go-nix/pkg/nar"
 	"github.com/purpleclay/go-overlay/internal/resolve"
+	"github.com/purpleclay/go-overlay/internal/vendor"
 	"github.com/sourcegraph/conc/pool"
 	"golang.org/x/mod/modfile"
 )
@@ -93,7 +94,7 @@ func (f *GoModFile) Replacements() map[string]Replacement {
 	return replacements
 }
 
-func (f *GoModFile) Dependencies(platforms []string) ([]GoModule, error) {
+func (f *GoModFile) Dependencies(platforms []string) ([]vendor.ModuleConfig, error) {
 	if platforms == nil {
 		platforms = DefaultPlatforms
 	}
@@ -272,16 +273,16 @@ func parseDownloadOutput(out string) ([]goModuleDownload, error) {
 	return downloads, nil
 }
 
-func (f *GoModFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[string][]string) ([]GoModule, error) {
+func (f *GoModFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[string][]string) ([]vendor.ModuleConfig, error) {
 	replacements := f.Replacements()
 
-	p := pool.NewWithResults[GoModule]().WithErrors().WithMaxGoroutines(8)
+	p := pool.NewWithResults[vendor.ModuleConfig]().WithErrors().WithMaxGoroutines(8)
 
 	for _, meta := range downloads {
-		p.Go(func() (GoModule, error) {
+		p.Go(func() (vendor.ModuleConfig, error) {
 			hash, err := resolve.NARHash(meta.Dir)
 			if err != nil {
-				return GoModule{}, fmt.Errorf("failed to hash downloaded module %s@%s: %w", meta.Path, meta.Version, err)
+				return vendor.ModuleConfig{}, fmt.Errorf("failed to hash downloaded module %s@%s: %w", meta.Path, meta.Version, err)
 			}
 
 			var goVersion string
@@ -300,7 +301,7 @@ func (f *GoModFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[s
 				replacedPath = meta.Path
 			}
 
-			return GoModule{
+			return vendor.ModuleConfig{
 				Path:         path,
 				Version:      meta.Version,
 				Packages:     pkgsByMod[path],
@@ -319,7 +320,7 @@ func (f *GoModFile) resolveModules(downloads []goModuleDownload, pkgsByMod map[s
 	return goModules, nil
 }
 
-func (f *GoModFile) resolveLocalModules(pkgsByMod map[string][]string) ([]GoModule, error) {
+func (f *GoModFile) resolveLocalModules(pkgsByMod map[string][]string) ([]vendor.ModuleConfig, error) {
 	replacements := f.Replacements()
 
 	var localRepls []Replacement
@@ -338,19 +339,19 @@ func (f *GoModFile) resolveLocalModules(pkgsByMod map[string][]string) ([]GoModu
 		requires[req.Mod.Path] = req.Mod.Version
 	}
 
-	p := pool.NewWithResults[GoModule]().WithErrors().WithMaxGoroutines(8)
+	p := pool.NewWithResults[vendor.ModuleConfig]().WithErrors().WithMaxGoroutines(8)
 
 	for _, repl := range localRepls {
-		p.Go(func() (GoModule, error) {
+		p.Go(func() (vendor.ModuleConfig, error) {
 			localDir := filepath.Join(f.dir, repl.LocalPath)
 			localDir, err := filepath.Abs(localDir)
 			if err != nil {
-				return GoModule{}, fmt.Errorf("failed to resolve local module path %s: %w", repl.LocalPath, err)
+				return vendor.ModuleConfig{}, fmt.Errorf("failed to resolve local module path %s: %w", repl.LocalPath, err)
 			}
 
 			tracked, err := gitTrackedFiles(localDir)
 			if err != nil {
-				return GoModule{}, fmt.Errorf("failed to list git tracked files for local module %s: %w", repl.LocalPath, err)
+				return vendor.ModuleConfig{}, fmt.Errorf("failed to list git tracked files for local module %s: %w", repl.LocalPath, err)
 			}
 
 			hash, err := resolve.NARHashFiltered(localDir, func(path string, _ nar.NodeType) bool {
@@ -361,7 +362,7 @@ func (f *GoModFile) resolveLocalModules(pkgsByMod map[string][]string) ([]GoModu
 				return ok
 			})
 			if err != nil {
-				return GoModule{}, fmt.Errorf("failed to hash local module %s: %w", repl.LocalPath, err)
+				return vendor.ModuleConfig{}, fmt.Errorf("failed to hash local module %s: %w", repl.LocalPath, err)
 			}
 
 			var goVersion string
@@ -377,7 +378,7 @@ func (f *GoModFile) resolveLocalModules(pkgsByMod map[string][]string) ([]GoModu
 				version = "v0.0.0"
 			}
 
-			return GoModule{
+			return vendor.ModuleConfig{
 				Path:         repl.OldPath,
 				Version:      version,
 				Packages:     pkgsByMod[repl.OldPath],

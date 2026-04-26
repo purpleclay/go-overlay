@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/purpleclay/go-overlay/internal/vendor"
 	"golang.org/x/mod/modfile"
 )
 
@@ -18,7 +19,7 @@ type GoWorkFile struct {
 	modules         []string
 	hash            string
 	workfile        *modfile.WorkFile
-	workspaceConfig *WorkspaceConfig
+	workspaceConfig *vendor.WorkspaceConfig
 }
 
 func ParseGoWorkFile(path string) (*GoWorkFile, error) {
@@ -51,9 +52,12 @@ func ParseGoWorkFile(path string) (*GoWorkFile, error) {
 	}, nil
 }
 
-func NewGoWorkFileFromManifest(dir string, config *WorkspaceConfig) (*GoWorkFile, error) {
-	modules := make([]string, len(config.Modules))
-	for i, mod := range config.Modules {
+func NewGoWorkFileFromManifest(dir string, config *vendor.WorkspaceConfig) (*GoWorkFile, error) {
+	if config == nil {
+		return nil, fmt.Errorf("workspace config is required")
+	}
+	modules := make([]string, len(config.ModuleConfigs))
+	for i, mod := range config.ModuleConfigs {
 		modules[i] = strings.TrimPrefix(mod, "./")
 	}
 
@@ -108,8 +112,8 @@ func (w *GoWorkFile) ModulePaths() []string {
 	return paths
 }
 
-func (w *GoWorkFile) Dependencies(platforms []string) ([]GoModule, error) {
-	allDeps := make(map[string]GoModule)
+func (w *GoWorkFile) Dependencies(platforms []string) ([]vendor.ModuleConfig, error) {
+	allDeps := make(map[string]vendor.ModuleConfig)
 	workspaceMembers := w.workspaceModulePaths()
 
 	for _, modDir := range w.modules {
@@ -147,7 +151,7 @@ func (w *GoWorkFile) Dependencies(platforms []string) ([]GoModule, error) {
 		}
 	}
 
-	modules := make([]GoModule, 0, len(allDeps))
+	modules := make([]vendor.ModuleConfig, 0, len(allDeps))
 	for _, mod := range allDeps {
 		modules = append(modules, mod)
 	}
@@ -182,7 +186,7 @@ func mergePackages(a, b []string) []string {
 	return result
 }
 
-func (w *GoWorkFile) WorkspaceConfig() *WorkspaceConfig {
+func (w *GoWorkFile) WorkspaceConfig() *vendor.WorkspaceConfig {
 	if w.workspaceConfig != nil {
 		return w.workspaceConfig
 	}
@@ -197,8 +201,8 @@ func (w *GoWorkFile) WorkspaceConfig() *WorkspaceConfig {
 	}
 	slices.Sort(modules)
 
-	config := &WorkspaceConfig{
-		Modules: modules,
+	config := &vendor.WorkspaceConfig{
+		ModuleConfigs: modules,
 	}
 
 	if w.workfile.Go != nil {

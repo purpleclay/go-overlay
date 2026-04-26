@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/purpleclay/go-overlay/internal/vendor"
 	"gotest.tools/v3/golden"
 )
 
@@ -21,7 +22,7 @@ func TestRenderResultsTableForGoMod(t *testing.T) {
 		resultMissing("path/to/missing/go.mod"),
 		resultNotFound("path/to/notfound/go.mod"),
 		resultOK("path/to/ok/go.mod"),
-		resultSchemaMismatch("path/to/schema-mismatch/go.mod", 1, schemaVersion),
+		resultSchemaMismatch("path/to/schema-mismatch/go.mod", 1, vendor.SchemaVersion),
 		resultSkipped("path/to/skipped/go.mod"),
 	}
 
@@ -37,7 +38,7 @@ func TestRenderResultsTableForGoWork(t *testing.T) {
 		resultMissing("path/to/missing/go.work"),
 		resultNotFound("path/to/notfound/go.work"),
 		resultOK("path/to/ok/go.work"),
-		resultSchemaMismatch("path/to/schema-mismatch/go.work", 1, schemaVersion),
+		resultSchemaMismatch("path/to/schema-mismatch/go.work", 1, vendor.SchemaVersion),
 		resultSkipped("path/to/skipped/go.work"),
 	}
 
