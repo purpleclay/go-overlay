@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/BurntSushi/toml"
+	"github.com/purpleclay/go-overlay/internal/vendor"
 	"github.com/sourcegraph/conc/pool"
 )
 
@@ -153,41 +153,14 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 	} else if err != nil {
 		return resultError(displayPath, err)
 	} else {
-		manifestSchema, err := extractSchema(existingData)
+		resolved, early, err := v.evaluateExistingManifest(displayPath, goWork.Hash(), existingData, extraPlatforms)
 		if err != nil {
 			return resultError(displayPath, err)
 		}
-		if manifestSchema != schemaVersion {
-			if v.opts.detectDrift {
-				return resultSchemaMismatch(displayPath, manifestSchema, schemaVersion)
-			}
-			if len(extraPlatforms) == 0 {
-				if existingPlatforms, err := extractPlatforms(existingData); err == nil {
-					extraPlatforms = existingPlatforms
-				}
-			}
-		} else {
-			existingHash, err := extractHash(existingData)
-			if err != nil {
-				return resultError(displayPath, err)
-			}
-
-			if len(extraPlatforms) == 0 {
-				if existingPlatforms, err := extractPlatforms(existingData); err == nil {
-					extraPlatforms = existingPlatforms
-				}
-			}
-
-			if !v.opts.force && existingHash == goWork.Hash() {
-				if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
-					return resultOK(displayPath)
-				}
-			}
-
-			if v.opts.detectDrift {
-				return resultDrift(displayPath, goWork.Hash(), existingHash)
-			}
+		if early != nil {
+			return *early
 		}
+		extraPlatforms = resolved
 	}
 
 	platforms := append(DefaultPlatforms, extraPlatforms...)
@@ -199,11 +172,49 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 	return resultGenerated(displayPath, depCount)
 }
 
+func (v *Vendor) evaluateExistingManifest(displayPath, currentHash string, existingData []byte, extraPlatforms []string) (resolved []string, early *vendorResult, err error) {
+	existing, err := vendor.Parse(existingData)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if existing.Schema != vendor.SchemaVersion {
+		if v.opts.detectDrift {
+			r := resultSchemaMismatch(displayPath, existing.Schema, vendor.SchemaVersion)
+			return nil, &r, nil
+		}
+		if len(extraPlatforms) == 0 {
+			extraPlatforms = existing.IncludePlatforms
+		}
+		return extraPlatforms, nil, nil
+	}
+
+	if len(extraPlatforms) == 0 {
+		extraPlatforms = existing.IncludePlatforms
+	}
+
+	if !v.opts.force && existing.Hash == currentHash {
+		if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
+			r := resultOK(displayPath)
+			return nil, &r, nil
+		}
+	}
+
+	if v.opts.detectDrift {
+		r := resultDrift(displayPath, currentHash, existing.Hash)
+		return nil, &r, nil
+	}
+
+	return extraPlatforms, nil, nil
+}
+
 func (v *Vendor) generateWorkspaceManifest(goWork *GoWorkFile, platforms []string, includePlatforms []string) (int, error) {
-	manifest, err := newWorkspaceManifest(goWork, platforms, includePlatforms)
+	deps, err := goWork.Dependencies(platforms)
 	if err != nil {
 		return 0, err
 	}
+
+	manifest := vendor.New(goWork.Hash(), deps, includePlatforms, goWork.WorkspaceConfig())
 
 	var buf bytes.Buffer
 	if _, err := manifest.WriteTo(&buf); err != nil {
@@ -284,41 +295,14 @@ func (v *Vendor) processModFile(path string) vendorResult {
 	} else if err != nil {
 		return resultError(path, err)
 	} else {
-		manifestSchema, err := extractSchema(existingData)
+		resolved, early, err := v.evaluateExistingManifest(path, goMod.Hash(), existingData, extraPlatforms)
 		if err != nil {
 			return resultError(path, err)
 		}
-		if manifestSchema != schemaVersion {
-			if v.opts.detectDrift {
-				return resultSchemaMismatch(path, manifestSchema, schemaVersion)
-			}
-			if len(extraPlatforms) == 0 {
-				if existingPlatforms, err := extractPlatforms(existingData); err == nil {
-					extraPlatforms = existingPlatforms
-				}
-			}
-		} else {
-			existingHash, err := extractHash(existingData)
-			if err != nil {
-				return resultError(path, err)
-			}
-
-			if len(extraPlatforms) == 0 {
-				if existingPlatforms, err := extractPlatforms(existingData); err == nil {
-					extraPlatforms = existingPlatforms
-				}
-			}
-
-			if !v.opts.force && existingHash == goMod.Hash() {
-				if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
-					return resultOK(path)
-				}
-			}
-
-			if v.opts.detectDrift {
-				return resultDrift(path, goMod.Hash(), existingHash)
-			}
+		if early != nil {
+			return *early
 		}
+		extraPlatforms = resolved
 	}
 
 	platforms := append(DefaultPlatforms, extraPlatforms...)
@@ -331,10 +315,12 @@ func (v *Vendor) processModFile(path string) vendorResult {
 }
 
 func (v *Vendor) generateManifest(goMod *GoModFile, platforms []string, includePlatforms []string) (int, error) {
-	manifest, err := newManifest(goMod, platforms, includePlatforms)
+	deps, err := goMod.Dependencies(platforms)
 	if err != nil {
 		return 0, err
 	}
+
+	manifest := vendor.New(goMod.Hash(), deps, includePlatforms, nil)
 
 	var buf bytes.Buffer
 	if _, err := manifest.WriteTo(&buf); err != nil {
@@ -396,14 +382,12 @@ func (v *Vendor) findWorkspaceAt(path string) *GoWorkFile {
 		return nil
 	}
 
-	var manifest struct {
-		Workspace *WorkspaceConfig `toml:"workspace"`
-	}
-	if err := toml.Unmarshal(data, &manifest); err != nil || manifest.Workspace == nil {
+	existing, err := vendor.Parse(data)
+	if err != nil || existing.Workspace == nil {
 		return nil
 	}
 
-	goWork, err := NewGoWorkFileFromManifest(path, manifest.Workspace)
+	goWork, err := NewGoWorkFileFromManifest(path, existing.Workspace)
 	if err != nil {
 		return nil
 	}
