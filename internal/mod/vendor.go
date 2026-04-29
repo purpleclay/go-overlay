@@ -85,6 +85,13 @@ func NewVendor(opts ...VendorOption) *Vendor {
 
 var errVendorFailed = fmt.Errorf("vendor failed")
 
+// manifestSource is implemented by both GoModFile and GoWorkFile, allowing
+// the common drift detection and generation algorithm to be shared.
+type manifestSource interface {
+	Hash() string
+	Dir() string
+}
+
 func (v *Vendor) VendorFiles() ([]vendor.Result, error) {
 	if v.opts.workspace {
 		return v.processWorkspaceMode()
@@ -96,7 +103,7 @@ func (v *Vendor) VendorFiles() ([]vendor.Result, error) {
 			path = v.opts.paths[0]
 		}
 		if goWork := v.findWorkspaceAt(path); goWork != nil {
-			return v.processWorkspace(goWork)
+			return v.toResults(v.processSource(goWork, filepath.Join(goWork.Dir(), goWorkFile)))
 		}
 	}
 
@@ -108,7 +115,14 @@ func (v *Vendor) VendorFiles() ([]vendor.Result, error) {
 	p := pool.NewWithResults[vendor.Result]()
 	for _, modFile := range modFiles {
 		p.Go(func() vendor.Result {
-			return v.processModFile(modFile)
+			goMod, err := ParseGoModFile(modFile)
+			if err != nil {
+				return resultError(modFile, err)
+			}
+			if !goMod.HasDependencies() {
+				return resultSkipped(modFile)
+			}
+			return v.processSource(goMod, modFile)
 		})
 	}
 
@@ -127,20 +141,17 @@ func (v *Vendor) VendorFiles() ([]vendor.Result, error) {
 	return results, nil
 }
 
-func (v *Vendor) processWorkspace(goWork *GoWorkFile) ([]vendor.Result, error) {
-	result := v.processWorkspaceManifest(goWork)
-
-	if result.Status.IsFailure() {
-		return []vendor.Result{result}, errVendorFailed
+func (v *Vendor) toResults(r vendor.Result) ([]vendor.Result, error) {
+	if r.Status.IsFailure() {
+		return []vendor.Result{r}, errVendorFailed
 	}
-
-	return []vendor.Result{result}, nil
+	return []vendor.Result{r}, nil
 }
 
-func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendor.Result {
-	displayPath := filepath.Join(goWork.Dir(), goWorkFile)
-
-	vendorPath := filepath.Join(goWork.Dir(), vendorFile)
+// processSource implements the common drift detection and generation algorithm
+// for both GoModFile and GoWorkFile sources.
+func (v *Vendor) processSource(src manifestSource, displayPath string) vendor.Result {
+	vendorPath := filepath.Join(src.Dir(), vendorFile)
 	existingData, err := os.ReadFile(vendorPath)
 
 	extraPlatforms := v.opts.extraPlatforms
@@ -152,18 +163,37 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendor.Result {
 	} else if err != nil {
 		return resultError(displayPath, err)
 	} else {
-		resolved, early, err := v.evaluateExistingManifest(displayPath, goWork.Hash(), existingData, extraPlatforms)
+		existing, err := vendor.Parse(existingData)
 		if err != nil {
 			return resultError(displayPath, err)
 		}
-		if early != nil {
-			return *early
+
+		if existing.Schema != vendor.SchemaVersion {
+			if v.opts.detectDrift {
+				return resultSchemaMismatch(displayPath, existing.Schema, vendor.SchemaVersion)
+			}
+			if len(extraPlatforms) == 0 {
+				extraPlatforms = existing.IncludePlatforms
+			}
+		} else {
+			if len(extraPlatforms) == 0 {
+				extraPlatforms = existing.IncludePlatforms
+			}
+
+			if !v.opts.force && existing.Hash == src.Hash() {
+				if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
+					return resultOK(displayPath)
+				}
+			}
+
+			if v.opts.detectDrift {
+				return resultDrift(displayPath, src.Hash(), existing.Hash)
+			}
 		}
-		extraPlatforms = resolved
 	}
 
 	platforms := append(DefaultPlatforms, extraPlatforms...)
-	depCount, err := v.generateWorkspaceManifest(goWork, platforms, extraPlatforms)
+	depCount, err := v.generate(src, platforms, extraPlatforms)
 	if err != nil {
 		return resultError(displayPath, err)
 	}
@@ -171,61 +201,38 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendor.Result {
 	return resultGenerated(displayPath, depCount)
 }
 
-func (v *Vendor) evaluateExistingManifest(displayPath, currentHash string, existingData []byte, extraPlatforms []string) (resolved []string, early *vendor.Result, err error) {
-	existing, err := vendor.Parse(existingData)
-	if err != nil {
-		return nil, nil, err
+func (v *Vendor) generate(src manifestSource, platforms, includePlatforms []string) (int, error) {
+	var deps []vendor.ModuleConfig
+	var workspace *vendor.WorkspaceConfig
+	var err error
+
+	switch s := src.(type) {
+	case *GoModFile:
+		deps, err = s.Dependencies(platforms)
+	case *GoWorkFile:
+		deps, err = s.Dependencies(platforms)
+		workspace = s.WorkspaceConfig()
+	default:
+		return 0, fmt.Errorf("unsupported source type: %T", src)
 	}
 
-	if existing.Schema != vendor.SchemaVersion {
-		if v.opts.detectDrift {
-			r := resultSchemaMismatch(displayPath, existing.Schema, vendor.SchemaVersion)
-			return nil, &r, nil
-		}
-		if len(extraPlatforms) == 0 {
-			extraPlatforms = existing.IncludePlatforms
-		}
-		return extraPlatforms, nil, nil
-	}
-
-	if len(extraPlatforms) == 0 {
-		extraPlatforms = existing.IncludePlatforms
-	}
-
-	if !v.opts.force && existing.Hash == currentHash {
-		if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
-			r := resultOK(displayPath)
-			return nil, &r, nil
-		}
-	}
-
-	if v.opts.detectDrift {
-		r := resultDrift(displayPath, currentHash, existing.Hash)
-		return nil, &r, nil
-	}
-
-	return extraPlatforms, nil, nil
-}
-
-func (v *Vendor) generateWorkspaceManifest(goWork *GoWorkFile, platforms []string, includePlatforms []string) (int, error) {
-	deps, err := goWork.Dependencies(platforms)
 	if err != nil {
 		return 0, err
 	}
 
-	manifest := vendor.New(goWork.Hash(), deps, includePlatforms, goWork.WorkspaceConfig())
+	m := vendor.New(src.Hash(), deps, includePlatforms, workspace)
 
 	var buf bytes.Buffer
-	if _, err := manifest.WriteTo(&buf); err != nil {
+	if _, err := m.WriteTo(&buf); err != nil {
 		return 0, err
 	}
 
-	outputPath := filepath.Join(goWork.Dir(), vendorFile)
+	outputPath := filepath.Join(src.Dir(), vendorFile)
 	if err := os.WriteFile(outputPath, buf.Bytes(), 0o644); err != nil {
 		return 0, err
 	}
 
-	return len(manifest.Mod), nil
+	return len(m.Mod), nil
 }
 
 func (v *Vendor) findModFiles() (modFiles []string, missing []vendor.Result, err error) {
@@ -273,67 +280,6 @@ func (v *Vendor) findModFiles() (modFiles []string, missing []vendor.Result, err
 	return modFiles, missing, nil
 }
 
-func (v *Vendor) processModFile(path string) vendor.Result {
-	goMod, err := ParseGoModFile(path)
-	if err != nil {
-		return resultError(path, err)
-	}
-
-	vendorPath := filepath.Join(goMod.Dir(), vendorFile)
-	existingData, err := os.ReadFile(vendorPath)
-
-	extraPlatforms := v.opts.extraPlatforms
-
-	if os.IsNotExist(err) {
-		if !goMod.HasDependencies() {
-			return resultSkipped(path)
-		}
-		if v.opts.detectDrift {
-			return resultMissing(path)
-		}
-	} else if err != nil {
-		return resultError(path, err)
-	} else {
-		resolved, early, err := v.evaluateExistingManifest(path, goMod.Hash(), existingData, extraPlatforms)
-		if err != nil {
-			return resultError(path, err)
-		}
-		if early != nil {
-			return *early
-		}
-		extraPlatforms = resolved
-	}
-
-	platforms := append(DefaultPlatforms, extraPlatforms...)
-	depCount, err := v.generateManifest(goMod, platforms, extraPlatforms)
-	if err != nil {
-		return resultError(path, err)
-	}
-
-	return resultGenerated(path, depCount)
-}
-
-func (v *Vendor) generateManifest(goMod *GoModFile, platforms []string, includePlatforms []string) (int, error) {
-	deps, err := goMod.Dependencies(platforms)
-	if err != nil {
-		return 0, err
-	}
-
-	manifest := vendor.New(goMod.Hash(), deps, includePlatforms, nil)
-
-	var buf bytes.Buffer
-	if _, err := manifest.WriteTo(&buf); err != nil {
-		return 0, err
-	}
-
-	outputPath := filepath.Join(goMod.Dir(), vendorFile)
-	if err := os.WriteFile(outputPath, buf.Bytes(), 0o644); err != nil {
-		return 0, err
-	}
-
-	return len(manifest.Mod), nil
-}
-
 func (v *Vendor) processWorkspaceMode() ([]vendor.Result, error) {
 	path := "."
 	if len(v.opts.paths) > 0 {
@@ -354,14 +300,11 @@ func (v *Vendor) processWorkspaceMode() ([]vendor.Result, error) {
 		if goWork == nil {
 			result = resultError(manifestPath, fmt.Errorf("invalid workspace manifest"))
 		} else {
-			result = v.processWorkspaceManifest(goWork)
+			result = v.processSource(goWork, filepath.Join(manifestDir, goWorkFile))
 		}
 	}
 
-	if result.Status.IsFailure() {
-		return []vendor.Result{result}, errVendorFailed
-	}
-	return []vendor.Result{result}, nil
+	return v.toResults(result)
 }
 
 func (v *Vendor) findWorkspaceAt(path string) *GoWorkFile {
