@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/ui"
 	"github.com/purpleclay/x/cli"
 	"github.com/purpleclay/x/theme"
 	"github.com/spf13/cobra"
@@ -100,7 +101,11 @@ func Execute(version cli.VersionInfo) error {
 			}
 
 			v := mod.NewVendor(opts...)
-			return v.VendorFiles()
+			results, err := v.VendorFiles()
+			if len(results) > 0 {
+				fmt.Println(ui.RenderResultsTable(results))
+			}
+			return err
 		},
 	}
 
