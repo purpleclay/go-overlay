@@ -85,7 +85,7 @@ func NewVendor(opts ...VendorOption) *Vendor {
 
 var errVendorFailed = fmt.Errorf("vendor failed")
 
-func (v *Vendor) VendorFiles() error {
+func (v *Vendor) VendorFiles() ([]vendor.Result, error) {
 	if v.opts.workspace {
 		return v.processWorkspaceMode()
 	}
@@ -100,11 +100,14 @@ func (v *Vendor) VendorFiles() error {
 		}
 	}
 
-	modFiles, missingResults := v.findModFiles()
+	modFiles, missingResults, err := v.findModFiles()
+	if err != nil {
+		return nil, err
+	}
 
-	p := pool.NewWithResults[vendorResult]()
+	p := pool.NewWithResults[vendor.Result]()
 	for _, modFile := range modFiles {
-		p.Go(func() vendorResult {
+		p.Go(func() vendor.Result {
 			return v.processModFile(modFile)
 		})
 	}
@@ -112,33 +115,29 @@ func (v *Vendor) VendorFiles() error {
 	results := append(missingResults, p.Wait()...)
 
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].path < results[j].path
+		return results[i].Path < results[j].Path
 	})
 
-	fmt.Println(renderResultsTable(results))
-
 	for _, r := range results {
-		if r.status.IsFailure() {
-			return errVendorFailed
+		if r.Status.IsFailure() {
+			return results, errVendorFailed
 		}
 	}
 
-	return nil
+	return results, nil
 }
 
-func (v *Vendor) processWorkspace(goWork *GoWorkFile) error {
+func (v *Vendor) processWorkspace(goWork *GoWorkFile) ([]vendor.Result, error) {
 	result := v.processWorkspaceManifest(goWork)
 
-	fmt.Println(renderResultsTable([]vendorResult{result}))
-
-	if result.status.IsFailure() {
-		return errVendorFailed
+	if result.Status.IsFailure() {
+		return []vendor.Result{result}, errVendorFailed
 	}
 
-	return nil
+	return []vendor.Result{result}, nil
 }
 
-func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
+func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendor.Result {
 	displayPath := filepath.Join(goWork.Dir(), goWorkFile)
 
 	vendorPath := filepath.Join(goWork.Dir(), vendorFile)
@@ -172,7 +171,7 @@ func (v *Vendor) processWorkspaceManifest(goWork *GoWorkFile) vendorResult {
 	return resultGenerated(displayPath, depCount)
 }
 
-func (v *Vendor) evaluateExistingManifest(displayPath, currentHash string, existingData []byte, extraPlatforms []string) (resolved []string, early *vendorResult, err error) {
+func (v *Vendor) evaluateExistingManifest(displayPath, currentHash string, existingData []byte, extraPlatforms []string) (resolved []string, early *vendor.Result, err error) {
 	existing, err := vendor.Parse(existingData)
 	if err != nil {
 		return nil, nil, err
@@ -229,7 +228,7 @@ func (v *Vendor) generateWorkspaceManifest(goWork *GoWorkFile, platforms []strin
 	return len(manifest.Mod), nil
 }
 
-func (v *Vendor) findModFiles() (modFiles []string, missing []vendorResult) {
+func (v *Vendor) findModFiles() (modFiles []string, missing []vendor.Result, err error) {
 	paths := v.opts.paths
 	if len(paths) == 0 {
 		paths = []string{"."}
@@ -246,7 +245,7 @@ func (v *Vendor) findModFiles() (modFiles []string, missing []vendorResult) {
 
 		results, err := p.Wait()
 		if err != nil {
-			return nil, nil
+			return nil, nil, err
 		}
 
 		for _, found := range results {
@@ -259,7 +258,7 @@ func (v *Vendor) findModFiles() (modFiles []string, missing []vendorResult) {
 			}
 		}
 
-		return modFiles, missing
+		return modFiles, missing, nil
 	}
 
 	for _, path := range paths {
@@ -271,10 +270,10 @@ func (v *Vendor) findModFiles() (modFiles []string, missing []vendorResult) {
 		}
 	}
 
-	return modFiles, missing
+	return modFiles, missing, nil
 }
 
-func (v *Vendor) processModFile(path string) vendorResult {
+func (v *Vendor) processModFile(path string) vendor.Result {
 	goMod, err := ParseGoModFile(path)
 	if err != nil {
 		return resultError(path, err)
@@ -335,7 +334,7 @@ func (v *Vendor) generateManifest(goMod *GoModFile, platforms []string, includeP
 	return len(manifest.Mod), nil
 }
 
-func (v *Vendor) processWorkspaceMode() error {
+func (v *Vendor) processWorkspaceMode() ([]vendor.Result, error) {
 	path := "."
 	if len(v.opts.paths) > 0 {
 		path = v.opts.paths[0]
@@ -343,10 +342,10 @@ func (v *Vendor) processWorkspaceMode() error {
 
 	manifestPath, err := FindWorkspaceManifest(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	var result vendorResult
+	var result vendor.Result
 	if manifestPath == "" {
 		result = resultMissing(filepath.Join(path, vendorFile))
 	} else {
@@ -359,12 +358,10 @@ func (v *Vendor) processWorkspaceMode() error {
 		}
 	}
 
-	fmt.Println(renderResultsTable([]vendorResult{result}))
-
-	if result.status.IsFailure() {
-		return errVendorFailed
+	if result.Status.IsFailure() {
+		return []vendor.Result{result}, errVendorFailed
 	}
-	return nil
+	return []vendor.Result{result}, nil
 }
 
 func (v *Vendor) findWorkspaceAt(path string) *GoWorkFile {
