@@ -121,11 +121,11 @@ jobs:
 
           git checkout -b "$branch"
           git add "$manifest"
-          git commit -s -m "chore: generated nix manifest for ${name} ${version#v}"
+          git commit -s -m "chore(tool): generated nix manifest for ${name} ${version#v}"
           git push -u origin "$branch"
 
           gh pr create \
-            --title "chore: add ${name} ${version#v} manifest" \
+            --title "chore(tool): add ${name} ${version#v} manifest" \
             --body "Auto-generated nix manifest for ${name} ${version}." \
             --base main \
             --head "$branch"
