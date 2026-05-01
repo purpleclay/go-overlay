@@ -30,7 +30,7 @@ func ValidatePlatforms(platforms []string) error {
 }
 
 func supportedPlatforms() (map[string]bool, error) {
-	out, err := exec([]string{"go", "tool", "dist", "list"}, ".")
+	out, err := execCmd([]string{"go", "tool", "dist", "list"}, ".")
 	if err != nil {
 		return nil, err
 	}
