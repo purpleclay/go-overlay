@@ -85,11 +85,12 @@ func NewVendor(opts ...VendorOption) *Vendor {
 
 var errVendorFailed = fmt.Errorf("vendor failed")
 
-// manifestSource is implemented by both GoModFile and GoWorkFile, allowing
+// dependencySource is implemented by both GoModFile and GoWorkFile, allowing
 // the common drift detection and generation algorithm to be shared.
-type manifestSource interface {
+type dependencySource interface {
 	Hash() string
 	Dir() string
+	Dependencies(platforms []string) ([]vendor.ModuleConfig, error)
 }
 
 func (v *Vendor) VendorFiles() ([]vendor.Result, error) {
@@ -103,7 +104,7 @@ func (v *Vendor) VendorFiles() ([]vendor.Result, error) {
 			path = v.opts.paths[0]
 		}
 		if goWork := v.findWorkspaceAt(path); goWork != nil {
-			return v.toResults(v.processSource(goWork, filepath.Join(goWork.Dir(), goWorkFile)))
+			return v.toResults(v.processSource(goWork, filepath.Join(goWork.Dir(), goWorkFile), goWork.WorkspaceConfig()))
 		}
 	}
 
@@ -122,7 +123,7 @@ func (v *Vendor) VendorFiles() ([]vendor.Result, error) {
 			if !goMod.HasDependencies() {
 				return resultSkipped(modFile)
 			}
-			return v.processSource(goMod, modFile)
+			return v.processSource(goMod, modFile, nil)
 		})
 	}
 
@@ -150,7 +151,7 @@ func (v *Vendor) toResults(r vendor.Result) ([]vendor.Result, error) {
 
 // processSource implements the common drift detection and generation algorithm
 // for both GoModFile and GoWorkFile sources.
-func (v *Vendor) processSource(src manifestSource, displayPath string) vendor.Result {
+func (v *Vendor) processSource(src dependencySource, displayPath string, workspace *vendor.WorkspaceConfig) vendor.Result {
 	vendorPath := filepath.Join(src.Dir(), vendorFile)
 	existingData, err := os.ReadFile(vendorPath)
 
@@ -193,7 +194,7 @@ func (v *Vendor) processSource(src manifestSource, displayPath string) vendor.Re
 	}
 
 	platforms := append(DefaultPlatforms, extraPlatforms...)
-	depCount, err := v.generate(src, platforms, extraPlatforms)
+	depCount, err := v.generate(src, platforms, extraPlatforms, workspace)
 	if err != nil {
 		return resultError(displayPath, err)
 	}
@@ -201,21 +202,8 @@ func (v *Vendor) processSource(src manifestSource, displayPath string) vendor.Re
 	return resultGenerated(displayPath, depCount)
 }
 
-func (v *Vendor) generate(src manifestSource, platforms, includePlatforms []string) (int, error) {
-	var deps []vendor.ModuleConfig
-	var workspace *vendor.WorkspaceConfig
-	var err error
-
-	switch s := src.(type) {
-	case *GoModFile:
-		deps, err = s.Dependencies(platforms)
-	case *GoWorkFile:
-		deps, err = s.Dependencies(platforms)
-		workspace = s.WorkspaceConfig()
-	default:
-		return 0, fmt.Errorf("unsupported source type: %T", src)
-	}
-
+func (v *Vendor) generate(src dependencySource, platforms, includePlatforms []string, workspace *vendor.WorkspaceConfig) (int, error) {
+	deps, err := src.Dependencies(platforms)
 	if err != nil {
 		return 0, err
 	}
@@ -300,7 +288,7 @@ func (v *Vendor) processWorkspaceMode() ([]vendor.Result, error) {
 		if goWork == nil {
 			result = resultError(manifestPath, fmt.Errorf("invalid workspace manifest"))
 		} else {
-			result = v.processSource(goWork, filepath.Join(manifestDir, goWorkFile))
+			result = v.processSource(goWork, filepath.Join(manifestDir, goWorkFile), goWork.WorkspaceConfig())
 		}
 	}
 
