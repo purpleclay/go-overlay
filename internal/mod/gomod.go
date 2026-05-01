@@ -180,7 +180,7 @@ func (f *GoModFile) packagesByModule(platforms []string) (map[string][]string, e
 }
 
 func (f *GoModFile) packagesByModuleForPlatform(goos, goarch string) (map[string][]string, error) {
-	listFmt := fmt.Sprintf(`'{{if not .Standard}}{{if .Module}}{{if ne .Module.Path "%s"}}{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}{{end}}'`, f.ModulePath())
+	listFmt := fmt.Sprintf(`{{if not .Standard}}{{if .Module}}{{if ne .Module.Path "%s"}}{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}{{end}}`, f.ModulePath())
 
 	cmd := []string{
 		"go", "list", "-deps", "-test", "-f", listFmt, "./...",
@@ -394,7 +394,7 @@ func (f *GoModFile) resolveLocalModules(pkgsByMod map[string][]string) ([]vendor
 }
 
 func gitTrackedFiles(dir string) (map[string]struct{}, error) {
-	out, err := exec([]string{"git", "ls-files"}, dir)
+	out, err := execCmd([]string{"git", "ls-files"}, dir)
 	if err != nil {
 		return nil, err
 	}
