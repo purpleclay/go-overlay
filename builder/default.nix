@@ -73,8 +73,7 @@
 
   # Generate modules.txt entry for a single module
   mkModuleEntry = goPackagePath: meta: let
-    # A remote path replacement has replaced set to a *different* module path.
-    # Local replacements also set replaced (to the same path) alongside local.
+    # A remote replacement has replaced set to the substitute module path.
     isRemoteReplace = (meta ? replaced) && meta.replaced != goPackagePath;
     header =
       if meta ? local

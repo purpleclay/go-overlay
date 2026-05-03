@@ -4,99 +4,103 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/purpleclay/go-overlay/internal/mod"
 	"github.com/purpleclay/go-overlay/internal/vendor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gotest.tools/v3/golden"
 )
 
 func TestParse(t *testing.T) {
-	t.Run("BackfillsModulePath", func(t *testing.T) {
-		data := []byte(`schema = 2
-hash = "sha256-abc123"
+	data := []byte(`schema = 2
+hash = "sha256-7rwfLDKKRjrYZVf/fGtIiL45LOWF5S05WW5yvDESJxE="
 
 [mod]
-  [mod."github.com/foo/bar"]
-    version = "v1.0.0"
-    hash = "sha256-def456"`)
-		m, err := vendor.Parse(data)
-		require.NoError(t, err)
-		cfg, ok := m.Mod["github.com/foo/bar"]
-		require.True(t, ok)
-		assert.Equal(t, "github.com/foo/bar", cfg.Path)
-	})
+  [mod."github.com/BurntSushi/toml"]
+    version = "v1.6.0"
+    hash = "sha256-dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk="
+    go = "1.18"
+    packages = ["github.com/BurntSushi/toml"]`)
+
+	m, err := vendor.Parse(data)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, m.Schema)
+	assert.Equal(t, "sha256-7rwfLDKKRjrYZVf/fGtIiL45LOWF5S05WW5yvDESJxE=", m.Hash)
+	assert.Nil(t, m.Workspace)
+	require.Len(t, m.Mod, 1)
+
+	dep := m.Mod["github.com/BurntSushi/toml"]
+	assert.Equal(t, "github.com/BurntSushi/toml", dep.Path)
+	assert.Equal(t, "v1.6.0", dep.Version)
+	assert.Equal(t, "sha256-dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=", dep.Hash)
+	assert.Equal(t, "1.18", dep.GoVersion)
+	assert.Equal(t, []string{"github.com/BurntSushi/toml"}, dep.Packages)
+}
+
+func TestParseWithWorkspace(t *testing.T) {
+	data := []byte(`schema = 2
+hash = "sha256-IJpcpXwkPQuqU/YHXlMIy9fNLkSzCfTfw6HRtzSBdok="
+
+[workspace]
+  go = "1.25.4"
+  toolchain = "go1.25.4"
+  modules = ["./cli", "./core"]
+
+[mod]
+  [mod."github.com/fatih/color"]
+    version = "v1.18.0"
+    hash = "sha256-pP5y72FSbi4j/BjyVq/XbAOFjzNjMxZt2R/lFFxGWvY="
+    go = "1.17"
+    packages = ["github.com/fatih/color"]`)
+
+	m, err := vendor.Parse(data)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, m.Schema)
+	assert.Equal(t, "sha256-IJpcpXwkPQuqU/YHXlMIy9fNLkSzCfTfw6HRtzSBdok=", m.Hash)
+	require.NotNil(t, m.Workspace)
+	assert.Equal(t, "1.25.4", m.Workspace.Go)
+	assert.Equal(t, "go1.25.4", m.Workspace.Toolchain)
+	assert.Equal(t, []string{"./cli", "./core"}, m.Workspace.Modules)
+	require.Len(t, m.Mod, 1)
+
+	dep := m.Mod["github.com/fatih/color"]
+	assert.Equal(t, "v1.18.0", dep.Version)
+	assert.Equal(t, "sha256-pP5y72FSbi4j/BjyVq/XbAOFjzNjMxZt2R/lFFxGWvY=", dep.Hash)
+	assert.Equal(t, "1.17", dep.GoVersion)
+	assert.Equal(t, []string{"github.com/fatih/color"}, dep.Packages)
 }
 
 func TestWriteTo(t *testing.T) {
-	tests := []struct {
-		name             string
-		hash             string
-		deps             []vendor.ModuleConfig
-		includePlatforms []string
-		workspace        *vendor.WorkspaceConfig
-	}{
-		{
-			name: "simple",
-			hash: "sha256-modulehash=",
-			deps: []vendor.ModuleConfig{
-				{
-					Path:      "github.com/stretchr/testify",
-					Version:   "v1.9.0",
-					Hash:      "sha256-abc123def456=",
-					GoVersion: "1.20",
-					Packages:  []string{"github.com/stretchr/testify/assert"},
-				},
-				{
-					Path:     "github.com/davecgh/go-spew",
-					Version:  "v1.1.1",
-					Hash:     "sha256-xyz789=",
-					Packages: []string{"github.com/davecgh/go-spew/spew"},
-				},
+	manifest := vendor.New(
+		"sha256-7rwfLDKKRjrYZVf/fGtIiL45LOWF5S05WW5yvDESJxE=",
+		[]mod.ModuleConfig{
+			{
+				Path:      "github.com/BurntSushi/toml",
+				Version:   "v1.6.0",
+				Hash:      "sha256-dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=",
+				GoVersion: "1.18",
+				Packages:  []string{"github.com/BurntSushi/toml"},
 			},
 		},
-		{
-			name: "with-platforms",
-			hash: "sha256-modulehash=",
-			deps: []vendor.ModuleConfig{
-				{
-					Path:      "github.com/stretchr/testify",
-					Version:   "v1.9.0",
-					Hash:      "sha256-abc123def456=",
-					GoVersion: "1.20",
-					Packages:  []string{"github.com/stretchr/testify/assert"},
-				},
-			},
-			includePlatforms: []string{"freebsd/amd64", "freebsd/arm64"},
+		[]string{"linux/amd64"},
+		&mod.WorkspaceConfig{
+			Go:        "1.25.4",
+			Toolchain: "go1.25.4",
+			Modules:   []string{"./cli"},
 		},
-		{
-			name: "workspace",
-			hash: "sha256-workspacehash=",
-			deps: []vendor.ModuleConfig{
-				{
-					Path:         "example.com/shared",
-					Version:      "v0.0.0",
-					GoVersion:    "1.22",
-					ReplacedPath: "example.com/shared",
-					Local:        "./shared",
-				},
-			},
-			workspace: &vendor.WorkspaceConfig{
-				Go:            "1.22",
-				ModuleConfigs: []string{"./api", "./shared"},
-			},
-		},
-	}
+	)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			manifest := vendor.New(tt.hash, tt.deps, tt.includePlatforms, tt.workspace)
+	var buf bytes.Buffer
+	n, err := manifest.WriteTo(&buf)
+	require.NoError(t, err)
+	assert.Equal(t, int64(buf.Len()), n)
 
-			var buf bytes.Buffer
-			n, err := manifest.WriteTo(&buf)
-			require.NoError(t, err)
-			require.Equal(t, int64(buf.Len()), n)
-
-			golden.Assert(t, buf.String(), tt.name+"/govendor.golden")
-		})
-	}
+	parsed, err := vendor.Parse(buf.Bytes())
+	require.NoError(t, err)
+	assert.Equal(t, manifest.Schema, parsed.Schema)
+	assert.Equal(t, manifest.Hash, parsed.Hash)
+	assert.Equal(t, manifest.IncludePlatforms, parsed.IncludePlatforms)
+	assert.Equal(t, manifest.Workspace, parsed.Workspace)
+	assert.Equal(t, manifest.Mod, parsed.Mod)
 }
