@@ -11,5 +11,4 @@ hash = "sha256-n2JuamOKKnhIcU25/UG5xkqWlFXOTLx3pWcMsIzASDI="
   [mod."github.com/purpleclay/go-overlay/examples/go-workspace/mood"]
     version = "v0.0.0"
     go = "1.25.4"
-    replaced = "github.com/purpleclay/go-overlay/examples/go-workspace/mood"
     local = "./mood"
