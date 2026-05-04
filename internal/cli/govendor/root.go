@@ -3,8 +3,9 @@ package govendor
 import (
 	"fmt"
 
-	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/resolve"
 	"github.com/purpleclay/go-overlay/internal/ui"
+	"github.com/purpleclay/go-overlay/internal/vendor"
 	"github.com/purpleclay/x/cli"
 	"github.com/purpleclay/x/theme"
 	"github.com/spf13/cobra"
@@ -71,36 +72,38 @@ func Execute(version cli.VersionInfo) error {
 				return fmt.Errorf("--workspace requires --check")
 			}
 
-			var opts []mod.VendorOption
+			var opts []vendor.Option
 
 			if len(args) > 0 {
-				opts = append(opts, mod.WithPaths(args...))
+				opts = append(opts, vendor.WithPaths(args...))
 			}
 
 			if check {
-				opts = append(opts, mod.WithDriftDetection())
+				opts = append(opts, vendor.WithDriftDetection())
 			}
 
 			if force {
-				opts = append(opts, mod.WithForce())
+				opts = append(opts, vendor.WithForce())
 			}
 
 			if recursive {
-				opts = append(opts, mod.WithRecursive(depth))
+				opts = append(opts, vendor.WithRecursive(depth))
 			}
 
 			if workspace {
-				opts = append(opts, mod.WithWorkspace())
+				opts = append(opts, vendor.WithWorkspace())
 			}
+
+			resolver := resolve.New(resolve.OSExecutor{})
 
 			if len(includePlatforms) > 0 {
-				if err := mod.ValidatePlatforms(includePlatforms); err != nil {
+				if err := resolver.ValidatePlatforms(includePlatforms); err != nil {
 					return err
 				}
-				opts = append(opts, mod.WithIncludePlatforms(includePlatforms))
+				opts = append(opts, vendor.WithIncludePlatforms(includePlatforms))
 			}
 
-			v := mod.NewVendor(opts...)
+			v := vendor.NewVendor(resolver, opts...)
 			results, err := v.VendorFiles()
 			if len(results) > 0 {
 				fmt.Println(ui.RenderResultsTable(results))

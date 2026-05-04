@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -19,6 +18,7 @@ import (
 	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/purpleclay/go-overlay/internal/mod"
 	"github.com/purpleclay/go-overlay/internal/proxy"
+	"github.com/purpleclay/go-overlay/internal/resolve"
 	"github.com/purpleclay/go-overlay/internal/version"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
@@ -114,6 +114,18 @@ func downloadModule(module, ver string) (string, error) {
 	return result.Dir, nil
 }
 
+// modEnvExecutor wraps OSExecutor and prepends a fixed set of environment
+// variables to every command. Used to inject GOFLAGS=-mod=mod per-invocation
+// rather than via os.Setenv, which is process-wide and unsafe under concurrent
+// goroutines.
+type modEnvExecutor struct {
+	baseEnv []string
+}
+
+func (e modEnvExecutor) Run(args []string, dir string, env []string) (string, error) {
+	return resolve.OSExecutor{}.Run(args, dir, append(e.baseEnv, env...))
+}
+
 func generateManifest(module, ver string, subPackages []string) (*toolManifest, error) {
 	var (
 		info      *proxy.ModuleInfo
@@ -147,14 +159,6 @@ func generateManifest(module, ver string, subPackages []string) (*toolManifest, 
 		return nil, err
 	}
 
-	// Force -mod=mod to prevent Go from automatically enabling -mod=vendor
-	// when the downloaded module source contains an in-tree vendor directory.
-	// Without this, go list fails with incomplete vendored dependencies.
-	// A future refactor could thread extra env vars through the Dependencies
-	// call chain instead of modifying process-level state.
-	os.Setenv("GOFLAGS", "-mod=mod")
-	defer os.Unsetenv("GOFLAGS")
-
 	sourceHash, err := narHash(srcDir)
 	if err != nil {
 		return nil, err
@@ -168,7 +172,12 @@ func generateManifest(module, ver string, subPackages []string) (*toolManifest, 
 	// Only resolve packages for platforms supported by Nix — Windows is
 	// excluded because Nix does not support it, and some tools (e.g. delve)
 	// have platform sentinel files that break go list on Windows.
-	deps, err := goModFile.Dependencies(nixPlatforms)
+	//
+	// GOFLAGS=-mod=mod prevents Go from auto-enabling -mod=vendor when the
+	// downloaded module source contains an in-tree vendor directory; without
+	// it, go list fails with incomplete vendored dependencies.
+	resolver := resolve.New(modEnvExecutor{baseEnv: []string{"GOFLAGS=-mod=mod"}})
+	deps, err := resolver.ResolveModule(goModFile, nixPlatforms)
 	if err != nil {
 		return nil, err
 	}

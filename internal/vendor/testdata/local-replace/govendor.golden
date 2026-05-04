@@ -9,5 +9,4 @@ hash = "sha256-he4cGcH05GNYNQLQF7LUt70Jr6hUlWD84ztqdOWDHQg="
     hash = "sha256-mwLCSagiaVDJvWqDCueCsSrqY/A9Rm7kRMHhn8ewq0Y="
     go = "1.22"
     packages = ["example.com/localmod"]
-    replaced = "example.com/localmod"
     local = "./localmod"

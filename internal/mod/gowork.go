@@ -7,10 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
-	"github.com/purpleclay/go-overlay/internal/vendor"
 	"golang.org/x/mod/modfile"
 )
 
@@ -19,7 +17,7 @@ type GoWorkFile struct {
 	modules         []string
 	hash            string
 	workfile        *modfile.WorkFile
-	workspaceConfig *vendor.WorkspaceConfig
+	workspaceConfig *WorkspaceConfig
 }
 
 func ParseGoWorkFile(path string) (*GoWorkFile, error) {
@@ -52,12 +50,12 @@ func ParseGoWorkFile(path string) (*GoWorkFile, error) {
 	}, nil
 }
 
-func NewGoWorkFileFromManifest(dir string, config *vendor.WorkspaceConfig) (*GoWorkFile, error) {
+func NewGoWorkFileFromManifest(dir string, config *WorkspaceConfig) (*GoWorkFile, error) {
 	if config == nil {
 		return nil, fmt.Errorf("workspace config is required")
 	}
-	modules := make([]string, len(config.ModuleConfigs))
-	for i, mod := range config.ModuleConfigs {
+	modules := make([]string, len(config.Modules))
+	for i, mod := range config.Modules {
 		modules[i] = strings.TrimPrefix(mod, "./")
 	}
 
@@ -112,97 +110,29 @@ func (w *GoWorkFile) ModulePaths() []string {
 	return paths
 }
 
-func (w *GoWorkFile) Dependencies(platforms []string) ([]vendor.ModuleConfig, error) {
-	allDeps := make(map[string]vendor.ModuleConfig)
-	workspaceMembers := w.workspaceModulePaths()
-
-	for _, modDir := range w.modules {
-		goModPath := filepath.Join(w.dir, modDir, goModFile)
-		goMod, err := ParseGoModFile(goModPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse %s: %w", goModPath, err)
-		}
-
-		deps, err := goMod.Dependencies(platforms)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get dependencies for %s: %w", modDir, err)
-		}
-
-		for _, dep := range deps {
-			// Post-process workspace members: clear hash and packages
-			// They're resolved from source, not fetched
-			if localPath, isWorkspace := workspaceMembers[dep.Path]; isWorkspace {
-				dep.Hash = ""
-				dep.Packages = nil
-
-				// Convert local path to be relative to workspace root
-				if dep.Local != "" {
-					dep.Local = localPath
-				}
-			}
-
-			// Dedup/merge dependencies
-			if existing, ok := allDeps[dep.Path]; ok {
-				existing.Packages = mergePackages(existing.Packages, dep.Packages)
-				allDeps[dep.Path] = existing
-			} else {
-				allDeps[dep.Path] = dep
-			}
-		}
+// normalizeWorkspaceMemberPath prepends "./" to bare relative paths (e.g.
+// "cli" → "./cli") while leaving absolute paths, ".", "./…" and "../…"
+// unchanged.
+func normalizeWorkspaceMemberPath(path string) string {
+	if filepath.IsAbs(path) || path == "." || strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../") {
+		return path
 	}
-
-	modules := make([]vendor.ModuleConfig, 0, len(allDeps))
-	for _, mod := range allDeps {
-		modules = append(modules, mod)
-	}
-	sort.Slice(modules, func(i, j int) bool {
-		return modules[i].Path < modules[j].Path
-	})
-
-	return modules, nil
+	return "./" + path
 }
 
-func mergePackages(a, b []string) []string {
-	if len(a) == 0 {
-		return b
-	}
-	if len(b) == 0 {
-		return a
-	}
-
-	seen := make(map[string]bool)
-	for _, p := range a {
-		seen[p] = true
-	}
-	for _, p := range b {
-		seen[p] = true
-	}
-
-	result := make([]string, 0, len(seen))
-	for p := range seen {
-		result = append(result, p)
-	}
-	sort.Strings(result)
-	return result
-}
-
-func (w *GoWorkFile) WorkspaceConfig() *vendor.WorkspaceConfig {
+func (w *GoWorkFile) WorkspaceConfig() *WorkspaceConfig {
 	if w.workspaceConfig != nil {
 		return w.workspaceConfig
 	}
 
 	modules := make([]string, 0, len(w.modules))
 	for _, mod := range w.modules {
-		path := mod
-		if !strings.HasPrefix(path, "./") {
-			path = "./" + path
-		}
-		modules = append(modules, path)
+		modules = append(modules, normalizeWorkspaceMemberPath(mod))
 	}
 	slices.Sort(modules)
 
-	config := &vendor.WorkspaceConfig{
-		ModuleConfigs: modules,
+	config := &WorkspaceConfig{
+		Modules: modules,
 	}
 
 	if w.workfile.Go != nil {
@@ -213,31 +143,34 @@ func (w *GoWorkFile) WorkspaceConfig() *vendor.WorkspaceConfig {
 		config.Toolchain = w.workfile.Toolchain.Name
 	}
 
+	w.workspaceConfig = config
 	return config
 }
 
-func (w *GoWorkFile) workspaceModulePaths() map[string]string {
-	members := make(map[string]string)
+// WorkspaceModulePaths reads each workspace member's go.mod to map Go module
+// paths to their relative directory paths. Returns an error if any member's
+// go.mod is unreadable or unparsable.
+func (w *GoWorkFile) WorkspaceModulePaths() (map[string]string, error) {
+	members := make(map[string]string, len(w.modules))
 
 	for _, mod := range w.modules {
 		modFilePath := filepath.Join(w.dir, mod, goModFile)
 		content, err := os.ReadFile(modFilePath)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("failed to read workspace member %s: %w", modFilePath, err)
 		}
 
 		mf, err := modfile.Parse(modFilePath, content, nil)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("failed to parse workspace member %s: %w", modFilePath, err)
 		}
 
-		path := mod
-		if !strings.HasPrefix(path, "./") {
-			path = "./" + path
+		if mf.Module == nil || mf.Module.Mod.Path == "" {
+			return nil, fmt.Errorf("workspace member %s is missing a module directive", modFilePath)
 		}
 
-		members[mf.Module.Mod.Path] = path
+		members[mf.Module.Mod.Path] = normalizeWorkspaceMemberPath(mod)
 	}
 
-	return members
+	return members, nil
 }

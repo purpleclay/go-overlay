@@ -9,5 +9,4 @@ hash = "sha256-NAokjx+UVYb5orZrxIhTkGxqxOmXnPtKrxlJ+rNpQHQ="
     hash = "sha256-fvMcq5YMDXCaQBtpo3Zhrl8qwzXqjnjCeN+g8zl2U78="
     go = "1.25.4"
     packages = ["github.com/go-overlay/examples/local-replaces/units"]
-    replaced = "github.com/go-overlay/examples/local-replaces/units"
     local = "./units"

@@ -1,6 +1,7 @@
-package mod
+package vendor
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -45,16 +46,23 @@ type scanOptions struct {
 
 type ScanOption func(*scanOptions)
 
+// WithMaxDepth limits how many directory levels ScanFrom will descend. A
+// value of 0 means unlimited. Note that fastwalk counts depth from the root
+// directory itself, so depth=2 finds go.mod files one directory level deep.
 func WithMaxDepth(depth int) ScanOption {
 	return func(opts *scanOptions) {
 		opts.maxDepth = depth
 	}
 }
 
+// FileTreeScanner walks a directory tree looking for go.mod files, skipping
+// directories that are unlikely to contain Go modules (e.g. .git, vendor,
+// node_modules).
 type FileTreeScanner struct {
 	opts scanOptions
 }
 
+// NewFileTreeScanner creates a FileTreeScanner with the given options.
 func NewFileTreeScanner(opts ...ScanOption) *FileTreeScanner {
 	s := &FileTreeScanner{}
 	for _, opt := range opts {
@@ -63,6 +71,8 @@ func NewFileTreeScanner(opts ...ScanOption) *FileTreeScanner {
 	return s
 }
 
+// ScanFrom walks the directory tree rooted at dir and returns the paths of
+// all go.mod files found, skipping well-known non-module directories.
 func (s *FileTreeScanner) ScanFrom(dir string) ([]string, error) {
 	var paths []string
 	var mu sync.Mutex
@@ -86,7 +96,7 @@ func (s *FileTreeScanner) ScanFrom(dir string) ([]string, error) {
 
 		if d.Name() == goModFile {
 			mu.Lock()
-			paths = append(paths, strings.TrimPrefix(path, "./"))
+			paths = append(paths, path)
 			mu.Unlock()
 		}
 
@@ -107,7 +117,6 @@ func (s *FileTreeScanner) ScanFrom(dir string) ([]string, error) {
 // For example, given "theme/go.mod", the path is cleaned to "theme" which
 // has 1 component, allowing traversal up 1 level to find the workspace manifest.
 func FindWorkspaceManifest(submodulePath string) (string, error) {
-	// Strip the filename if present (e.g., "theme/go.mod" -> "theme")
 	if base := filepath.Base(submodulePath); base == goModFile || base == goWorkFile || base == vendorFile {
 		submodulePath = filepath.Dir(submodulePath)
 	}
@@ -117,8 +126,6 @@ func FindWorkspaceManifest(submodulePath string) (string, error) {
 		return "", err
 	}
 
-	// Count path components to determine max depth
-	// "theme" -> 1, "a/b/c" -> 3, "." -> 0
 	cleaned := filepath.Clean(submodulePath)
 	maxDepth := 0
 	if cleaned != "." {
@@ -130,6 +137,8 @@ func FindWorkspaceManifest(submodulePath string) (string, error) {
 		candidate := filepath.Join(current, vendorFile)
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", err
 		}
 
 		parent := filepath.Dir(current)

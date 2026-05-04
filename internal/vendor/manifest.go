@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/BurntSushi/toml"
+	"github.com/purpleclay/go-overlay/internal/mod"
 )
 
 const (
@@ -14,37 +15,19 @@ const (
 
 // Manifest represents a govendor.toml file.
 type Manifest struct {
-	Schema           int                     `toml:"schema"`
-	Hash             string                  `toml:"hash"`
-	IncludePlatforms []string                `toml:"include_platforms,omitempty"`
-	Workspace        *WorkspaceConfig        `toml:"workspace,omitempty"`
-	Mod              map[string]ModuleConfig `toml:"mod"`
-}
-
-// WorkspaceConfig holds Go workspace metadata recorded in the manifest.
-type WorkspaceConfig struct {
-	Go            string   `toml:"go"`
-	Toolchain     string   `toml:"toolchain,omitempty"`
-	ModuleConfigs []string `toml:"modules"`
-}
-
-// ModuleConfig represents a single dependency entry in the manifest.
-type ModuleConfig struct {
-	Path         string   `toml:"-"`
-	Version      string   `toml:"version"`
-	Hash         string   `toml:"hash,omitempty"`
-	GoVersion    string   `toml:"go,omitempty"`
-	Packages     []string `toml:"packages,omitempty"`
-	ReplacedPath string   `toml:"replaced,omitempty"`
-	Local        string   `toml:"local,omitempty"`
+	Schema           int                         `toml:"schema"`
+	Hash             string                      `toml:"hash"`
+	IncludePlatforms []string                    `toml:"include_platforms,omitempty"`
+	Workspace        *mod.WorkspaceConfig        `toml:"workspace,omitempty"`
+	Mod              map[string]mod.ModuleConfig `toml:"mod"`
 }
 
 // New builds a Manifest from resolved dependencies. Pass a non-nil workspace
 // for workspace (go.work) projects.
-func New(hash string, deps []ModuleConfig, includePlatforms []string, workspace *WorkspaceConfig) *Manifest {
-	mod := make(map[string]ModuleConfig, len(deps))
+func New(hash string, deps []mod.ModuleConfig, includePlatforms []string, workspace *mod.WorkspaceConfig) *Manifest {
+	mods := make(map[string]mod.ModuleConfig, len(deps))
 	for _, m := range deps {
-		mod[m.Path] = m
+		mods[m.Path] = m
 	}
 
 	var recorded []string
@@ -59,7 +42,7 @@ func New(hash string, deps []ModuleConfig, includePlatforms []string, workspace 
 		Hash:             hash,
 		IncludePlatforms: recorded,
 		Workspace:        workspace,
-		Mod:              mod,
+		Mod:              mods,
 	}
 }
 
