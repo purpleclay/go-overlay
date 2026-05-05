@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/charlievieth/fastwalk"
+	"github.com/purpleclay/go-overlay/internal/mod"
 )
 
 var skipDirs = map[string]struct{}{
@@ -94,7 +95,7 @@ func (s *FileTreeScanner) ScanFrom(dir string) ([]string, error) {
 			return nil
 		}
 
-		if d.Name() == goModFile {
+		if d.Name() == mod.GoModFilename {
 			mu.Lock()
 			paths = append(paths, path)
 			mu.Unlock()
@@ -117,7 +118,7 @@ func (s *FileTreeScanner) ScanFrom(dir string) ([]string, error) {
 // For example, given "theme/go.mod", the path is cleaned to "theme" which
 // has 1 component, allowing traversal up 1 level to find the workspace manifest.
 func FindWorkspaceManifest(submodulePath string) (string, error) {
-	if base := filepath.Base(submodulePath); base == goModFile || base == goWorkFile || base == vendorFile {
+	if base := filepath.Base(submodulePath); base == mod.GoModFilename || base == mod.GoWorkFilename || base == vendorFile {
 		submodulePath = filepath.Dir(submodulePath)
 	}
 

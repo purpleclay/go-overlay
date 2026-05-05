@@ -40,14 +40,13 @@ require (
 	goMod, err := mod.ParseGoModFile(path)
 	require.NoError(t, err)
 
-	assert.Equal(t, dir, goMod.Dir())
-	assert.Equal(t, "github.com/purpleclay/example/with-deps", goMod.ModulePath())
-	assert.Equal(t, "1.25.4", goMod.GoVersion())
+	assert.Equal(t, dir, goMod.Dir)
+	assert.Equal(t, "github.com/purpleclay/example/with-deps", goMod.ModulePath)
+	assert.Equal(t, "1.25.4", goMod.GoVersion)
 	assert.True(t, goMod.HasDependencies())
 	assert.False(t, goMod.HasTools())
-	assert.Equal(t, "sha256-rgxUeyQeYlhhzhUV4JLESO1HsjBfOWl58oFqkobyYus=", goMod.Hash())
 
-	reqs := goMod.Requires()
+	reqs := goMod.Requires
 	assert.Len(t, reqs, 4)
 	assert.Equal(t, "v1.18.0", reqs["github.com/fatih/color"])
 	assert.Equal(t, "v0.1.13", reqs["github.com/mattn/go-colorable"])

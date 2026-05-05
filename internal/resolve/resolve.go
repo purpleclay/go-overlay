@@ -101,15 +101,20 @@ func (r *Resolver) ResolveWorkspace(goWork *mod.GoWorkFile, platforms []string) 
 		platforms = mod.DefaultPlatforms()
 	}
 
-	workspaceMembers, err := goWork.WorkspaceModulePaths()
+	members, err := goWork.ParseMembers()
 	if err != nil {
 		return nil, err
 	}
 
+	workspaceMembers := make(map[string]string, len(members))
+	for _, m := range members {
+		workspaceMembers[m.ModulePath] = m.Dir
+	}
+
 	allDeps := make(map[string]mod.ModuleConfig)
 
-	for _, modDir := range goWork.Modules() {
-		goModPath := filepath.Join(goWork.Dir(), modDir, "go.mod")
+	for _, modDir := range goWork.Modules {
+		goModPath := filepath.Join(goWork.Dir, modDir, mod.GoModFilename)
 		goMod, err := mod.ParseGoModFile(goModPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse %s: %w", goModPath, err)
@@ -124,9 +129,7 @@ func (r *Resolver) ResolveWorkspace(goWork *mod.GoWorkFile, platforms []string) 
 			if localPath, isWorkspace := workspaceMembers[dep.Path]; isWorkspace {
 				dep.Hash = ""
 				dep.Packages = nil
-				if dep.Local != "" {
-					dep.Local = localPath
-				}
+				dep.Local = localPath
 			}
 
 			if existing, ok := allDeps[dep.Path]; ok {
@@ -188,7 +191,7 @@ func (r *Resolver) packagesByModule(goMod *mod.GoModFile, platforms []string) (m
 }
 
 func (r *Resolver) packagesByModuleForPlatform(goMod *mod.GoModFile, goos, goarch string) (map[string][]string, error) {
-	listFmt := fmt.Sprintf(`{{if not .Standard}}{{if .Module}}{{if ne .Module.Path "%s"}}{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}{{end}}`, goMod.ModulePath())
+	listFmt := fmt.Sprintf(`{{if not .Standard}}{{if .Module}}{{if ne .Module.Path "%s"}}{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}{{end}}`, goMod.ModulePath)
 
 	args := []string{
 		"go", "list", "-deps", "-test", "-f", listFmt, "./...",
@@ -203,7 +206,7 @@ func (r *Resolver) packagesByModuleForPlatform(goMod *mod.GoModFile, goos, goarc
 		"GOARCH=" + goarch,
 	}
 
-	out, err := r.exec.Run(args, goMod.Dir(), env)
+	out, err := r.exec.Run(args, goMod.Dir, env)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +222,7 @@ func (r *Resolver) packagesByModuleForPlatform(goMod *mod.GoModFile, goos, goarc
 			"go", "list", "-deps", "-f", listFmt, "tool",
 		}
 
-		toolOut, err := r.exec.Run(toolArgs, goMod.Dir(), env)
+		toolOut, err := r.exec.Run(toolArgs, goMod.Dir, env)
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +239,7 @@ func (r *Resolver) downloadModules(goMod *mod.GoModFile) ([]ModuleDownload, erro
 	args := []string{"go", "mod", "download", "-json"}
 	env := []string{"GOWORK=off"}
 
-	out, err := r.exec.Run(args, goMod.Dir(), env)
+	out, err := r.exec.Run(args, goMod.Dir, env)
 	if err != nil {
 		return nil, err
 	}
@@ -292,14 +295,14 @@ func (r *Resolver) resolveLocalModules(goMod *mod.GoModFile, pkgsByMod map[strin
 		return nil, nil
 	}
 
-	requires := goMod.Requires()
+	requires := goMod.Requires
 	p := pool.NewWithResults[mod.ModuleConfig]().WithErrors().WithMaxGoroutines(8)
 
 	for _, repl := range localRepls {
 		p.Go(func() (mod.ModuleConfig, error) {
 			localDir := repl.LocalPath
 			if !filepath.IsAbs(localDir) {
-				localDir = filepath.Join(goMod.Dir(), localDir)
+				localDir = filepath.Join(goMod.Dir, localDir)
 			}
 			localDir, err := filepath.Abs(localDir)
 			if err != nil {
@@ -323,7 +326,7 @@ func (r *Resolver) resolveLocalModules(goMod *mod.GoModFile, pkgsByMod map[strin
 			}
 
 			var goVersion string
-			localGoMod := filepath.Join(localDir, "go.mod")
+			localGoMod := filepath.Join(localDir, mod.GoModFilename)
 			if modData, err := os.ReadFile(localGoMod); err == nil {
 				if mf, err := modfile.Parse(localGoMod, modData, nil); err == nil && mf.Go != nil {
 					goVersion = mf.Go.Version

@@ -11,8 +11,7 @@ import (
 )
 
 func TestParse(t *testing.T) {
-	data := []byte(`schema = 2
-hash = "sha256-7rwfLDKKRjrYZVf/fGtIiL45LOWF5S05WW5yvDESJxE="
+	data := []byte(`schema = 3
 
 [mod]
   [mod."github.com/BurntSushi/toml"]
@@ -24,8 +23,7 @@ hash = "sha256-7rwfLDKKRjrYZVf/fGtIiL45LOWF5S05WW5yvDESJxE="
 	m, err := vendor.Parse(data)
 	require.NoError(t, err)
 
-	assert.Equal(t, 2, m.Schema)
-	assert.Equal(t, "sha256-7rwfLDKKRjrYZVf/fGtIiL45LOWF5S05WW5yvDESJxE=", m.Hash)
+	assert.Equal(t, 3, m.Schema)
 	assert.Nil(t, m.Workspace)
 	require.Len(t, m.Mod, 1)
 
@@ -38,8 +36,7 @@ hash = "sha256-7rwfLDKKRjrYZVf/fGtIiL45LOWF5S05WW5yvDESJxE="
 }
 
 func TestParseWithWorkspace(t *testing.T) {
-	data := []byte(`schema = 2
-hash = "sha256-IJpcpXwkPQuqU/YHXlMIy9fNLkSzCfTfw6HRtzSBdok="
+	data := []byte(`schema = 3
 
 [workspace]
   go = "1.25.4"
@@ -56,8 +53,7 @@ hash = "sha256-IJpcpXwkPQuqU/YHXlMIy9fNLkSzCfTfw6HRtzSBdok="
 	m, err := vendor.Parse(data)
 	require.NoError(t, err)
 
-	assert.Equal(t, 2, m.Schema)
-	assert.Equal(t, "sha256-IJpcpXwkPQuqU/YHXlMIy9fNLkSzCfTfw6HRtzSBdok=", m.Hash)
+	assert.Equal(t, 3, m.Schema)
 	require.NotNil(t, m.Workspace)
 	assert.Equal(t, "1.25.4", m.Workspace.Go)
 	assert.Equal(t, "go1.25.4", m.Workspace.Toolchain)
@@ -73,7 +69,6 @@ hash = "sha256-IJpcpXwkPQuqU/YHXlMIy9fNLkSzCfTfw6HRtzSBdok="
 
 func TestWriteTo(t *testing.T) {
 	manifest := vendor.New(
-		"sha256-7rwfLDKKRjrYZVf/fGtIiL45LOWF5S05WW5yvDESJxE=",
 		[]mod.ModuleConfig{
 			{
 				Path:      "github.com/BurntSushi/toml",
@@ -99,7 +94,6 @@ func TestWriteTo(t *testing.T) {
 	parsed, err := vendor.Parse(buf.Bytes())
 	require.NoError(t, err)
 	assert.Equal(t, manifest.Schema, parsed.Schema)
-	assert.Equal(t, manifest.Hash, parsed.Hash)
 	assert.Equal(t, manifest.IncludePlatforms, parsed.IncludePlatforms)
 	assert.Equal(t, manifest.Workspace, parsed.Workspace)
 	assert.Equal(t, manifest.Mod, parsed.Mod)

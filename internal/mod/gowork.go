@@ -1,8 +1,6 @@
 package mod
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,12 +10,23 @@ import (
 	"golang.org/x/mod/modfile"
 )
 
+const GoWorkFilename = "go.work"
+
+// WorkspaceMember holds the parsed metadata for a single workspace
+// member's go.mod.
+type WorkspaceMember struct {
+	Dir        string
+	ModulePath string
+	Requires   map[string]string
+}
+
+// GoWorkFile is a parsed go.work file. All fields are extracted at
+// parse time. No methods shell out to external processes.
 type GoWorkFile struct {
-	dir             string
-	modules         []string
-	hash            string
-	workfile        *modfile.WorkFile
-	workspaceConfig *WorkspaceConfig
+	Dir       string
+	GoVersion string
+	Toolchain string
+	Modules   []string
 }
 
 func ParseGoWorkFile(path string) (*GoWorkFile, error) {
@@ -31,22 +40,26 @@ func ParseGoWorkFile(path string) (*GoWorkFile, error) {
 		return nil, fmt.Errorf("failed to parse go.work: %w", err)
 	}
 
-	var modules []string
-	for _, use := range wf.Use {
-		modules = append(modules, use.Path)
+	modules := make([]string, len(wf.Use))
+	for i, use := range wf.Use {
+		modules[i] = use.Path
 	}
 
-	dir := filepath.Dir(path)
-	hash, err := computeWorkspaceHash(dir, modules)
-	if err != nil {
-		return nil, err
+	var goVersion string
+	if wf.Go != nil {
+		goVersion = wf.Go.Version
+	}
+
+	var toolchain string
+	if wf.Toolchain != nil {
+		toolchain = wf.Toolchain.Name
 	}
 
 	return &GoWorkFile{
-		dir:      dir,
-		modules:  modules,
-		hash:     hash,
-		workfile: wf,
+		Dir:       filepath.Dir(path),
+		GoVersion: goVersion,
+		Toolchain: toolchain,
+		Modules:   modules,
 	}, nil
 }
 
@@ -54,107 +67,50 @@ func NewGoWorkFileFromManifest(dir string, config *WorkspaceConfig) (*GoWorkFile
 	if config == nil {
 		return nil, fmt.Errorf("workspace config is required")
 	}
+
 	modules := make([]string, len(config.Modules))
 	for i, mod := range config.Modules {
 		modules[i] = strings.TrimPrefix(mod, "./")
 	}
 
-	hash, err := computeWorkspaceHash(dir, modules)
-	if err != nil {
-		return nil, err
-	}
-
 	return &GoWorkFile{
-		dir:             dir,
-		modules:         modules,
-		hash:            hash,
-		workspaceConfig: config,
+		Dir:       dir,
+		GoVersion: config.Go,
+		Toolchain: config.Toolchain,
+		Modules:   modules,
 	}, nil
 }
 
-func computeWorkspaceHash(dir string, modules []string) (string, error) {
-	h := sha256.New()
-
-	sortedModules := slices.Clone(modules)
-	slices.Sort(sortedModules)
-
-	for _, mod := range sortedModules {
-		modPath := filepath.Join(dir, mod, goModFile)
-		content, err := os.ReadFile(modPath)
-		if err != nil {
-			return "", fmt.Errorf("failed to read %s: %w", modPath, err)
-		}
-		h.Write(content)
-	}
-
-	return "sha256-" + base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
-}
-
-func (w *GoWorkFile) Dir() string {
-	return w.dir
-}
-
-func (w *GoWorkFile) Hash() string {
-	return w.hash
-}
-
-func (w *GoWorkFile) Modules() []string {
-	return w.modules
-}
-
 func (w *GoWorkFile) ModulePaths() []string {
-	var paths []string
-	for _, mod := range w.modules {
-		paths = append(paths, filepath.Join(w.dir, mod))
+	paths := make([]string, len(w.Modules))
+	for i, mod := range w.Modules {
+		paths[i] = filepath.Join(w.Dir, mod)
 	}
 	return paths
 }
 
-// normalizeWorkspaceMemberPath prepends "./" to bare relative paths (e.g.
-// "cli" → "./cli") while leaving absolute paths, ".", "./…" and "../…"
-// unchanged.
-func normalizeWorkspaceMemberPath(path string) string {
-	if filepath.IsAbs(path) || path == "." || strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../") {
-		return path
-	}
-	return "./" + path
-}
-
 func (w *GoWorkFile) WorkspaceConfig() *WorkspaceConfig {
-	if w.workspaceConfig != nil {
-		return w.workspaceConfig
-	}
-
-	modules := make([]string, 0, len(w.modules))
-	for _, mod := range w.modules {
-		modules = append(modules, normalizeWorkspaceMemberPath(mod))
+	modules := make([]string, len(w.Modules))
+	for i, mod := range w.Modules {
+		modules[i] = normalizeWorkspaceMemberPath(mod)
 	}
 	slices.Sort(modules)
 
-	config := &WorkspaceConfig{
-		Modules: modules,
+	return &WorkspaceConfig{
+		Go:        w.GoVersion,
+		Toolchain: w.Toolchain,
+		Modules:   modules,
 	}
-
-	if w.workfile.Go != nil {
-		config.Go = w.workfile.Go.Version
-	}
-
-	if w.workfile.Toolchain != nil {
-		config.Toolchain = w.workfile.Toolchain.Name
-	}
-
-	w.workspaceConfig = config
-	return config
 }
 
-// WorkspaceModulePaths reads each workspace member's go.mod to map Go module
-// paths to their relative directory paths. Returns an error if any member's
-// go.mod is unreadable or unparsable.
-func (w *GoWorkFile) WorkspaceModulePaths() (map[string]string, error) {
-	members := make(map[string]string, len(w.modules))
+// ParseMembers reads and parses each workspace member's go.mod in one
+// pass, returning the module path, relative directory, and requires for
+// each member.
+func (w *GoWorkFile) ParseMembers() ([]WorkspaceMember, error) {
+	members := make([]WorkspaceMember, 0, len(w.Modules))
 
-	for _, mod := range w.modules {
-		modFilePath := filepath.Join(w.dir, mod, goModFile)
+	for _, mod := range w.Modules {
+		modFilePath := filepath.Join(w.Dir, mod, GoModFilename)
 		content, err := os.ReadFile(modFilePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read workspace member %s: %w", modFilePath, err)
@@ -169,8 +125,27 @@ func (w *GoWorkFile) WorkspaceModulePaths() (map[string]string, error) {
 			return nil, fmt.Errorf("workspace member %s is missing a module directive", modFilePath)
 		}
 
-		members[mf.Module.Mod.Path] = normalizeWorkspaceMemberPath(mod)
+		requires := make(map[string]string, len(mf.Require))
+		for _, req := range mf.Require {
+			requires[req.Mod.Path] = req.Mod.Version
+		}
+
+		members = append(members, WorkspaceMember{
+			Dir:        normalizeWorkspaceMemberPath(mod),
+			ModulePath: mf.Module.Mod.Path,
+			Requires:   requires,
+		})
 	}
 
 	return members, nil
+}
+
+// normalizeWorkspaceMemberPath prepends "./" to bare relative paths (e.g.
+// "cli" → "./cli") while leaving absolute paths, ".", "./…" and "../…"
+// unchanged.
+func normalizeWorkspaceMemberPath(path string) string {
+	if filepath.IsAbs(path) || path == "." || strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../") {
+		return path
+	}
+	return "./" + path
 }
