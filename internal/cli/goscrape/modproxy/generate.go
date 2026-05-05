@@ -164,7 +164,7 @@ func generateManifest(module, ver string, subPackages []string) (*toolManifest, 
 		return nil, err
 	}
 
-	goModFile, err := mod.ParseGoModFile(filepath.Join(srcDir, "go.mod"))
+	goModFile, err := mod.ParseGoModFile(filepath.Join(srcDir, mod.GoModFilename))
 	if err != nil {
 		return nil, err
 	}
