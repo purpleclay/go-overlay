@@ -40,23 +40,27 @@ go 1.25.4
 	gw, err := mod.ParseGoWorkFile(filepath.Join(dir, goWorkFile))
 	require.NoError(t, err)
 
-	assert.Equal(t, dir, gw.Dir())
-	assert.Equal(t, "sha256-IJpcpXwkPQuqU/YHXlMIy9fNLkSzCfTfw6HRtzSBdok=", gw.Hash())
-	assert.ElementsMatch(t, []string{"./cli", "./core"}, gw.Modules())
+	assert.Equal(t, dir, gw.Dir)
+	assert.Equal(t, "1.25.4", gw.GoVersion)
+	assert.Equal(t, "go1.25.4", gw.Toolchain)
+	assert.ElementsMatch(t, []string{"./cli", "./core"}, gw.Modules)
 
 	cfg := gw.WorkspaceConfig()
 	require.NotNil(t, cfg)
 	assert.Equal(t, "1.25.4", cfg.Go)
 	assert.Equal(t, "go1.25.4", cfg.Toolchain)
 	assert.Equal(t, []string{"./cli", "./core"}, cfg.Modules)
-
-	members, err := gw.WorkspaceModulePaths()
-	require.NoError(t, err)
-	assert.Equal(t, "./cli", members["github.com/purpleclay/example/cli"])
-	assert.Equal(t, "./core", members["github.com/purpleclay/example/core"])
 }
 
-func TestGoWorkFileHashStableUnderModuleOrder(t *testing.T) {
+func TestParseGoWorkFileMembers(t *testing.T) {
+	goWork := `
+go 1.25.4
+
+use (
+	./cli
+	./core
+)
+`
 	cli := `
 module github.com/purpleclay/example/cli
 
@@ -67,40 +71,28 @@ module github.com/purpleclay/example/core
 
 go 1.25.4
 `
+	dir := t.TempDir()
+	writeFile(t, dir, goWorkFile, goWork)
+	writeFile(t, dir, "cli/go.mod", cli)
+	writeFile(t, dir, "core/go.mod", core)
 
-	dir1 := t.TempDir()
-	writeFile(t, dir1, goWorkFile, `
-go 1.25.4
-
-use (
-	./cli
-	./core
-)
-`)
-	writeFile(t, dir1, "cli/go.mod", cli)
-	writeFile(t, dir1, "core/go.mod", core)
-
-	dir2 := t.TempDir()
-	writeFile(t, dir2, goWorkFile, `
-go 1.25.4
-
-use (
-	./core
-	./cli
-)
-`)
-	writeFile(t, dir2, "cli/go.mod", cli)
-	writeFile(t, dir2, "core/go.mod", core)
-
-	gw1, err := mod.ParseGoWorkFile(filepath.Join(dir1, goWorkFile))
-	require.NoError(t, err)
-	gw2, err := mod.ParseGoWorkFile(filepath.Join(dir2, goWorkFile))
+	gw, err := mod.ParseGoWorkFile(filepath.Join(dir, goWorkFile))
 	require.NoError(t, err)
 
-	assert.Equal(t, gw1.Hash(), gw2.Hash())
+	members, err := gw.ParseMembers()
+	require.NoError(t, err)
+	require.Len(t, members, 2)
+
+	byPath := make(map[string]mod.WorkspaceMember, len(members))
+	for _, m := range members {
+		byPath[m.ModulePath] = m
+	}
+
+	assert.Equal(t, "./cli", byPath["github.com/purpleclay/example/cli"].Dir)
+	assert.Equal(t, "./core", byPath["github.com/purpleclay/example/core"].Dir)
 }
 
-func TestWorkspaceModulePathsReturnsErrorForMissingModuleDirective(t *testing.T) {
+func TestParseMembersReturnsErrorForMissingModuleDirective(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, goWorkFile, `
 go 1.25.4
@@ -115,7 +107,7 @@ use (
 	gw, err := mod.ParseGoWorkFile(filepath.Join(dir, goWorkFile))
 	require.NoError(t, err)
 
-	_, err = gw.WorkspaceModulePaths()
+	_, err = gw.ParseMembers()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing a module directive")
 }
@@ -133,7 +125,6 @@ func TestNewGoWorkFileFromManifest(t *testing.T) {
 
 	gw, err := mod.NewGoWorkFileFromManifest(dir, cfg)
 	require.NoError(t, err)
-	assert.Equal(t, dir, gw.Dir())
-	assert.NotEmpty(t, gw.Hash())
+	assert.Equal(t, dir, gw.Dir)
 	assert.Equal(t, cfg, gw.WorkspaceConfig())
 }

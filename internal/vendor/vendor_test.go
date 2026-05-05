@@ -56,7 +56,7 @@ func TestVendor(t *testing.T) {
 			deps, err := resolver.ResolveModule(goMod, platforms)
 			require.NoError(t, err)
 
-			manifest := vendor.New(goMod.Hash(), deps, tt.includePlatforms, nil)
+			manifest := vendor.New(deps, tt.includePlatforms, nil)
 
 			var buf bytes.Buffer
 			_, err = manifest.WriteTo(&buf)
@@ -94,7 +94,7 @@ func TestVendorWorkspace(t *testing.T) {
 			deps, err := resolver.ResolveWorkspace(goWork, platforms)
 			require.NoError(t, err)
 
-			manifest := vendor.New(goWork.Hash(), deps, tt.includePlatforms, goWork.WorkspaceConfig())
+			manifest := vendor.New(deps, tt.includePlatforms, goWork.WorkspaceConfig())
 
 			var buf bytes.Buffer
 			_, err = manifest.WriteTo(&buf)

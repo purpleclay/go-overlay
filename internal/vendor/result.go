@@ -3,6 +3,8 @@ package vendor
 import (
 	"fmt"
 	"path/filepath"
+
+	"github.com/purpleclay/go-overlay/internal/mod"
 )
 
 // Status represents the outcome of processing a single go.mod or go.work.
@@ -33,10 +35,10 @@ type Result struct {
 }
 
 func fileType(path string) string {
-	if filepath.Base(path) == goWorkFile {
-		return "go.work"
+	if filepath.Base(path) == mod.GoWorkFilename {
+		return mod.GoWorkFilename
 	}
-	return "go.mod"
+	return mod.GoModFilename
 }
 
 func resultOK(path string) Result {
@@ -47,9 +49,9 @@ func resultGenerated(path string, count int) Result {
 	return Result{Path: path, Status: StatusGenerated, Message: fmt.Sprintf("generated govendor.toml with %d dependencies", count)}
 }
 
-func resultDrift(path, currentHash, manifestHash string) Result {
+func resultDrift(path string) Result {
 	ft := fileType(path)
-	msg := fmt.Sprintf("%s has changed, run 'govendor' to regenerate\n\n  %-14s %s\n  %-14s %s", ft, ft+":", currentHash, "govendor.toml:", manifestHash)
+	msg := fmt.Sprintf("%s has changed, run 'govendor' to regenerate", ft)
 	return Result{Path: path, Status: StatusDrift, Message: msg}
 }
 

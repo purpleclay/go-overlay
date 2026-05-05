@@ -17,13 +17,13 @@ If this is a private repository, see https://golang.org/doc/faq#git_https for ad
 
 func TestRenderResultsTableForGoMod(t *testing.T) {
 	results := []vendor.Result{
-		{Path: "path/to/drift/go.mod", Status: vendor.StatusDrift, Message: "go.mod has changed, run 'govendor' to regenerate\n\n  go.mod:        sha256-A3tDBEG/zwPthZ+l5TxH8XpVY9FRw/iEQOtMryi9zXg=\n  govendor.toml: sha256-juCtIr7pvECB2svxXEKFvbdj/vqWUbu5EECe2te0RTI="},
+		{Path: "path/to/drift/go.mod", Status: vendor.StatusDrift, Message: "go.mod has changed, run 'govendor' to regenerate"},
 		{Path: "path/to/error/go.mod", Status: vendor.StatusError, Message: errModuleNotFound.Error()},
 		{Path: "path/to/generated/go.mod", Status: vendor.StatusGenerated, Message: "generated govendor.toml with 10 dependencies"},
 		{Path: "path/to/missing/go.mod", Status: vendor.StatusMissing, Message: "govendor.toml not found, run govendor to generate"},
 		{Path: "path/to/notfound/go.mod", Status: vendor.StatusError, Message: "go.mod does not exist, check path"},
 		{Path: "path/to/ok/go.mod", Status: vendor.StatusOK, Message: "govendor.toml is up to date"},
-		{Path: "path/to/schema-mismatch/go.mod", Status: vendor.StatusDrift, Message: "govendor.toml uses schema v1, current govendor requires schema v2 — run 'govendor' to regenerate"},
+		{Path: "path/to/schema-mismatch/go.mod", Status: vendor.StatusDrift, Message: "govendor.toml uses schema v1, current govendor requires schema v3 — run 'govendor' to regenerate"},
 		{Path: "path/to/skipped/go.mod", Status: vendor.StatusSkipped, Message: "go.mod has no external dependencies"},
 	}
 
@@ -33,13 +33,13 @@ func TestRenderResultsTableForGoMod(t *testing.T) {
 
 func TestRenderResultsTableForGoWork(t *testing.T) {
 	results := []vendor.Result{
-		{Path: "path/to/drift/go.work", Status: vendor.StatusDrift, Message: "go.work has changed, run 'govendor' to regenerate\n\n  go.work:       sha256-A3tDBEG/zwPthZ+l5TxH8XpVY9FRw/iEQOtMryi9zXg=\n  govendor.toml: sha256-juCtIr7pvECB2svxXEKFvbdj/vqWUbu5EECe2te0RTI="},
+		{Path: "path/to/drift/go.work", Status: vendor.StatusDrift, Message: "go.work has changed, run 'govendor' to regenerate"},
 		{Path: "path/to/error/go.work", Status: vendor.StatusError, Message: errModuleNotFound.Error()},
 		{Path: "path/to/generated/go.work", Status: vendor.StatusGenerated, Message: "generated govendor.toml with 10 dependencies"},
 		{Path: "path/to/missing/go.work", Status: vendor.StatusMissing, Message: "govendor.toml not found, run govendor to generate"},
 		{Path: "path/to/notfound/go.work", Status: vendor.StatusError, Message: "go.work does not exist, check path"},
 		{Path: "path/to/ok/go.work", Status: vendor.StatusOK, Message: "govendor.toml is up to date"},
-		{Path: "path/to/schema-mismatch/go.work", Status: vendor.StatusDrift, Message: "govendor.toml uses schema v1, current govendor requires schema v2 — run 'govendor' to regenerate"},
+		{Path: "path/to/schema-mismatch/go.work", Status: vendor.StatusDrift, Message: "govendor.toml uses schema v1, current govendor requires schema v3 — run 'govendor' to regenerate"},
 		{Path: "path/to/skipped/go.work", Status: vendor.StatusSkipped, Message: "go.work has no external dependencies"},
 	}
 

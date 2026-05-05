@@ -3,6 +3,7 @@ package vendor
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,11 +12,7 @@ import (
 	"github.com/sourcegraph/conc/pool"
 )
 
-const (
-	goModFile  = "go.mod"
-	goWorkFile = "go.work"
-	vendorFile = "govendor.toml"
-)
+const vendorFile = "govendor.toml"
 
 type vendorOptions struct {
 	detectDrift    bool
@@ -44,7 +41,7 @@ func WithForce() Option {
 func WithPaths(paths ...string) Option {
 	return func(opts *vendorOptions) {
 		for _, path := range paths {
-			if base := filepath.Base(path); base == goModFile || base == goWorkFile || base == vendorFile {
+			if base := filepath.Base(path); base == mod.GoModFilename || base == mod.GoWorkFilename || base == vendorFile {
 				path = filepath.Dir(path)
 			}
 			opts.paths = append(opts.paths, path)
@@ -95,12 +92,9 @@ func NewVendor(resolver Resolver, opts ...Option) *Vendor {
 
 var errVendorFailed = fmt.Errorf("vendor failed")
 
-// dependencySource is implemented by both *mod.GoModFile and *mod.GoWorkFile,
-// allowing the common drift detection algorithm to be shared.
-type dependencySource interface {
-	Hash() string
-	Dir() string
-}
+// dependencySource is satisfied by *mod.GoModFile and *mod.GoWorkFile.
+// Type switches on this value are used to dispatch to type-specific behaviour.
+type dependencySource = any
 
 func (v *Vendor) VendorFiles() ([]Result, error) {
 	if v.opts.workspace {
@@ -117,7 +111,7 @@ func (v *Vendor) VendorFiles() ([]Result, error) {
 			return nil, err
 		}
 		if goWork != nil {
-			return v.toResults(v.processSource(goWork, filepath.Join(goWork.Dir(), goWorkFile), goWork.WorkspaceConfig()))
+			return v.toResults(v.processSource(goWork, filepath.Join(goWork.Dir, mod.GoWorkFilename), goWork.WorkspaceConfig()))
 		}
 	}
 
@@ -165,7 +159,8 @@ func (v *Vendor) toResults(r Result) ([]Result, error) {
 // processSource implements the common drift detection and generation algorithm
 // for both *mod.GoModFile and *mod.GoWorkFile sources.
 func (v *Vendor) processSource(src dependencySource, displayPath string, workspace *mod.WorkspaceConfig) Result {
-	vendorPath := filepath.Join(src.Dir(), vendorFile)
+	dir := filepath.Dir(displayPath)
+	vendorPath := filepath.Join(dir, vendorFile)
 	existingData, err := os.ReadFile(vendorPath)
 
 	extraPlatforms := v.opts.extraPlatforms
@@ -194,20 +189,27 @@ func (v *Vendor) processSource(src dependencySource, displayPath string, workspa
 				extraPlatforms = existing.IncludePlatforms
 			}
 
-			if !v.opts.force && existing.Hash == src.Hash() {
+			drifted, err := isDrifted(src, existing)
+			if err != nil {
+				return resultError(displayPath, err)
+			}
+			if !v.opts.force && !drifted {
 				if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
 					return resultOK(displayPath)
 				}
 			}
 
 			if v.opts.detectDrift {
-				return resultDrift(displayPath, src.Hash(), existing.Hash)
+				if drifted {
+					return resultDrift(displayPath)
+				}
+				return resultOK(displayPath)
 			}
 		}
 	}
 
 	platforms := append(mod.DefaultPlatforms(), extraPlatforms...)
-	depCount, err := v.generate(src, platforms, extraPlatforms, workspace)
+	depCount, err := v.generate(src, dir, platforms, extraPlatforms, workspace)
 	if err != nil {
 		return resultError(displayPath, err)
 	}
@@ -215,7 +217,7 @@ func (v *Vendor) processSource(src dependencySource, displayPath string, workspa
 	return resultGenerated(displayPath, depCount)
 }
 
-func (v *Vendor) generate(src dependencySource, platforms, includePlatforms []string, workspace *mod.WorkspaceConfig) (int, error) {
+func (v *Vendor) generate(src dependencySource, dir string, platforms, includePlatforms []string, workspace *mod.WorkspaceConfig) (int, error) {
 	var deps []mod.ModuleConfig
 	var err error
 
@@ -231,14 +233,14 @@ func (v *Vendor) generate(src dependencySource, platforms, includePlatforms []st
 		return 0, err
 	}
 
-	m := New(src.Hash(), deps, includePlatforms, workspace)
+	m := New(deps, includePlatforms, workspace)
 
 	var buf bytes.Buffer
 	if _, err := m.WriteTo(&buf); err != nil {
 		return 0, err
 	}
 
-	outputPath := filepath.Join(src.Dir(), vendorFile)
+	outputPath := filepath.Join(dir, vendorFile)
 	if err := os.WriteFile(outputPath, buf.Bytes(), 0o644); err != nil {
 		return 0, err
 	}
@@ -272,7 +274,7 @@ func (v *Vendor) findModFiles() (modFiles []string, missing []Result, err error)
 
 		if len(modFiles) == 0 {
 			for _, path := range paths {
-				missing = append(missing, resultNotFound(filepath.Join(path, goModFile)))
+				missing = append(missing, resultNotFound(filepath.Join(path, mod.GoModFilename)))
 			}
 		}
 
@@ -280,7 +282,7 @@ func (v *Vendor) findModFiles() (modFiles []string, missing []Result, err error)
 	}
 
 	for _, path := range paths {
-		modPath := filepath.Join(path, goModFile)
+		modPath := filepath.Join(path, mod.GoModFilename)
 		if _, err := os.Stat(modPath); err != nil {
 			missing = append(missing, resultNotFound(modPath))
 		} else {
@@ -313,7 +315,7 @@ func (v *Vendor) processWorkspaceMode() ([]Result, error) {
 		} else if goWork == nil {
 			result = resultError(manifestPath, fmt.Errorf("invalid workspace manifest"))
 		} else {
-			result = v.processSource(goWork, filepath.Join(manifestDir, goWorkFile), goWork.WorkspaceConfig())
+			result = v.processSource(goWork, filepath.Join(manifestDir, mod.GoWorkFilename), goWork.WorkspaceConfig())
 		}
 	}
 
@@ -321,7 +323,7 @@ func (v *Vendor) processWorkspaceMode() ([]Result, error) {
 }
 
 func (v *Vendor) findWorkspaceAt(path string) (*mod.GoWorkFile, error) {
-	workPath := filepath.Join(path, goWorkFile)
+	workPath := filepath.Join(path, mod.GoWorkFilename)
 	if _, err := os.Stat(workPath); err == nil {
 		goWork, err := mod.ParseGoWorkFile(workPath)
 		if err != nil {
@@ -353,4 +355,42 @@ func (v *Vendor) findWorkspaceAt(path string) (*mod.GoWorkFile, error) {
 	}
 
 	return goWork, nil
+}
+
+// isDrifted returns true if the dependency source's requires differ from the
+// existing manifest's recorded modules.
+func isDrifted(src dependencySource, existing *Manifest) (bool, error) {
+	var requires map[string]string
+
+	switch s := src.(type) {
+	case *mod.GoModFile:
+		requires = s.Requires
+	case *mod.GoWorkFile:
+		members, err := s.ParseMembers()
+		if err != nil {
+			return false, err
+		}
+		requires = make(map[string]string)
+		for _, m := range members {
+			maps.Copy(requires, m.Requires)
+		}
+	default:
+		return false, fmt.Errorf("unsupported dependency source: %T", src)
+	}
+
+	return requiresDrifted(requires, existing.Mod), nil
+}
+
+// requiresDrifted returns true if the requires map and the existing mods map
+// differ in any module path or version.
+func requiresDrifted(requires map[string]string, mods map[string]mod.ModuleConfig) bool {
+	if len(requires) != len(mods) {
+		return true
+	}
+	for path, version := range requires {
+		if m, ok := mods[path]; !ok || m.Version != version {
+			return true
+		}
+	}
+	return false
 }
