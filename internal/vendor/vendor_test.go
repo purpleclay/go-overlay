@@ -86,6 +86,10 @@ func TestVendorWorkspace(t *testing.T) {
 			name: "workspace-with-excludes",
 			dir:  "testdata/workspace-with-excludes",
 		},
+		{
+			name: "workspace-mvs-conflict",
+			dir:  "testdata/workspace-mvs-conflict",
+		},
 	}
 
 	resolver := resolve.New(resolve.OSExecutor{})
