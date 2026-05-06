@@ -2,6 +2,7 @@ package resolve
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -75,7 +76,7 @@ func (r *Resolver) ResolveModule(goMod *mod.GoModFile, platforms []string) ([]mo
 		return nil, err
 	}
 
-	modules, err := r.resolveRemoteModules(goMod, downloads, pkgsByMod)
+	modules, err := r.resolveRemoteModules(goMod.RemoteReplacements(), downloads, pkgsByMod)
 	if err != nil {
 		return nil, err
 	}
@@ -93,9 +94,9 @@ func (r *Resolver) ResolveModule(goMod *mod.GoModFile, platforms []string) ([]mo
 	return modules, nil
 }
 
-// ResolveWorkspace resolves dependencies across all modules in a workspace,
-// merging packages and post-processing workspace members (clearing hash and
-// packages, since they're resolved from source rather than fetched).
+// ResolveWorkspace resolves dependencies across all modules in a Go workspace.
+// It runs a single go mod download from the workspace root so Go's MVS applies
+// across all members, then gathers per-member package attribution with GOWORK=off.
 func (r *Resolver) ResolveWorkspace(goWork *mod.GoWorkFile, platforms []string) ([]mod.ModuleConfig, error) {
 	if platforms == nil {
 		platforms = mod.DefaultPlatforms()
@@ -111,40 +112,77 @@ func (r *Resolver) ResolveWorkspace(goWork *mod.GoWorkFile, platforms []string) 
 		workspaceMembers[m.ModulePath] = m.Dir
 	}
 
-	allDeps := make(map[string]mod.ModuleConfig)
+	// Download from the workspace root with GOWORK active so the Go toolchain
+	// applies workspace-level MVS, producing one authoritative set of resolved
+	// module versions rather than per-member independent resolutions.
+	downloads, err := r.downloadWorkspaceModules(goWork)
+	if err != nil {
+		return nil, err
+	}
 
+	// Parse each member go.mod once up front so both the packages and local
+	// replacement passes can reuse the result without duplicate file I/O.
+	memberGoMods := make(map[string]*mod.GoModFile, len(goWork.Modules))
 	for _, modDir := range goWork.Modules {
 		goModPath := filepath.Join(goWork.Dir, modDir, mod.GoModFilename)
 		goMod, err := mod.ParseGoModFile(goModPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse %s: %w", goModPath, err)
 		}
+		memberGoMods[modDir] = goMod
+	}
 
-		deps, err := r.ResolveModule(goMod, platforms)
+	// Gather packages per member with GOWORK=off so each member's build graph
+	// is queried independently, then merge the results.
+	pkgsByMod := make(map[string][]string)
+	remoteRepls := make(map[string]mod.Replacement)
+
+	for _, modDir := range goWork.Modules {
+		goMod := memberGoMods[modDir]
+
+		memberPkgs, err := r.packagesByModule(goMod, platforms)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve dependencies for %s: %w", modDir, err)
+			return nil, fmt.Errorf("failed to list packages for %s: %w", modDir, err)
+		}
+		for m, pkgs := range memberPkgs {
+			pkgsByMod[m] = MergePackages(pkgsByMod[m], pkgs)
 		}
 
-		for _, dep := range deps {
-			if localPath, isWorkspace := workspaceMembers[dep.Path]; isWorkspace {
-				dep.Hash = ""
-				dep.Packages = nil
-				dep.Local = localPath
-			}
+		maps.Copy(remoteRepls, goMod.RemoteReplacements())
+	}
 
-			if existing, ok := allDeps[dep.Path]; ok {
-				existing.Packages = MergePackages(existing.Packages, dep.Packages)
-				allDeps[dep.Path] = existing
-			} else {
-				allDeps[dep.Path] = dep
-			}
+	remoteDeps, err := r.resolveRemoteModules(remoteRepls, downloads, pkgsByMod)
+	if err != nil {
+		return nil, err
+	}
+
+	// Resolve local replacements per member, preserving each member's base
+	// directory for relative path resolution.
+	allDeps := make(map[string]mod.ModuleConfig, len(remoteDeps))
+	for _, dep := range remoteDeps {
+		allDeps[dep.Path] = dep
+	}
+
+	for _, modDir := range goWork.Modules {
+		localDeps, err := r.resolveLocalModules(memberGoMods[modDir], pkgsByMod)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve local modules for %s: %w", modDir, err)
+		}
+		for _, dep := range localDeps {
+			allDeps[dep.Path] = dep
 		}
 	}
 
 	modules := make([]mod.ModuleConfig, 0, len(allDeps))
 	for _, m := range allDeps {
+		if localPath, isWorkspace := workspaceMembers[m.Path]; isWorkspace {
+			m.Hash = ""
+			m.Packages = nil
+			m.Local = localPath
+		}
 		modules = append(modules, m)
 	}
+
 	sort.Slice(modules, func(i, j int) bool {
 		return modules[i].Path < modules[j].Path
 	})
@@ -247,9 +285,20 @@ func (r *Resolver) downloadModules(goMod *mod.GoModFile) ([]ModuleDownload, erro
 	return ParseDownloadOutput(out)
 }
 
-func (r *Resolver) resolveRemoteModules(goMod *mod.GoModFile, downloads []ModuleDownload, pkgsByMod map[string][]string) ([]mod.ModuleConfig, error) {
-	remoteReplacements := goMod.RemoteReplacements()
+// downloadWorkspaceModules runs go mod download from the workspace root with
+// GOWORK active, letting the Go toolchain apply workspace-level MVS.
+func (r *Resolver) downloadWorkspaceModules(goWork *mod.GoWorkFile) ([]ModuleDownload, error) {
+	args := []string{"go", "mod", "download", "-json"}
 
+	out, err := r.exec.Run(args, goWork.Dir, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return ParseDownloadOutput(out)
+}
+
+func (r *Resolver) resolveRemoteModules(remoteReplacements map[string]mod.Replacement, downloads []ModuleDownload, pkgsByMod map[string][]string) ([]mod.ModuleConfig, error) {
 	p := pool.NewWithResults[mod.ModuleConfig]().WithErrors().WithMaxGoroutines(8)
 
 	for _, meta := range downloads {
