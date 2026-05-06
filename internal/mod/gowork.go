@@ -15,9 +15,11 @@ const GoWorkFilename = "go.work"
 // WorkspaceMember holds the parsed metadata for a single workspace
 // member's go.mod.
 type WorkspaceMember struct {
-	Dir        string
-	ModulePath string
-	Requires   map[string]string
+	Dir          string
+	ModulePath   string
+	Requires     map[string]string
+	Replacements map[string]Replacement
+	Excludes     map[string][]string
 }
 
 // GoWorkFile is a parsed go.work file. All fields are extracted at
@@ -130,10 +132,15 @@ func (w *GoWorkFile) ParseMembers() ([]WorkspaceMember, error) {
 			requires[req.Mod.Path] = req.Mod.Version
 		}
 
+		replacements := parseReplacements(mf.Replace)
+		excludes := parseExcludes(mf.Exclude)
+
 		members = append(members, WorkspaceMember{
-			Dir:        normalizeWorkspaceMemberPath(mod),
-			ModulePath: mf.Module.Mod.Path,
-			Requires:   requires,
+			Dir:          normalizeWorkspaceMemberPath(mod),
+			ModulePath:   mf.Module.Mod.Path,
+			Requires:     requires,
+			Replacements: replacements,
+			Excludes:     excludes,
 		})
 	}
 

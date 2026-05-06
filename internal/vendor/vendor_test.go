@@ -3,6 +3,7 @@ package vendor_test
 import (
 	"bytes"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/purpleclay/go-overlay/internal/mod"
@@ -39,6 +40,10 @@ func TestVendor(t *testing.T) {
 			name: "tools-only",
 			dir:  "testdata/tools-only",
 		},
+		{
+			name: "with-excludes",
+			dir:  "testdata/with-excludes",
+		},
 	}
 
 	resolver := resolve.New(resolve.OSExecutor{})
@@ -56,7 +61,7 @@ func TestVendor(t *testing.T) {
 			deps, err := resolver.ResolveModule(goMod, platforms)
 			require.NoError(t, err)
 
-			manifest := vendor.New(deps, tt.includePlatforms, nil)
+			manifest := vendor.New(deps, tt.includePlatforms, nil, goMod.Excludes)
 
 			var buf bytes.Buffer
 			_, err = manifest.WriteTo(&buf)
@@ -77,6 +82,10 @@ func TestVendorWorkspace(t *testing.T) {
 			name: "workspace",
 			dir:  "testdata/workspace",
 		},
+		{
+			name: "workspace-with-excludes",
+			dir:  "testdata/workspace-with-excludes",
+		},
 	}
 
 	resolver := resolve.New(resolve.OSExecutor{})
@@ -94,7 +103,25 @@ func TestVendorWorkspace(t *testing.T) {
 			deps, err := resolver.ResolveWorkspace(goWork, platforms)
 			require.NoError(t, err)
 
-			manifest := vendor.New(deps, tt.includePlatforms, goWork.WorkspaceConfig())
+			members, err := goWork.ParseMembers()
+			require.NoError(t, err)
+
+			merged := make(map[string][]string)
+			for _, m := range members {
+				for path, versions := range m.Excludes {
+					merged[path] = append(merged[path], versions...)
+				}
+			}
+			for path, versions := range merged {
+				slices.Sort(versions)
+				merged[path] = slices.Compact(versions)
+			}
+			var excludes map[string][]string
+			if len(merged) > 0 {
+				excludes = merged
+			}
+
+			manifest := vendor.New(deps, tt.includePlatforms, goWork.WorkspaceConfig(), excludes)
 
 			var buf bytes.Buffer
 			_, err = manifest.WriteTo(&buf)
