@@ -21,6 +21,7 @@ type GoModFile struct {
 	Requires     map[string]string
 	Tools        []string
 	Replacements map[string]Replacement
+	Excludes     map[string][]string
 }
 
 func ParseGoModFile(path string) (*GoModFile, error) {
@@ -53,16 +54,8 @@ func ParseGoModFile(path string) (*GoModFile, error) {
 		tools[i] = t.Path
 	}
 
-	replacements := make(map[string]Replacement, len(mf.Replace))
-	for _, repl := range mf.Replace {
-		isLocal := strings.HasPrefix(repl.New.Path, ".") || filepath.IsAbs(repl.New.Path)
-		replacements[repl.Old.Path] = Replacement{
-			OldPath:   repl.Old.Path,
-			NewPath:   repl.New.Path,
-			IsLocal:   isLocal,
-			LocalPath: repl.New.Path,
-		}
-	}
+	replacements := parseReplacements(mf.Replace)
+	excludes := parseExcludes(mf.Exclude)
 
 	return &GoModFile{
 		Dir:          filepath.Dir(path),
@@ -71,6 +64,7 @@ func ParseGoModFile(path string) (*GoModFile, error) {
 		Requires:     requires,
 		Tools:        tools,
 		Replacements: replacements,
+		Excludes:     excludes,
 	}, nil
 }
 
@@ -115,4 +109,29 @@ func (f *GoModFile) RemoteReplacements() map[string]Replacement {
 		}
 	}
 	return remote
+}
+
+func parseReplacements(repls []*modfile.Replace) map[string]Replacement {
+	replacements := make(map[string]Replacement, len(repls))
+	for _, repl := range repls {
+		isLocal := strings.HasPrefix(repl.New.Path, ".") || filepath.IsAbs(repl.New.Path)
+		replacements[repl.Old.Path] = Replacement{
+			OldPath:   repl.Old.Path,
+			NewPath:   repl.New.Path,
+			IsLocal:   isLocal,
+			LocalPath: repl.New.Path,
+		}
+	}
+	return replacements
+}
+
+func parseExcludes(excls []*modfile.Exclude) map[string][]string {
+	excludes := make(map[string][]string, len(excls))
+	for _, exc := range excls {
+		excludes[exc.Mod.Path] = append(excludes[exc.Mod.Path], exc.Mod.Version)
+	}
+	for _, versions := range excludes {
+		slices.Sort(versions)
+	}
+	return excludes
 }

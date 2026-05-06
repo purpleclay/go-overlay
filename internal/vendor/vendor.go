@@ -3,9 +3,9 @@ package vendor
 import (
 	"bytes"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 
 	"github.com/purpleclay/go-overlay/internal/mod"
@@ -189,7 +189,7 @@ func (v *Vendor) processSource(src dependencySource, displayPath string, workspa
 				extraPlatforms = existing.IncludePlatforms
 			}
 
-			drifted, err := isDrifted(src, existing)
+			drifted, err := IsDrifted(src, existing)
 			if err != nil {
 				return resultError(displayPath, err)
 			}
@@ -219,13 +219,37 @@ func (v *Vendor) processSource(src dependencySource, displayPath string, workspa
 
 func (v *Vendor) generate(src dependencySource, dir string, platforms, includePlatforms []string, workspace *mod.WorkspaceConfig) (int, error) {
 	var deps []mod.ModuleConfig
+	var excludes map[string][]string
 	var err error
 
 	switch s := src.(type) {
 	case *mod.GoModFile:
 		deps, err = v.resolver.ResolveModule(s, platforms)
+		if len(s.Excludes) > 0 {
+			excludes = s.Excludes
+		}
 	case *mod.GoWorkFile:
 		deps, err = v.resolver.ResolveWorkspace(s, platforms)
+		if err != nil {
+			return 0, err
+		}
+		members, err := s.ParseMembers()
+		if err != nil {
+			return 0, err
+		}
+		merged := make(map[string][]string)
+		for _, m := range members {
+			for path, versions := range m.Excludes {
+				merged[path] = append(merged[path], versions...)
+			}
+		}
+		for path, versions := range merged {
+			slices.Sort(versions)
+			merged[path] = slices.Compact(versions)
+		}
+		if len(merged) > 0 {
+			excludes = merged
+		}
 	default:
 		return 0, fmt.Errorf("unsupported dependency source: %T", src)
 	}
@@ -233,7 +257,7 @@ func (v *Vendor) generate(src dependencySource, dir string, platforms, includePl
 		return 0, err
 	}
 
-	m := New(deps, includePlatforms, workspace)
+	m := New(deps, includePlatforms, workspace, excludes)
 
 	var buf bytes.Buffer
 	if _, err := m.WriteTo(&buf); err != nil {
@@ -355,42 +379,4 @@ func (v *Vendor) findWorkspaceAt(path string) (*mod.GoWorkFile, error) {
 	}
 
 	return goWork, nil
-}
-
-// isDrifted returns true if the dependency source's requires differ from the
-// existing manifest's recorded modules.
-func isDrifted(src dependencySource, existing *Manifest) (bool, error) {
-	var requires map[string]string
-
-	switch s := src.(type) {
-	case *mod.GoModFile:
-		requires = s.Requires
-	case *mod.GoWorkFile:
-		members, err := s.ParseMembers()
-		if err != nil {
-			return false, err
-		}
-		requires = make(map[string]string)
-		for _, m := range members {
-			maps.Copy(requires, m.Requires)
-		}
-	default:
-		return false, fmt.Errorf("unsupported dependency source: %T", src)
-	}
-
-	return requiresDrifted(requires, existing.Mod), nil
-}
-
-// requiresDrifted returns true if the requires map and the existing mods map
-// differ in any module path or version.
-func requiresDrifted(requires map[string]string, mods map[string]mod.ModuleConfig) bool {
-	if len(requires) != len(mods) {
-		return true
-	}
-	for path, version := range requires {
-		if m, ok := mods[path]; !ok || m.Version != version {
-			return true
-		}
-	}
-	return false
 }
