@@ -38,6 +38,10 @@ schema = 3
     version = "v1.0.0"
     hash = "sha256-/FtmHnaGjdvEIKAJtrUfEhV7EVo5A/eYrtdnUkuxLDA="
     packages = ["github.com/pmezard/go-difflib/difflib"]
+  [mod."github.com/stretchr/objx"]
+    version = "v0.5.2"
+    hash = "sha256-VKYxrrFb1nkX6Wu3tE5DoP9+fCttwSl9pgLN6567nck="
+    go = "1.20"
   [mod."github.com/stretchr/testify"]
     version = "v1.11.1"
     hash = "sha256-sWfjkuKJyDllDEtnM8sb/pdLzPQmUYWYtmeWz/5suUc="
@@ -48,6 +52,9 @@ schema = 3
     hash = "sha256-PXZ9EQZ7SFpcL7d3E1+KGTxziYlHEIZPfoXEbnaVD3I="
     go = "1.18"
     packages = ["golang.org/x/sys/unix", "golang.org/x/sys/windows"]
+  [mod."gopkg.in/check.v1"]
+    version = "v0.0.0-20161208181325-20d25e280405"
+    hash = "sha256-1w5mgYaZUC52uzDnpXXVqle/9AVkH4WePSrQFOVANUw="
   [mod."gopkg.in/yaml.v3"]
     version = "v3.0.1"
     hash = "sha256-FqL9TKYJ0XkNwJFnq9j0VvJ5ZUU1RvH/52h/f5bkYAU="
