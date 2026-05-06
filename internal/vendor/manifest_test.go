@@ -84,6 +84,7 @@ func TestWriteTo(t *testing.T) {
 			Toolchain: "go1.25.4",
 			Modules:   []string{"./cli"},
 		},
+		nil,
 	)
 
 	var buf bytes.Buffer
