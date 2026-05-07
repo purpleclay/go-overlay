@@ -25,10 +25,11 @@ type WorkspaceMember struct {
 // GoWorkFile is a parsed go.work file. All fields are extracted at
 // parse time. No methods shell out to external processes.
 type GoWorkFile struct {
-	Dir       string
-	GoVersion string
-	Toolchain string
-	Modules   []string
+	Dir          string
+	GoVersion    string
+	Toolchain    string
+	Modules      []string
+	Replacements map[string]Replacement
 }
 
 func ParseGoWorkFile(path string) (*GoWorkFile, error) {
@@ -58,10 +59,11 @@ func ParseGoWorkFile(path string) (*GoWorkFile, error) {
 	}
 
 	return &GoWorkFile{
-		Dir:       filepath.Dir(path),
-		GoVersion: goVersion,
-		Toolchain: toolchain,
-		Modules:   modules,
+		Dir:          filepath.Dir(path),
+		GoVersion:    goVersion,
+		Toolchain:    toolchain,
+		Modules:      modules,
+		Replacements: parseReplacements(wf.Replace),
 	}, nil
 }
 
@@ -81,6 +83,33 @@ func NewGoWorkFileFromManifest(dir string, config *WorkspaceConfig) (*GoWorkFile
 		Toolchain: config.Toolchain,
 		Modules:   modules,
 	}, nil
+}
+
+// LocalReplacements returns only workspace-level local replace directives,
+// sorted by original module path. These take precedence over member go.mod replaces.
+func (w *GoWorkFile) LocalReplacements() []Replacement {
+	var local []Replacement
+	for _, repl := range w.Replacements {
+		if repl.IsLocal {
+			local = append(local, repl)
+		}
+	}
+	slices.SortFunc(local, func(a, b Replacement) int {
+		return strings.Compare(a.OldPath, b.OldPath)
+	})
+	return local
+}
+
+// RemoteReplacements returns workspace-level remote replace directives keyed by
+// the replacement target path. These take precedence over member go.mod replaces.
+func (w *GoWorkFile) RemoteReplacements() map[string]Replacement {
+	remote := make(map[string]Replacement)
+	for _, repl := range w.Replacements {
+		if !repl.IsLocal {
+			remote[repl.NewPath] = repl
+		}
+	}
+	return remote
 }
 
 func (w *GoWorkFile) ModulePaths() []string {

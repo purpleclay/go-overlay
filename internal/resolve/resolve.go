@@ -151,6 +151,9 @@ func (r *Resolver) ResolveWorkspace(goWork *mod.GoWorkFile, platforms []string) 
 		maps.Copy(remoteRepls, goMod.RemoteReplacements())
 	}
 
+	// Workspace-level replace directives take precedence over member-level ones.
+	maps.Copy(remoteRepls, goWork.RemoteReplacements())
+
 	remoteDeps, err := r.resolveRemoteModules(remoteRepls, downloads, pkgsByMod)
 	if err != nil {
 		return nil, err
