@@ -90,6 +90,10 @@ func TestVendorWorkspace(t *testing.T) {
 			name: "workspace-mvs-conflict",
 			dir:  "testdata/workspace-mvs-conflict",
 		},
+		{
+			name: "workspace-remote-replace",
+			dir:  "testdata/workspace-remote-replace",
+		},
 	}
 
 	resolver := resolve.New(resolve.OSExecutor{})

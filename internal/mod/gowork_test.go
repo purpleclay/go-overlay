@@ -92,6 +92,42 @@ go 1.25.4
 	assert.Equal(t, "./core", byPath["github.com/purpleclay/example/core"].Dir)
 }
 
+func TestParseGoWorkFileReplacements(t *testing.T) {
+	goWork := `
+go 1.25.4
+
+use ./cli
+
+replace github.com/old/pkg => github.com/new/pkg v1.2.0
+replace example.com/local => ./local
+`
+	cli := `
+module github.com/purpleclay/example/cli
+
+go 1.25.4
+`
+	dir := t.TempDir()
+	writeFile(t, dir, goWorkFile, goWork)
+	writeFile(t, dir, "cli/go.mod", cli)
+
+	gw, err := mod.ParseGoWorkFile(filepath.Join(dir, goWorkFile))
+	require.NoError(t, err)
+
+	require.Len(t, gw.Replacements, 2)
+
+	remote := gw.RemoteReplacements()
+	require.Len(t, remote, 1)
+	assert.Equal(t, "github.com/old/pkg", remote["github.com/new/pkg"].OldPath)
+	assert.Equal(t, "github.com/new/pkg", remote["github.com/new/pkg"].NewPath)
+	assert.False(t, remote["github.com/new/pkg"].IsLocal)
+
+	local := gw.LocalReplacements()
+	require.Len(t, local, 1)
+	assert.Equal(t, "example.com/local", local[0].OldPath)
+	assert.Equal(t, "./local", local[0].LocalPath)
+	assert.True(t, local[0].IsLocal)
+}
+
 func TestParseMembersReturnsErrorForMissingModuleDirective(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, goWorkFile, `

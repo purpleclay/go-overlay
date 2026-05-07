@@ -35,6 +35,8 @@ func IsDrifted(src dependencySource, existing *Manifest) (bool, error) {
 			slices.Sort(versions)
 			excludes[path] = slices.Compact(versions)
 		}
+		// Workspace-level replacements take precedence over member-level ones.
+		maps.Copy(replacements, s.Replacements)
 		return requiresDrifted(requires, existing.Mod) ||
 			replacementsDrifted(replacements, existing.Mod) ||
 			excludesDrifted(excludes, existing.Exclude), nil

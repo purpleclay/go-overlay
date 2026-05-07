@@ -209,6 +209,42 @@ func TestIsDriftedGoWork(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			name:   "WorkspaceLevelReplacementAdded",
+			goWork: "go 1.22\nuse ./api\nreplace example.com/dep => ../local\n",
+			members: map[string]string{
+				"api": "module example.com/api\ngo 1.22\nrequire example.com/dep v1.0.0\n",
+			},
+			existing: &vendor.Manifest{
+				Schema: vendor.SchemaVersion,
+				Mod:    map[string]mod.ModuleConfig{"example.com/dep": {Version: "v1.0.0"}},
+			},
+			want: true,
+		},
+		{
+			name:   "WorkspaceLevelReplacementRemoved",
+			goWork: "go 1.22\nuse ./api\n",
+			members: map[string]string{
+				"api": "module example.com/api\ngo 1.22\nrequire example.com/dep v1.0.0\n",
+			},
+			existing: &vendor.Manifest{
+				Schema: vendor.SchemaVersion,
+				Mod:    map[string]mod.ModuleConfig{"example.com/dep": {Version: "v1.0.0", Local: "../local"}},
+			},
+			want: true,
+		},
+		{
+			name:   "WorkspaceLevelReplacementUnchanged",
+			goWork: "go 1.22\nuse ./api\nreplace example.com/dep => ../local\n",
+			members: map[string]string{
+				"api": "module example.com/api\ngo 1.22\nrequire example.com/dep v1.0.0\n",
+			},
+			existing: &vendor.Manifest{
+				Schema: vendor.SchemaVersion,
+				Mod:    map[string]mod.ModuleConfig{"example.com/dep": {Version: "v1.0.0", Local: "../local"}},
+			},
+			want: false,
+		},
 	}
 
 	for _, tt := range tests {
