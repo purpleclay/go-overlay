@@ -2,6 +2,10 @@
 
 schema = 3
 
+[tool]
+  [tool."github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen"]
+    version = "v2.6.0"
+
 [mod]
   [mod."github.com/apapsch/go-jsonmerge/v2"]
     version = "v2.0.0"

@@ -219,12 +219,14 @@ func (v *Vendor) processSource(src dependencySource, displayPath string, workspa
 
 func (v *Vendor) generate(src dependencySource, dir string, platforms, includePlatforms []string, workspace *mod.WorkspaceConfig) (int, error) {
 	var deps []mod.ModuleConfig
+	var rawTools []string
 	var excludes map[string][]string
 	var err error
 
 	switch s := src.(type) {
 	case *mod.GoModFile:
 		deps, err = v.resolver.ResolveModule(s, platforms)
+		rawTools = s.Tools
 		if len(s.Excludes) > 0 {
 			excludes = s.Excludes
 		}
@@ -239,6 +241,7 @@ func (v *Vendor) generate(src dependencySource, dir string, platforms, includePl
 		}
 		merged := make(map[string][]string)
 		for _, m := range members {
+			rawTools = append(rawTools, m.Tools...)
 			for path, versions := range m.Excludes {
 				merged[path] = append(merged[path], versions...)
 			}
@@ -257,7 +260,25 @@ func (v *Vendor) generate(src dependencySource, dir string, platforms, includePl
 		return 0, err
 	}
 
-	m := New(deps, includePlatforms, workspace, excludes)
+	// Build a package→version lookup from resolved deps so each tool entry
+	// records its own module version rather than the application version.
+	var tool mod.ToolConfig
+	if len(rawTools) > 0 {
+		pkgToVersion := make(map[string]string)
+		for _, dep := range deps {
+			for _, pkg := range dep.Packages {
+				pkgToVersion[pkg] = dep.Version
+			}
+		}
+		slices.Sort(rawTools)
+		rawTools = slices.Compact(rawTools)
+		tool = make(mod.ToolConfig, len(rawTools))
+		for _, pkg := range rawTools {
+			tool[pkg] = mod.ToolEntry{Version: pkgToVersion[pkg]}
+		}
+	}
+
+	m := New(deps, includePlatforms, workspace, tool, excludes)
 
 	var buf bytes.Buffer
 	if _, err := m.WriteTo(&buf); err != nil {
