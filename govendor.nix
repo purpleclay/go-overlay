@@ -5,8 +5,8 @@
   commit ? "unknown",
 }: let
   pname = "govendor";
-  version = "v0.12.0";
-  buildDate = "2026-05-06T00:00:00Z";
+  version = "v0.13.0";
+  buildDate = "2026-05-07T00:00:00Z";
 in
   buildGoApplication {
     inherit pname version go;

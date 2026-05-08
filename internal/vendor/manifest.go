@@ -18,13 +18,15 @@ type Manifest struct {
 	Schema           int                         `toml:"schema"`
 	IncludePlatforms []string                    `toml:"include_platforms,omitempty"`
 	Workspace        *mod.WorkspaceConfig        `toml:"workspace,omitempty"`
+	Tool             mod.ToolConfig              `toml:"tool,omitempty"`
 	Exclude          map[string][]string         `toml:"exclude,omitempty"`
 	Mod              map[string]mod.ModuleConfig `toml:"mod"`
 }
 
 // New builds a Manifest from resolved dependencies. Pass a non-nil workspace
-// for workspace (go.work) projects.
-func New(deps []mod.ModuleConfig, includePlatforms []string, workspace *mod.WorkspaceConfig, excludes map[string][]string) *Manifest {
+// for workspace (go.work) projects, and a non-nil tool for modules with tool
+// directives.
+func New(deps []mod.ModuleConfig, includePlatforms []string, workspace *mod.WorkspaceConfig, tool mod.ToolConfig, excludes map[string][]string) *Manifest {
 	mods := make(map[string]mod.ModuleConfig, len(deps))
 	for _, m := range deps {
 		mods[m.Path] = m
@@ -41,6 +43,7 @@ func New(deps []mod.ModuleConfig, includePlatforms []string, workspace *mod.Work
 		Schema:           SchemaVersion,
 		IncludePlatforms: recorded,
 		Workspace:        workspace,
+		Tool:             tool,
 		Exclude:          excludes,
 		Mod:              mods,
 	}

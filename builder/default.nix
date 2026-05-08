@@ -255,6 +255,72 @@
       cp "$modulesTxtPath" "$out/modules.txt"
     '';
 
+  # Build a single Go tool package for the host platform from an existing
+  # vendorEnv. Used to populate nativeBuildInputs so tool binaries are
+  # available in $PATH during preBuild without any user configuration.
+  mkHostTool = {
+    version,
+    src,
+    go,
+    vendorEnv,
+    pkg, # the tool package path, e.g. "github.com/a-h/templ/cmd/templ"
+    useSymlinks,
+    GOWORK ? null, # "off" for buildGoApplication; null for in-tree workspace
+    goWorkContent ? null, # generated go.work content for manifest-only workspaces
+  }:
+    stdenv.mkDerivation {
+      pname = baseNameOf pkg;
+      inherit version src;
+
+      nativeBuildInputs = [go];
+
+      env =
+        {
+          GOFLAGS = "-mod=vendor";
+          GO111MODULE = "on";
+          GOTOOLCHAIN = "local";
+          GOPROXY = "off";
+          # Build for the host platform — no GOOS/GOARCH override.
+          CGO_ENABLED = go.CGO_ENABLED;
+          GODEBUG = lib.optionalString (lib.versionAtLeast go.version "1.25") "embedfollowsymlinks=1";
+        }
+        // lib.optionalAttrs (GOWORK != null) {inherit GOWORK;};
+
+      configurePhase = ''
+        runHook preConfigure
+        export GOCACHE=$TMPDIR/go-cache
+        export GOPATH="$TMPDIR/go"
+        ${optionalString (goWorkContent != null) ''
+          if [ ! -f go.work ]; then
+            printf '%s' ${escapeShellArg goWorkContent} > go.work
+          fi
+        ''}
+        rm -rf vendor
+        ${
+          if useSymlinks
+          then "cp --no-preserve=mode -rs ${vendorEnv} vendor"
+          else "cp -r --reflink=auto ${vendorEnv} vendor"
+        }
+        chmod -R u+w vendor
+        runHook postConfigure
+      '';
+
+      buildPhase = ''
+        runHook preBuild
+        go install -v -p $NIX_BUILD_CORES "${pkg}"
+        runHook postBuild
+      '';
+
+      installPhase = ''
+        runHook preInstall
+        mkdir -p $out
+        cp -r "$GOPATH/bin" $out/
+        runHook postInstall
+      '';
+
+      strictDeps = true;
+    };
+
   # Builder-owned parameters stripped from attrs before passing to stdenv.mkDerivation.
   # Shared between buildGoApplication and buildGoWorkspace to prevent drift.
   commonRemovedAttrs = [
@@ -294,6 +360,7 @@
     subPackages,
     checkFlags,
     extraGoFlags ? [], # additional flags appended to the computed GOFLAGS
+    hostTools ? [], # tool derivations built for the host platform, injected into nativeBuildInputs
     testPackages, # pre-computed test target string (differs between app and workspace)
     configurePhase, # builder-specific configure phase (pre-computed with attrs fallback)
     passthru, # builder-specific passthru attrs
@@ -314,7 +381,8 @@
 
       nativeBuildInputs =
         (attrs.nativeBuildInputs or [])
-        ++ [go];
+        ++ [go]
+        ++ hostTools;
 
       env =
         # Defaults: correct for most builds, overridable via attrs.env
@@ -517,6 +585,22 @@
         "$(go list ${concatMapStringsSep " " (p: "./${p}/...") subPackages}"
         + " | grep -F -v -- ${concatMapStringsSep " | grep -F -v -- " (p: escapeShellArg p) excludedPackages})";
 
+    # Build each declared tool for the host platform so it lands in $PATH
+    # during preBuild without any user configuration.
+    hostTools =
+      if useManifest && vendorEnv != null
+      then
+        map (pkg:
+          mkHostTool {
+            inherit src go pkg;
+            inherit (vendorEnv) useSymlinks;
+            vendorEnv = vendorEnv;
+            version = manifest.tool.${pkg}.version;
+            GOWORK = "off";
+          })
+        (builtins.attrNames (manifest.tool or {}))
+      else [];
+
     passthru = {inherit go vendorEnv;};
   in
     assert (useVendor || !hasGoSum)
@@ -540,7 +624,7 @@
           inherit pname version src;
         }
         // mkCommonAttrs {
-          inherit attrs go allowGoReference ldflags tags GOOS GOARCH CGO_ENABLED;
+          inherit attrs go allowGoReference ldflags tags GOOS GOARCH CGO_ENABLED hostTools;
           inherit useVendor subPackages checkFlags extraGoFlags testPackages configurePhase passthru;
           GOWORK = "off";
         }
@@ -823,6 +907,21 @@
       then workspaceTestTargets
       else "$(go list ${workspaceTestTargets} | grep -F -v -- ${concatMapStringsSep " | grep -F -v -- " (p: escapeShellArg p) excludedPackages})";
 
+    # Build each declared tool for the host platform so it lands in $PATH
+    # during preBuild without any user configuration.
+    hostTools =
+      if useManifest && vendorEnv != null
+      then
+        map (pkg:
+          mkHostTool {
+            inherit src go pkg goWorkContent;
+            inherit (vendorEnv) useSymlinks;
+            vendorEnv = vendorEnv;
+            version = manifest.tool.${pkg}.version;
+          })
+        (builtins.attrNames (manifest.tool or {}))
+      else [];
+
     passthru = {inherit go vendorEnv workspaceConfig;};
   in
     assert (useVendor || !hasGoSum)
@@ -854,7 +953,7 @@
           inherit pname version src;
         }
         // mkCommonAttrs {
-          inherit attrs go allowGoReference ldflags tags GOOS GOARCH CGO_ENABLED;
+          inherit attrs go allowGoReference ldflags tags GOOS GOARCH CGO_ENABLED hostTools;
           inherit useVendor subPackages checkFlags extraGoFlags testPackages configurePhase passthru;
         }
       );

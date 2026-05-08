@@ -10,10 +10,10 @@ pkgs.buildGoApplication {
   src = ./.;
   modules = ./govendor.toml;
 
-  # oapi-codegen is declared as a tool directive in go.mod rather than a
-  # nativeBuildInput. govendor includes tool dependencies in govendor.toml
-  # so the Go toolchain can find and run it from the vendor directory.
+  # oapi-codegen is declared as a tool directive in go.mod. govendor compiles
+  # it for the host platform and injects the binary into nativeBuildInputs,
+  # making it available in $PATH here without any extra configuration.
   preBuild = ''
-    go generate ./...
+    oapi-codegen --config=api/oapi-codegen.yaml api/catto.yaml
   '';
 }

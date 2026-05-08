@@ -141,6 +141,46 @@ replace github.com/foo/bar => github.com/fork/bar v1.0.0
 			},
 			want: true,
 		},
+		{
+			name: "ToolAdded",
+			goMod: `module example.com/app
+go 1.24
+require github.com/foo/bar v1.0.0
+tool github.com/a-h/templ/cmd/templ
+`,
+			existing: &vendor.Manifest{
+				Schema: vendor.SchemaVersion,
+				Mod:    map[string]mod.ModuleConfig{"github.com/foo/bar": {Version: "v1.0.0"}},
+			},
+			want: true,
+		},
+		{
+			name: "ToolRemoved",
+			goMod: `module example.com/app
+go 1.24
+require github.com/foo/bar v1.0.0
+`,
+			existing: &vendor.Manifest{
+				Schema: vendor.SchemaVersion,
+				Tool:   mod.ToolConfig{"github.com/a-h/templ/cmd/templ": {}},
+				Mod:    map[string]mod.ModuleConfig{"github.com/foo/bar": {Version: "v1.0.0"}},
+			},
+			want: true,
+		},
+		{
+			name: "ToolUnchanged",
+			goMod: `module example.com/app
+go 1.24
+require github.com/foo/bar v1.0.0
+tool github.com/a-h/templ/cmd/templ
+`,
+			existing: &vendor.Manifest{
+				Schema: vendor.SchemaVersion,
+				Tool:   mod.ToolConfig{"github.com/a-h/templ/cmd/templ": {}},
+				Mod:    map[string]mod.ModuleConfig{"github.com/foo/bar": {Version: "v1.0.0"}},
+			},
+			want: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -242,6 +282,44 @@ func TestIsDriftedGoWork(t *testing.T) {
 			existing: &vendor.Manifest{
 				Schema: vendor.SchemaVersion,
 				Mod:    map[string]mod.ModuleConfig{"example.com/dep": {Version: "v1.0.0", Local: "../local"}},
+			},
+			want: false,
+		},
+		{
+			name:   "WorkspaceToolAdded",
+			goWork: "go 1.24\nuse ./api\n",
+			members: map[string]string{
+				"api": "module example.com/api\ngo 1.24\nrequire github.com/foo/bar v1.0.0\ntool github.com/a-h/templ/cmd/templ\n",
+			},
+			existing: &vendor.Manifest{
+				Schema: vendor.SchemaVersion,
+				Mod:    map[string]mod.ModuleConfig{"github.com/foo/bar": {Version: "v1.0.0"}},
+			},
+			want: true,
+		},
+		{
+			name:   "WorkspaceToolRemoved",
+			goWork: "go 1.24\nuse ./api\n",
+			members: map[string]string{
+				"api": "module example.com/api\ngo 1.24\nrequire github.com/foo/bar v1.0.0\n",
+			},
+			existing: &vendor.Manifest{
+				Schema: vendor.SchemaVersion,
+				Tool:   mod.ToolConfig{"github.com/a-h/templ/cmd/templ": {}},
+				Mod:    map[string]mod.ModuleConfig{"github.com/foo/bar": {Version: "v1.0.0"}},
+			},
+			want: true,
+		},
+		{
+			name:   "WorkspaceToolUnchanged",
+			goWork: "go 1.24\nuse ./api\n",
+			members: map[string]string{
+				"api": "module example.com/api\ngo 1.24\nrequire github.com/foo/bar v1.0.0\ntool github.com/a-h/templ/cmd/templ\n",
+			},
+			existing: &vendor.Manifest{
+				Schema: vendor.SchemaVersion,
+				Tool:   mod.ToolConfig{"github.com/a-h/templ/cmd/templ": {}},
+				Mod:    map[string]mod.ModuleConfig{"github.com/foo/bar": {Version: "v1.0.0"}},
 			},
 			want: false,
 		},

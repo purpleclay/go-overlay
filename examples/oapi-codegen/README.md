@@ -1,6 +1,6 @@
 # oapi-codegen
 
-An HTTP server whose boilerplate is generated from an OpenAPI spec using [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen), demonstrating govendor support for the Go `tool` directive.
+An HTTP server whose boilerplate is generated from an OpenAPI spec using [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen), demonstrating govendor's native support for the Go `tool` directive.
 
 ## Getting started
 
@@ -23,11 +23,13 @@ pkgs.buildGoApplication {
   src = ./.;
   modules = ./govendor.toml;
 
-  # oapi-codegen is declared as a tool directive in go.mod rather than a
-  # nativeBuildInput. govendor includes tool dependencies in govendor.toml
-  # so the Go toolchain can find and run it from the vendor directory.
+  # oapi-codegen is declared as a tool directive in go.mod. govendor compiles
+  # it for the host platform and injects the binary into nativeBuildInputs,
+  # making it available in $PATH here without any extra configuration.
   preBuild = ''
-    go generate ./...
+    oapi-codegen --config=api/oapi-codegen.yaml api/catto.yaml
   '';
 }
 ```
+
+The tool is invoked by its binary name directly — no `go generate`, no `go tool`. Because govendor compiles the tool for the **host** platform and injects it into `nativeBuildInputs`, this works correctly under cross-compilation without any workarounds.
