@@ -79,8 +79,8 @@ github.com/purpleclay/chomp v0.7.0 h1:0uvN0kORhGsoH+SRuqytPBId2++A3PGEJaIlEpiPYA
 github.com/purpleclay/chomp v0.7.0/go.mod h1:LFdzw8cqsEPc1W9KtjhcmlKBWI4t3XTve4iSw5IH22c=
 github.com/purpleclay/x/cli v0.7.2 h1:EyWEJJlpf4jpMWuaagM39IlwWCbYzNJTSgBy7RtzafQ=
 github.com/purpleclay/x/cli v0.7.2/go.mod h1:GZksfZ5hlj/Zq8jVkDTiQ9O4CRR1CbII1/6Kov421dE=
-github.com/purpleclay/x/theme v0.3.1 h1:tZvO59TDGdpoK+Vlfe1J3f71u3D2HD2JcsZCDBDmMyc=
-github.com/purpleclay/x/theme v0.3.1/go.mod h1:XstI/vTBjTdMWdIXuJJDpzTpmw7tSXez14kBdXfq6Uw=
+github.com/purpleclay/x/theme v0.4.0 h1:/2t2tHVvOSQs6pWfVJAlwuObeJN+laRUcuz/z82cfXo=
+github.com/purpleclay/x/theme v0.4.0/go.mod h1:Ps1Zg0KA8dis+A+GTDHTJ8UDWJ5u7qSUmMcclxISDjk=
 github.com/rivo/uniseg v0.1.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.2.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=
