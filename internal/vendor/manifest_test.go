@@ -84,6 +84,7 @@ func TestWriteTo(t *testing.T) {
 			Toolchain: "go1.25.4",
 			Modules:   []string{"./cli"},
 		},
+		mod.ToolConfig{"github.com/a-h/templ/cmd/templ": {Version: "v0.3.924"}},
 		nil,
 	)
 
@@ -97,5 +98,6 @@ func TestWriteTo(t *testing.T) {
 	assert.Equal(t, manifest.Schema, parsed.Schema)
 	assert.Equal(t, manifest.IncludePlatforms, parsed.IncludePlatforms)
 	assert.Equal(t, manifest.Workspace, parsed.Workspace)
+	assert.Equal(t, manifest.Tool, parsed.Tool)
 	assert.Equal(t, manifest.Mod, parsed.Mod)
 }

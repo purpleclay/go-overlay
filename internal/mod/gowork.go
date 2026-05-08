@@ -18,6 +18,7 @@ type WorkspaceMember struct {
 	Dir          string
 	ModulePath   string
 	Requires     map[string]string
+	Tools        []string
 	Replacements map[string]Replacement
 	Excludes     map[string][]string
 }
@@ -161,6 +162,11 @@ func (w *GoWorkFile) ParseMembers() ([]WorkspaceMember, error) {
 			requires[req.Mod.Path] = req.Mod.Version
 		}
 
+		tools := make([]string, len(mf.Tool))
+		for i, t := range mf.Tool {
+			tools[i] = t.Path
+		}
+
 		replacements := parseReplacements(mf.Replace)
 		excludes := parseExcludes(mf.Exclude)
 
@@ -168,6 +174,7 @@ func (w *GoWorkFile) ParseMembers() ([]WorkspaceMember, error) {
 			Dir:          normalizeWorkspaceMemberPath(mod),
 			ModulePath:   mf.Module.Mod.Path,
 			Requires:     requires,
+			Tools:        tools,
 			Replacements: replacements,
 			Excludes:     excludes,
 		})

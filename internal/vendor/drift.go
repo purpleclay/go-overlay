@@ -15,6 +15,7 @@ func IsDrifted(src dependencySource, existing *Manifest) (bool, error) {
 	case *mod.GoModFile:
 		return requiresDrifted(s.Requires, existing.Mod) ||
 			replacementsDrifted(s.Replacements, existing.Mod) ||
+			toolsDrifted(s.Tools, existing.Tool) ||
 			excludesDrifted(s.Excludes, existing.Exclude), nil
 	case *mod.GoWorkFile:
 		members, err := s.ParseMembers()
@@ -24,9 +25,11 @@ func IsDrifted(src dependencySource, existing *Manifest) (bool, error) {
 		requires := make(map[string]string)
 		replacements := make(map[string]mod.Replacement)
 		excludes := make(map[string][]string)
+		var tools []string
 		for _, m := range members {
 			maps.Copy(requires, m.Requires)
 			maps.Copy(replacements, m.Replacements)
+			tools = append(tools, m.Tools...)
 			for path, versions := range m.Excludes {
 				excludes[path] = append(excludes[path], versions...)
 			}
@@ -35,10 +38,13 @@ func IsDrifted(src dependencySource, existing *Manifest) (bool, error) {
 			slices.Sort(versions)
 			excludes[path] = slices.Compact(versions)
 		}
+		slices.Sort(tools)
+		tools = slices.Compact(tools)
 		// Workspace-level replacements take precedence over member-level ones.
 		maps.Copy(replacements, s.Replacements)
 		return requiresDrifted(requires, existing.Mod) ||
 			replacementsDrifted(replacements, existing.Mod) ||
+			toolsDrifted(tools, existing.Tool) ||
 			excludesDrifted(excludes, existing.Exclude), nil
 	default:
 		return false, fmt.Errorf("unsupported dependency source: %T", src)
@@ -78,6 +84,19 @@ func replacementsDrifted(replacements map[string]mod.Replacement, mods map[strin
 			if _, ok := replacements[path]; !ok {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// toolsDrifted returns true if the tool package list has changed.
+func toolsDrifted(tools []string, recorded mod.ToolConfig) bool {
+	if len(tools) != len(recorded) {
+		return true
+	}
+	for _, pkg := range tools {
+		if _, ok := recorded[pkg]; !ok {
+			return true
 		}
 	}
 	return false

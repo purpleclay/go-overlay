@@ -61,7 +61,20 @@ func TestVendor(t *testing.T) {
 			deps, err := resolver.ResolveModule(goMod, platforms)
 			require.NoError(t, err)
 
-			manifest := vendor.New(deps, tt.includePlatforms, nil, goMod.Excludes)
+			var tool mod.ToolConfig
+			if len(goMod.Tools) > 0 {
+				pkgToVersion := make(map[string]string)
+				for _, dep := range deps {
+					for _, pkg := range dep.Packages {
+						pkgToVersion[pkg] = dep.Version
+					}
+				}
+				tool = make(mod.ToolConfig, len(goMod.Tools))
+				for _, pkg := range goMod.Tools {
+					tool[pkg] = mod.ToolEntry{Version: pkgToVersion[pkg]}
+				}
+			}
+			manifest := vendor.New(deps, tt.includePlatforms, nil, tool, goMod.Excludes)
 
 			var buf bytes.Buffer
 			_, err = manifest.WriteTo(&buf)
@@ -94,6 +107,10 @@ func TestVendorWorkspace(t *testing.T) {
 			name: "workspace-remote-replace",
 			dir:  "testdata/workspace-remote-replace",
 		},
+		{
+			name: "workspace-with-tools",
+			dir:  "testdata/workspace-with-tools",
+		},
 	}
 
 	resolver := resolve.New(resolve.OSExecutor{})
@@ -114,8 +131,10 @@ func TestVendorWorkspace(t *testing.T) {
 			members, err := goWork.ParseMembers()
 			require.NoError(t, err)
 
+			var allTools []string
 			merged := make(map[string][]string)
 			for _, m := range members {
+				allTools = append(allTools, m.Tools...)
 				for path, versions := range m.Excludes {
 					merged[path] = append(merged[path], versions...)
 				}
@@ -128,8 +147,23 @@ func TestVendorWorkspace(t *testing.T) {
 			if len(merged) > 0 {
 				excludes = merged
 			}
+			var tool mod.ToolConfig
+			if len(allTools) > 0 {
+				pkgToVersion := make(map[string]string)
+				for _, dep := range deps {
+					for _, pkg := range dep.Packages {
+						pkgToVersion[pkg] = dep.Version
+					}
+				}
+				slices.Sort(allTools)
+				allTools = slices.Compact(allTools)
+				tool = make(mod.ToolConfig, len(allTools))
+				for _, pkg := range allTools {
+					tool[pkg] = mod.ToolEntry{Version: pkgToVersion[pkg]}
+				}
+			}
 
-			manifest := vendor.New(deps, tt.includePlatforms, goWork.WorkspaceConfig(), excludes)
+			manifest := vendor.New(deps, tt.includePlatforms, goWork.WorkspaceConfig(), tool, excludes)
 
 			var buf bytes.Buffer
 			_, err = manifest.WriteTo(&buf)

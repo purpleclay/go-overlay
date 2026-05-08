@@ -11,6 +11,7 @@ Full option tables and API documentation for go-overlay.
   - [`buildGoApplication`](#buildgoapplication)
   - [`buildGoWorkspace`](#buildgoworkspace)
   - [`mkVendorEnv`](#mkvendorenv)
+- [Go Module Tool Directives](#go-module-tool-directives)
 - [Cross-Compilation](#cross-compilation)
 - [Traditional Nix Installation](#traditional-nix-installation)
 
@@ -186,6 +187,27 @@ Create a vendor directory with `modules.txt` from a parsed `govendor.toml` manif
 | `GOPRIVATE`     | `""`     | Module path prefixes to bypass the proxy and checksum DB   |
 | `GONOSUMDB`     | `""`     | Module path prefixes to bypass the checksum DB only        |
 | `GONOPROXY`     | `""`     | Module path prefixes to bypass the proxy only              |
+
+## Go Module Tool Directives
+
+Go 1.24+ `tool` directives in `go.mod` are first-class citizens in go-overlay. When `govendor` generates a manifest it records declared tools in a `[tool]` section:
+
+```toml
+[tool]
+  packages = ["github.com/a-h/templ/cmd/templ"]
+```
+
+Both `buildGoApplication` and `buildGoWorkspace` read this section and compile each tool for the **host** platform, injecting the resulting binaries into `nativeBuildInputs`. Tools are available in `$PATH` during `preBuild` without any extra configuration:
+
+```nix
+preBuild = ''
+  templ generate ./...
+'';
+```
+
+For workspace projects, tools are aggregated across all member `go.mod` files.
+
+See [Go Module Tool Directives](./go-module-tools.md) for a full explanation of invocation patterns and cross-compilation nuances.
 
 ## Cross-Compilation
 

@@ -19,3 +19,13 @@ type WorkspaceConfig struct {
 	Toolchain string   `toml:"toolchain,omitempty"`
 	Modules   []string `toml:"modules"`
 }
+
+// ToolEntry records the resolved version of a single Go tool directive.
+type ToolEntry struct {
+	Version string `toml:"version"`
+}
+
+// ToolConfig records Go tool directive packages in the manifest, keyed by
+// package path. The Nix builder uses this to compile each tool for the host
+// platform, labelling each derivation with the tool's own module version.
+type ToolConfig map[string]ToolEntry
