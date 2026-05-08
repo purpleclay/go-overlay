@@ -45,7 +45,8 @@ func IsDrifted(src dependencySource, existing *Manifest) (bool, error) {
 		return requiresDrifted(requires, existing.Mod) ||
 			replacementsDrifted(replacements, existing.Mod) ||
 			toolsDrifted(tools, existing.Tool) ||
-			excludesDrifted(excludes, existing.Exclude), nil
+			excludesDrifted(excludes, existing.Exclude) ||
+			workspaceDrifted(s, existing.Workspace), nil
 	default:
 		return false, fmt.Errorf("unsupported dependency source: %T", src)
 	}
@@ -100,6 +101,13 @@ func toolsDrifted(tools []string, recorded mod.ToolConfig) bool {
 		}
 	}
 	return false
+}
+
+func workspaceDrifted(goWork *mod.GoWorkFile, recorded *mod.WorkspaceConfig) bool {
+	if recorded == nil {
+		return true
+	}
+	return goWork.GoVersion != recorded.Go || goWork.Toolchain != recorded.Toolchain
 }
 
 func excludesDrifted(excludes map[string][]string, recorded map[string][]string) bool {
