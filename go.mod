@@ -10,7 +10,7 @@ require (
 	github.com/nix-community/go-nix v0.0.0-20250101154619-4bdde671e0a1
 	github.com/purpleclay/chomp v0.7.0
 	github.com/purpleclay/x/cli v0.7.2
-	github.com/purpleclay/x/theme v0.3.1
+	github.com/purpleclay/x/theme v0.4.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
