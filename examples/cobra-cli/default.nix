@@ -20,7 +20,6 @@ in
       src = ./.;
       modules = ./govendor.toml;
       subPackages = ["cmd/doggo"];
-      doCheck = true;
       ldflags = ["-X main.version=${version}"];
 
       # subPackages controls what is built, so the default checkPhase would

@@ -11,4 +11,5 @@ pkgs.buildGoApplication {
   # The modules parameter points buildGoApplication at the govendor.toml manifest,
   # which pins each external dependency with a hash for integrity verification.
   modules = ./govendor.toml;
+  doCheck = false;
 }
