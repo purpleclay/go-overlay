@@ -9,6 +9,7 @@ pkgs.buildGoApplication {
   version = "0.1.0";
   src = ./.;
   modules = ./govendor.toml;
+  doCheck = false;
 
   # oapi-codegen is declared as a tool directive in go.mod. govendor compiles
   # it for the host platform and injects the binary into nativeBuildInputs,

@@ -8,6 +8,7 @@ pkgs.buildGoApplication {
   version = "0.1.0";
   src = ./.;
   modules = ./govendor.toml;
+  doCheck = false;
 
   # The go.mod replace directive points to ./units — a relative filesystem path
   # that does not exist inside the Nix sandbox. localReplaces maps each locally

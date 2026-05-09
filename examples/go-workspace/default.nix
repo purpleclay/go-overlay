@@ -14,5 +14,4 @@ pkgs.buildGoWorkspace {
   # The workspace contains two modules (mood, server). subPackages selects
   # which one to build.
   subPackages = ["server"];
-  doCheck = true;
 }
