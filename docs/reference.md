@@ -137,7 +137,7 @@ Build a single-module Go application using vendored dependencies.
 | `GOPRIVATE`        | `""`                | Module path prefixes to bypass the proxy and checksum DB                         |
 | `GONOSUMDB`        | `""`                | Module path prefixes to bypass the checksum DB only                              |
 | `GONOPROXY`        | `""`                | Module path prefixes to bypass the proxy only                                    |
-| `doCheck`          | `false`             | Run tests during the build                                                       |
+| `doCheck`          | `true`              | Run tests during the build                                                       |
 | `checkFlags`       | `[]`                | Additional flags passed to `go test`                                             |
 | `extraGoFlags`     | `[]`                | Additional flags appended to `GOFLAGS` for all `go` commands (e.g. `["-cover"]`) |
 | `excludedPackages` | `[]`                | Packages to exclude from testing                                                 |
@@ -165,7 +165,7 @@ Build applications from a Go workspace (`go.work`).
 | `GOPRIVATE`        | `""`                | Module path prefixes to bypass the proxy and checksum DB                         |
 | `GONOSUMDB`        | `""`                | Module path prefixes to bypass the checksum DB only                              |
 | `GONOPROXY`        | `""`                | Module path prefixes to bypass the proxy only                                    |
-| `doCheck`          | `false`             | Run tests during the build                                                       |
+| `doCheck`          | `true`              | Run tests during the build                                                       |
 | `checkFlags`       | `[]`                | Additional flags passed to `go test`                                             |
 | `extraGoFlags`     | `[]`                | Additional flags appended to `GOFLAGS` for all `go` commands (e.g. `["-cover"]`) |
 | `excludedPackages` | `[]`                | Packages to exclude from testing                                                 |

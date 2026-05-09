@@ -429,7 +429,7 @@
           runHook postBuild
         '';
 
-      doCheck = attrs.doCheck or false;
+      doCheck = attrs.doCheck or true;
 
       checkPhase =
         attrs.checkPhase or ''
