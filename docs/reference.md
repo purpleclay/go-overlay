@@ -128,7 +128,7 @@ Build a single-module Go application using vendored dependencies.
 | `src`              | required            | Source directory                                                                 |
 | `go`               | required            | Go derivation from go-overlay                                                    |
 | `modules`          | `null`              | Path to govendor.toml manifest (null = use in-tree vendor)                       |
-| `subPackages`      | `["."]`             | Packages to build (relative to src)                                              |
+| `subPackages`      | `["."]`             | Packages to build (relative to src). Does not affect test scope.                 |
 | `ldflags`          | `[]`                | Linker flags                                                                     |
 | `tags`             | `[]`                | Build tags                                                                       |
 | `allowGoReference` | `false`             | Allow Go toolchain in runtime closure                                            |
@@ -140,7 +140,7 @@ Build a single-module Go application using vendored dependencies.
 | `doCheck`          | `true`              | Run tests during the build                                                       |
 | `checkFlags`       | `[]`                | Additional flags passed to `go test`                                             |
 | `extraGoFlags`     | `[]`                | Additional flags appended to `GOFLAGS` for all `go` commands (e.g. `["-cover"]`) |
-| `excludedPackages` | `[]`                | Packages to exclude from testing                                                 |
+| `excludedPackages` | `[]`                | Packages to exclude from `go test` (the default test scope is `./...`)           |
 | `CGO_ENABLED`      | inherited from `go` | Enable CGO                                                                       |
 | `GOOS`             | inherited from `go` | Target operating system                                                          |
 | `GOARCH`           | inherited from `go` | Target architecture                                                              |
@@ -149,29 +149,29 @@ Build a single-module Go application using vendored dependencies.
 
 Build applications from a Go workspace (`go.work`).
 
-| Option             | Default             | Description                                                                      |
-| :----------------- | :------------------ | :------------------------------------------------------------------------------- |
-| `pname`            | required            | Package name                                                                     |
-| `version`          | required            | Package version                                                                  |
-| `src`              | required            | Source directory (workspace root)                                                |
-| `go`               | required            | Go derivation from go-overlay                                                    |
-| `modules`          | `null`              | Path to govendor.toml manifest (null = use in-tree vendor)                       |
-| `subPackages`      | `["."]`             | Packages to build (relative to workspace root)                                   |
-| `ldflags`          | `[]`                | Linker flags                                                                     |
-| `tags`             | `[]`                | Build tags                                                                       |
-| `allowGoReference` | `false`             | Allow Go toolchain in runtime closure                                            |
-| `localReplaces`    | `{}`                | Map of module path to Nix path for external local replaces                       |
-| `netrcFile`        | `null`              | Path to a `.netrc` file for private module authentication                        |
-| `GOPRIVATE`        | `""`                | Module path prefixes to bypass the proxy and checksum DB                         |
-| `GONOSUMDB`        | `""`                | Module path prefixes to bypass the checksum DB only                              |
-| `GONOPROXY`        | `""`                | Module path prefixes to bypass the proxy only                                    |
-| `doCheck`          | `true`              | Run tests during the build                                                       |
-| `checkFlags`       | `[]`                | Additional flags passed to `go test`                                             |
-| `extraGoFlags`     | `[]`                | Additional flags appended to `GOFLAGS` for all `go` commands (e.g. `["-cover"]`) |
-| `excludedPackages` | `[]`                | Packages to exclude from testing                                                 |
-| `CGO_ENABLED`      | inherited from `go` | Enable CGO                                                                       |
-| `GOOS`             | inherited from `go` | Target operating system                                                          |
-| `GOARCH`           | inherited from `go` | Target architecture                                                              |
+| Option             | Default             | Description                                                                                                                                    |
+| :----------------- | :------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pname`            | required            | Package name                                                                                                                                   |
+| `version`          | required            | Package version                                                                                                                                |
+| `src`              | required            | Source directory (workspace root)                                                                                                              |
+| `go`               | required            | Go derivation from go-overlay                                                                                                                  |
+| `modules`          | `null`              | Path to govendor.toml manifest (null = use in-tree vendor)                                                                                     |
+| `subPackages`      | `["."]`             | Packages to build (relative to workspace root). Does not affect test scope.                                                                    |
+| `ldflags`          | `[]`                | Linker flags                                                                                                                                   |
+| `tags`             | `[]`                | Build tags                                                                                                                                     |
+| `allowGoReference` | `false`             | Allow Go toolchain in runtime closure                                                                                                          |
+| `localReplaces`    | `{}`                | Map of module path to Nix path for external local replaces                                                                                     |
+| `netrcFile`        | `null`              | Path to a `.netrc` file for private module authentication                                                                                      |
+| `GOPRIVATE`        | `""`                | Module path prefixes to bypass the proxy and checksum DB                                                                                       |
+| `GONOSUMDB`        | `""`                | Module path prefixes to bypass the checksum DB only                                                                                            |
+| `GONOPROXY`        | `""`                | Module path prefixes to bypass the proxy only                                                                                                  |
+| `doCheck`          | `true`              | Run tests during the build                                                                                                                     |
+| `checkFlags`       | `[]`                | Additional flags passed to `go test`                                                                                                           |
+| `extraGoFlags`     | `[]`                | Additional flags appended to `GOFLAGS` for all `go` commands (e.g. `["-cover"]`)                                                               |
+| `excludedPackages` | `[]`                | Packages to exclude from `go test` (default test scope is each workspace member's `./mod/...`; in in-tree vendor mode, members are parsed from `go.work`) |
+| `CGO_ENABLED`      | inherited from `go` | Enable CGO                                                                                                                                     |
+| `GOOS`             | inherited from `go` | Target operating system                                                                                                                        |
+| `GOARCH`           | inherited from `go` | Target architecture                                                                                                                            |
 
 ### `mkVendorEnv`
 
