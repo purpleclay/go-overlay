@@ -30,7 +30,41 @@
     optionalAttrs
     optionalString
     pathExists
+    splitString
     ;
+
+  # Parse workspace member paths from a go.work file's content.
+  # Handles both single-line (use ./path) and block (use (\n  ./path\n)) forms.
+  # Returns a list of path strings, e.g. ["./mood" "./server"].
+  parseGoWorkModules = content: let
+    lines = splitString "\n" content;
+    result =
+      builtins.foldl' (
+        acc: line: let
+          startBlock = builtins.match "[ \t]*use[ \t]+\\([ \t]*" line;
+          endBlock = builtins.match "[ \t]*\\)[ \t]*" line;
+          singleUse = builtins.match "[ \t]*use[ \t]+([^ \t]+)[ \t]*" line;
+          blockEntry = builtins.match "[ \t]*([^ \t/][^ \t]*)[ \t]*" line;
+        in
+          if acc.inBlock
+          then
+            if endBlock != null
+            then acc // {inBlock = false;}
+            else if blockEntry != null
+            then acc // {mods = acc.mods ++ [(builtins.head blockEntry)];}
+            else acc
+          else if startBlock != null
+          then acc // {inBlock = true;}
+          else if singleUse != null
+          then acc // {mods = acc.mods ++ [(builtins.head singleUse)];}
+          else acc
+      ) {
+        inBlock = false;
+        mods = [];
+      }
+      lines;
+  in
+    result.mods;
 
   # Fetch a Go module using `go mod download`.
   # Supports private modules via GOPRIVATE and a netrc file for authentication.
@@ -578,12 +612,13 @@
         ''
       );
 
+    # Test scope is independent of build scope: tests run across the entire
+    # module by default, regardless of which subPackages are built. Filter
+    # specific packages out via excludedPackages.
     testPackages =
       if excludedPackages == []
-      then concatMapStringsSep " " (p: "./${p}/...") subPackages
-      else
-        "$(go list ${concatMapStringsSep " " (p: "./${p}/...") subPackages}"
-        + " | grep -F -v -- ${concatMapStringsSep " | grep -F -v -- " (p: escapeShellArg p) excludedPackages})";
+      then "./..."
+      else "$(go list ./... | grep -F -v -- ${concatMapStringsSep " | grep -F -v -- " (p: escapeShellArg p) excludedPackages} || echo './...')";
 
     # Build each declared tool for the host platform so it lands in $PATH
     # during preBuild without any user configuration.
@@ -895,17 +930,26 @@
       );
 
     # In workspace mode, go test ./... does not expand across module boundaries.
-    # Instead, derive test targets from the workspace modules listed in go.work.
-    # Falls back to subPackages if no workspace config is present (in-tree vendor mode).
+    # Instead, derive test targets from the workspace modules listed in go.work
+    # so the entire workspace is tested by default — independent of subPackages.
+    # In in-tree vendor mode (no manifest), parse go.work directly to recover
+    # member paths; ./... is the last-resort fallback if go.work is absent.
+    inTreeWorkspaceModules =
+      if useInTreeVendor && pathExists (src + "/go.work")
+      then parseGoWorkModules (readFile (src + "/go.work"))
+      else [];
+
     workspaceTestTargets =
       if workspaceConfig != null
       then concatMapStringsSep " " (mod: "${mod}/...") (workspaceConfig.modules or [])
-      else concatMapStringsSep " " (p: "./${p}/...") subPackages;
+      else if inTreeWorkspaceModules != []
+      then concatMapStringsSep " " (mod: "${mod}/...") inTreeWorkspaceModules
+      else "./...";
 
     testPackages =
       if excludedPackages == []
       then workspaceTestTargets
-      else "$(go list ${workspaceTestTargets} | grep -F -v -- ${concatMapStringsSep " | grep -F -v -- " (p: escapeShellArg p) excludedPackages})";
+      else "$(go list ${workspaceTestTargets} | grep -F -v -- ${concatMapStringsSep " | grep -F -v -- " (p: escapeShellArg p) excludedPackages} || echo ${escapeShellArg workspaceTestTargets})";
 
     # Build each declared tool for the host platform so it lands in $PATH
     # during preBuild without any user configuration.
