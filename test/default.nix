@@ -1,6 +1,37 @@
 {pkgs}: let
   go-bin = pkgs.go-bin;
 
+  # Direct access to tool-manifests internals for ordering assertions
+  toolManifests = import ../lib/tool-manifests.nix {lib = pkgs.lib;};
+
+  # Returns the index of x in xs, or null if not found.
+  # Returning null (rather than a sentinel integer) ensures ordering assertions
+  # fail explicitly when an expected version is absent from the list.
+  indexOf = xs: x: let
+    res =
+      builtins.foldl'
+      (acc: v:
+        if acc.done
+        then acc
+        else if v == x
+        then {
+          done = true;
+          i = acc.i;
+        }
+        else {
+          done = false;
+          i = acc.i + 1;
+        })
+      {
+        done = false;
+        i = 0;
+      }
+      xs;
+  in
+    if res.done
+    then res.i
+    else null;
+
   assertEq = name: expected: actual:
     if expected == actual
     then pkgs.runCommand "test-${name}-pass" {} "touch $out"
@@ -98,4 +129,24 @@ in {
   # withDefaultTools - bundles toolchain with curated default tools into a single derivation
   # Binary existence is verified in CI via the build-with-default-tools matrix job
   withDefaultTools-is-derivation = assertEq "withDefaultTools-is-derivation" true (builtins.isAttrs go-bin.latest.withDefaultTools);
+
+  # tools - pre-release version handling (gopls 0.22.0-pre.*)
+  # Accessing a pre-release version by its full key must not throw
+  tools-gopls-pre-release-accessible = assertEq "tools-gopls-pre-release-accessible" "0.22.0-pre.2" go-bin.latest.tools.gopls."0.22.0-pre.2".version;
+
+  # Higher pre-release counter sorts above lower counter for the same base version
+  tools-gopls-pre-release-counter-ordering = let
+    sorted = toolManifests.tools.gopls.sortedVersions;
+    pre2 = indexOf sorted "0.22.0-pre.2";
+    pre1 = indexOf sorted "0.22.0-pre.1";
+  in
+    assertEq "tools-gopls-pre-release-counter-ordering" true (pre2 != null && pre1 != null && pre2 < pre1);
+
+  # Pre-release of a higher minor version sorts above a stable release of a lower minor version
+  tools-gopls-pre-release-above-older-stable = let
+    sorted = toolManifests.tools.gopls.sortedVersions;
+    pre2 = indexOf sorted "0.22.0-pre.2";
+    stable = indexOf sorted "0.21.1";
+  in
+    assertEq "tools-gopls-pre-release-above-older-stable" true (pre2 != null && stable != null && pre2 < stable);
 }
