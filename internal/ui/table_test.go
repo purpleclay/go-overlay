@@ -24,7 +24,6 @@ func TestRenderResultsTableForGoMod(t *testing.T) {
 		{Path: "path/to/notfound/go.mod", Status: vendor.StatusError, Message: "go.mod does not exist, check path"},
 		{Path: "path/to/ok/go.mod", Status: vendor.StatusOK, Message: "govendor.toml is up to date"},
 		{Path: "path/to/schema-mismatch/go.mod", Status: vendor.StatusDrift, Message: "govendor.toml uses schema v1, current govendor requires schema v3 — run 'govendor' to regenerate"},
-		{Path: "path/to/skipped/go.mod", Status: vendor.StatusSkipped, Message: "go.mod has no external dependencies"},
 	}
 
 	got := ui.RenderResultsTable(results)
@@ -40,7 +39,6 @@ func TestRenderResultsTableForGoWork(t *testing.T) {
 		{Path: "path/to/notfound/go.work", Status: vendor.StatusError, Message: "go.work does not exist, check path"},
 		{Path: "path/to/ok/go.work", Status: vendor.StatusOK, Message: "govendor.toml is up to date"},
 		{Path: "path/to/schema-mismatch/go.work", Status: vendor.StatusDrift, Message: "govendor.toml uses schema v1, current govendor requires schema v3 — run 'govendor' to regenerate"},
-		{Path: "path/to/skipped/go.work", Status: vendor.StatusSkipped, Message: "go.work has no external dependencies"},
 	}
 
 	got := ui.RenderResultsTable(results)

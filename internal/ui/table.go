@@ -8,9 +8,8 @@ import (
 )
 
 var (
-	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	greenStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	redStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 
 	headerStyle  = lipgloss.NewStyle().Bold(true).Padding(0, 1)
 	cellStyle    = lipgloss.NewStyle().Padding(0, 1)
@@ -27,8 +26,6 @@ func StatusSymbol(s vendor.Status) string {
 		return greenStyle.Render("✓")
 	case vendor.StatusDrift, vendor.StatusMissing, vendor.StatusError:
 		return redStyle.Render("✗")
-	case vendor.StatusSkipped:
-		return yellowStyle.Render("○")
 	default:
 		return " "
 	}
@@ -41,8 +38,6 @@ func StatusLabel(s vendor.Status) string {
 		return greenStyle.Render(string(s))
 	case vendor.StatusDrift, vendor.StatusMissing, vendor.StatusError:
 		return redStyle.Render(string(s))
-	case vendor.StatusSkipped:
-		return yellowStyle.Render(string(s))
 	default:
 		return string(s)
 	}

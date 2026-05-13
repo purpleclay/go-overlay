@@ -16,5 +16,4 @@
 │ path/to/ok/go.mod              │ ✓ ok        │ govendor.toml is up to date                                                                           │
 │ path/to/schema-mismatch/go.mod │ ✗ drift     │ govendor.toml uses schema v1, current govendor requires schema v3 — run 'govendor' to                 │
 │                                │             │ regenerate                                                                                            │
-│ path/to/skipped/go.mod         │ ○ skipped   │ go.mod has no external dependencies                                                                   │
 ╰────────────────────────────────┴─────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────╯

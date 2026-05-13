@@ -127,9 +127,6 @@ func (v *Vendor) VendorFiles() ([]Result, error) {
 			if err != nil {
 				return resultError(modFile, err)
 			}
-			if !goMod.HasDependencies() && !goMod.HasTools() {
-				return resultSkipped(modFile)
-			}
 			return v.processSource(goMod, modFile, nil)
 		})
 	}
