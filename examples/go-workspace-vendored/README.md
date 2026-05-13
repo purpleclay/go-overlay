@@ -1,6 +1,6 @@
 # go-workspace-vendored
 
-Builds the same mood check-in app as `go-workspace` using a committed `vendor/` directory instead of a `govendor.toml` manifest.
+Builds the same mood check-in app as `go-workspace` using a committed `vendor/` directory instead of a `govendor.toml` manifest. This demonstrates the use of `buildGoVendoredWorkspace`.
 
 ## Getting started
 
@@ -15,8 +15,8 @@ Then open [http://localhost:8080](http://localhost:8080) in your browser.
 ## The Nix bit
 
 ```nix
-# No modules parameter — buildGoWorkspace detects the committed vendor/ directory automatically.
-pkgs.buildGoWorkspace {
+# No govendor.toml — buildGoVendoredWorkspace uses the committed vendor/ directory directly.
+pkgs.buildGoVendoredWorkspace {
   inherit go;
 
   pname = "server";
@@ -26,10 +26,4 @@ pkgs.buildGoWorkspace {
 }
 ```
 
-The `vendor/` directory is generated with `go work vendor` rather than `go mod vendor`, and is committed alongside the source. When no `modules` parameter is provided, `buildGoWorkspace` detects the vendor directory automatically and uses it in place of a `govendor.toml` manifest.
-
-During the build, `buildGoWorkspace` logs which path was taken:
-
-```shell
-go-overlay: using committed vendor/ directory
-```
+The `vendor/` directory is generated with `go work vendor` rather than `go mod vendor`, and is committed alongside the source.

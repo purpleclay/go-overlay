@@ -25,7 +25,6 @@ pkgs.buildGoApplication {
   pname = "local-replaces";
   version = "0.1.0";
   src = ./.;
-  modules = ./govendor.toml;
 
   # The go.mod replace directive points to ./units — a relative filesystem path
   # that does not exist inside the Nix sandbox. localReplaces maps each locally

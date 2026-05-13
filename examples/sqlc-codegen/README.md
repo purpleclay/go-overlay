@@ -25,7 +25,6 @@ pkgs.buildGoApplication {
   pname = "sqlc-codegen";
   version = "0.1.0";
   src = ./.;
-  modules = ./govendor.toml;
 
   # sqlc is a non-Go tool, so it is provided via nativeBuildInputs rather than
   # the Go tool directive. It is available on $PATH during build phases but is

@@ -18,10 +18,9 @@ Then open [http://localhost:8080](http://localhost:8080) in your browser.
 pkgs.buildGoApplication {
   inherit go;
 
-  pname = "catto";
+  pname = "oapi-codegen";
   version = "0.1.0";
   src = ./.;
-  modules = ./govendor.toml;
 
   # oapi-codegen is declared as a tool directive in go.mod. govendor compiles
   # it for the host platform and injects the binary into nativeBuildInputs,
