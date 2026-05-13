@@ -15,12 +15,11 @@ const (
 	StatusGenerated Status = "generated"
 	StatusDrift     Status = "drift"
 	StatusMissing   Status = "missing"
-	StatusSkipped   Status = "skipped"
 	StatusError     Status = "error"
 )
 
 func (s Status) IsSuccess() bool {
-	return s == StatusOK || s == StatusGenerated || s == StatusSkipped
+	return s == StatusOK || s == StatusGenerated
 }
 
 func (s Status) IsFailure() bool {
@@ -62,11 +61,6 @@ func resultSchemaMismatch(path string, manifestSchema, currentSchema int) Result
 
 func resultMissing(path string) Result {
 	return Result{Path: path, Status: StatusMissing, Message: "govendor.toml not found, run govendor to generate"}
-}
-
-func resultSkipped(path string) Result {
-	ft := fileType(path)
-	return Result{Path: path, Status: StatusSkipped, Message: fmt.Sprintf("%s has no external dependencies", ft)}
 }
 
 func resultError(path string, err error) Result {
