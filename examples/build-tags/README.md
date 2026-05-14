@@ -29,7 +29,6 @@ pkgs.buildGoApplication {
   pname = "build-tags";
   version = "0.1.0";
   src = ./.;
-  modules = ./govendor.toml;
 }
 ```
 

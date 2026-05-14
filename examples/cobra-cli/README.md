@@ -22,7 +22,6 @@ in
 
     pname = "doggo";
     src = ./.;
-    modules = ./govendor.toml;
     subPackages = ["cmd/doggo"];
     ldflags = ["-X main.version=${version}"];
 

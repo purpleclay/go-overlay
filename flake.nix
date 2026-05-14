@@ -25,8 +25,14 @@
         pkgs = final;
       };
 
-      # Builder for Go applications using govendor.toml
-      inherit (final.callPackage ./builder {}) buildGoApplication buildGoWorkspace mkVendorEnv;
+      inherit
+        (final.callPackage ./builder {})
+        buildGoApplication
+        buildGoWorkspace
+        buildGoVendoredApplication
+        buildGoVendoredWorkspace
+        mkVendorEnv
+        ;
     };
   in
     {

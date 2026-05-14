@@ -1,6 +1,6 @@
 # vendored
 
-A lottery number generator styled with [lipgloss](https://github.com/charmbracelet/lipgloss), demonstrating `buildGoApplication` with a committed `vendor/` directory.
+A lottery number generator styled with [lipgloss](https://github.com/charmbracelet/lipgloss), demonstrating `buildGoVendoredApplication` with a committed `vendor/` directory.
 
 ## Getting started
 
@@ -17,15 +17,15 @@ nix run .#example-vendored
   pkgs,
   go,
 }:
-# No modules parameter — buildGoApplication detects the committed vendor/
+# No modules parameter — buildGoVendoredApplication detects the committed vendor/
 # directory automatically and uses it in place of a govendor.toml manifest.
-pkgs.buildGoApplication {
+pkgs.buildGoVendoredApplication {
   inherit go;
 
-  pname = "lucky-dip";
+  pname = "vendored";
   version = "0.1.0";
   src = ./.;
 }
 ```
 
-The `vendor/` directory is generated with `go mod vendor` and committed alongside the source. When no `modules` parameter is provided, `buildGoApplication` detects it automatically.
+The `vendor/` directory is generated with `go mod vendor` and committed alongside the source.
