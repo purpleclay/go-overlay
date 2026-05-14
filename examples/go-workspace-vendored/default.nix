@@ -2,8 +2,8 @@
   pkgs,
   go,
 }:
-# No modules parameter — buildGoWorkspace detects the committed vendor/ directory automatically.
-pkgs.buildGoWorkspace {
+# No govendor.toml — buildGoVendoredWorkspace uses the committed vendor/ directory directly.
+pkgs.buildGoVendoredWorkspace {
   inherit go;
 
   pname = "server";
