@@ -6,7 +6,8 @@
     flake-utils.url = "github:numtide/flake-utils";
 
     go-overlay = {
-      url = "github:purpleclay/go-overlay";
+      #url = "github:purpleclay/go-overlay";
+      url = "path:../..";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         flake-utils.follows = "flake-utils";
@@ -55,7 +56,9 @@
             inherit (pre-commit-check) shellHook;
             buildInputs =
               [
-                go.withDefaultTools
+                # Basic tools required for development, extend or replace with .withDefaultTools
+                # https://github.com/purpleclay/go-overlay/blob/main/docs/reference.md#go-tools
+                (go.withTools ["gopls" "gofumpt" "staticcheck"])
                 go-overlay.packages.${system}.govendor
               ]
               ++ pre-commit-check.enabledPackages;

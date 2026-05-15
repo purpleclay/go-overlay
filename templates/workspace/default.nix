@@ -1,12 +1,15 @@
 {
   pkgs,
   go,
-}:
-pkgs.buildGoWorkspace {
-  pname = "api";
-  version = "0.1.0";
-  src = ./.;
-  inherit go;
-  modules = ./govendor.toml;
-  subPackages = ["api"];
-}
+}: let
+  pname = "example";
+in
+  pkgs.buildGoWorkspace {
+    inherit go pname;
+
+    version = "0.1.0";
+    src = ./.;
+    subPackages = ["api"];
+
+    meta.mainProgram = pname;
+  }

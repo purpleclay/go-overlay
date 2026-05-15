@@ -1,5 +1,5 @@
 {
-  description = "A Go application";
+  description = "A Go application packaged as a container image";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -38,6 +38,15 @@
         };
         go = pkgs.go-bin.fromGoMod ./go.mod;
 
+        # Images must always be built for Linux. Derive the Linux equivalent of
+        # the current system so nix build .#image works on macOS via linux-builder.
+        linuxSystem = builtins.replaceStrings ["darwin"] ["linux"] system;
+        pkgsLinux = import nixpkgs {
+          system = linuxSystem;
+          overlays = [go-overlay.overlays.default];
+        };
+        goLinux = pkgsLinux.go-bin.fromGoMod ./go.mod;
+
         pre-commit-check = git-hooks.lib.${system}.run {
           src = ./.;
           hooks.govendor = {
@@ -50,15 +59,18 @@
         };
       in
         with pkgs; {
-          packages.default = callPackage ./default.nix {inherit go;};
+          packages = {
+            default = callPackage ./default.nix {inherit go;};
+            image = pkgsLinux.callPackage ./image.nix {
+              app = pkgsLinux.callPackage ./default.nix {go = goLinux;};
+            };
+          };
 
           devShells.default = mkShell {
             inherit (pre-commit-check) shellHook;
             buildInputs =
               [
-                # Basic tools required for development, extend or replace with .withDefaultTools
-                # https://github.com/purpleclay/go-overlay/blob/main/docs/reference.md#go-tools
-                (go.withTools ["gopls" "gofumpt" "staticcheck"])
+                go.withDefaultTools
                 go-overlay.packages.${system}.govendor
               ]
               ++ pre-commit-check.enabledPackages;
