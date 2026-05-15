@@ -74,3 +74,27 @@ jobs:
 
       - name: Verify workspace template dev shell
         run: nix develop --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-workspace-template --command go version
+
+  template-image:
+    runs-on: ubuntu-24.04
+    name: template / image / ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          cachix-token: ${{ secrets.GH_CACHIX }}
+
+      - name: Scaffold image template
+        run: nix flake new -t .#image /tmp/go-overlay-image-template
+
+      - name: Build image template binary
+        run: nix build --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-image-template
+
+      - name: Build image template container image
+        run: nix build --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-image-template#image
+
+      - name: Verify image template dev shell
+        run: nix develop --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-image-template --command go version

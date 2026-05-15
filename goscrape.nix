@@ -11,7 +11,6 @@ in
   buildGoApplication {
     inherit pname version go;
     src = ./.;
-    modules = ./govendor.toml;
     subPackages = ["cmd/goscrape"];
     CGO_ENABLED = 0;
 

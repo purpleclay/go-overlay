@@ -1,5 +1,5 @@
 {
-  description = "A basic Go application";
+  description = "A Go application";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -55,7 +55,9 @@
             inherit (pre-commit-check) shellHook;
             buildInputs =
               [
-                go.withDefaultTools
+                # Basic tools required for development, use .withDefaultTools for the full default set
+                # https://github.com/purpleclay/go-overlay/blob/main/docs/reference.md#go-tools
+                (go.withTools ["gopls" "gofumpt" "staticcheck"])
                 go-overlay.packages.${system}.govendor
               ]
               ++ pre-commit-check.enabledPackages;

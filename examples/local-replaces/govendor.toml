@@ -5,7 +5,7 @@ schema = 3
 [mod]
   [mod."github.com/go-overlay/examples/local-replaces/units"]
     version = "v0.0.0"
-    hash = "sha256-fvMcq5YMDXCaQBtpo3Zhrl8qwzXqjnjCeN+g8zl2U78="
-    go = "1.25.4"
+    hash = "sha256-O0DWGlGrdNGo5c4c4hmdyn2ac6a/EZGGnSYjaMgX6aw="
+    go = "1.26.3"
     packages = ["github.com/go-overlay/examples/local-replaces/units"]
     local = "./units"
