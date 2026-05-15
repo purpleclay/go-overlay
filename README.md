@@ -236,7 +236,7 @@ nix build --impure
 ## Further Reading
 
 - [reference.md](docs/reference.md) — Full option tables for all builder functions, library functions, and traditional Nix installation.
-- [govendor-toml-v2.md](docs/govendor-toml-v2.md) — `govendor.toml` schema reference.
+- [govendor-toml-v3.md](docs/govendor-toml-v3.md) — `govendor.toml` schema reference.
 - [migrating.md](docs/migrating.md) — Migration guides from gomod2nix and buildGoModule.
 
 ---
