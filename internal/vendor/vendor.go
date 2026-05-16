@@ -154,12 +154,15 @@ func (v *Vendor) toResults(r Result) ([]Result, error) {
 }
 
 // processSource implements the common drift detection and generation algorithm
-// for both *mod.GoModFile and *mod.GoWorkFile sources.
+// for both *mod.GoModFile and *mod.GoWorkFile sources. It always runs full
+// resolution and compares the resulting manifest against the existing one —
+// byte-for-byte equality is the drift signal. This catches all classes of
+// change including package list updates, not just go.mod-level directives.
 func (v *Vendor) processSource(src dependencySource, displayPath string, workspace *mod.WorkspaceConfig) Result {
 	dir := filepath.Dir(displayPath)
 	vendorPath := filepath.Join(dir, vendorFile)
-	existingData, err := os.ReadFile(vendorPath)
 
+	existingData, err := os.ReadFile(vendorPath)
 	extraPlatforms := v.opts.extraPlatforms
 
 	if os.IsNotExist(err) {
@@ -173,48 +176,41 @@ func (v *Vendor) processSource(src dependencySource, displayPath string, workspa
 		if err != nil {
 			return resultError(displayPath, err)
 		}
-
-		if existing.Schema != SchemaVersion {
-			if v.opts.detectDrift {
-				return resultSchemaMismatch(displayPath, existing.Schema, SchemaVersion)
-			}
-			if len(extraPlatforms) == 0 {
-				extraPlatforms = existing.IncludePlatforms
-			}
-		} else {
-			if len(extraPlatforms) == 0 {
-				extraPlatforms = existing.IncludePlatforms
-			}
-
-			drifted, err := IsDrifted(src, existing)
-			if err != nil {
-				return resultError(displayPath, err)
-			}
-			if !v.opts.force && !drifted {
-				if v.opts.detectDrift || len(v.opts.extraPlatforms) == 0 {
-					return resultOK(displayPath)
-				}
-			}
-
-			if v.opts.detectDrift {
-				if drifted {
-					return resultDrift(displayPath)
-				}
-				return resultOK(displayPath)
-			}
+		if existing.Schema != SchemaVersion && v.opts.detectDrift {
+			return resultSchemaMismatch(displayPath, existing.Schema, SchemaVersion)
+		}
+		if len(extraPlatforms) == 0 {
+			extraPlatforms = existing.IncludePlatforms
 		}
 	}
 
 	platforms := append(mod.DefaultPlatforms(), extraPlatforms...)
-	depCount, err := v.generate(src, dir, platforms, extraPlatforms, workspace)
+	newData, depCount, err := v.generate(src, platforms, extraPlatforms, workspace)
 	if err != nil {
+		return resultError(displayPath, err)
+	}
+
+	unchanged := existingData != nil && bytes.Equal(newData, existingData)
+
+	if v.opts.detectDrift {
+		if unchanged {
+			return resultOK(displayPath)
+		}
+		return resultDrift(displayPath)
+	}
+
+	if unchanged && !v.opts.force {
+		return resultOK(displayPath)
+	}
+
+	if err := os.WriteFile(vendorPath, newData, 0o644); err != nil {
 		return resultError(displayPath, err)
 	}
 
 	return resultGenerated(displayPath, depCount)
 }
 
-func (v *Vendor) generate(src dependencySource, dir string, platforms, includePlatforms []string, workspace *mod.WorkspaceConfig) (int, error) {
+func (v *Vendor) generate(src dependencySource, platforms, includePlatforms []string, workspace *mod.WorkspaceConfig) ([]byte, int, error) {
 	var deps []mod.ModuleConfig
 	var rawTools []string
 	var excludes map[string][]string
@@ -230,11 +226,11 @@ func (v *Vendor) generate(src dependencySource, dir string, platforms, includePl
 	case *mod.GoWorkFile:
 		deps, err = v.resolver.ResolveWorkspace(s, platforms)
 		if err != nil {
-			return 0, err
+			return nil, 0, err
 		}
 		members, err := s.ParseMembers()
 		if err != nil {
-			return 0, err
+			return nil, 0, err
 		}
 		merged := make(map[string][]string)
 		for _, m := range members {
@@ -251,10 +247,10 @@ func (v *Vendor) generate(src dependencySource, dir string, platforms, includePl
 			excludes = merged
 		}
 	default:
-		return 0, fmt.Errorf("unsupported dependency source: %T", src)
+		return nil, 0, fmt.Errorf("unsupported dependency source: %T", src)
 	}
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 
 	// Build a package→version lookup from resolved deps so each tool entry
@@ -279,15 +275,10 @@ func (v *Vendor) generate(src dependencySource, dir string, platforms, includePl
 
 	var buf bytes.Buffer
 	if _, err := m.WriteTo(&buf); err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 
-	outputPath := filepath.Join(dir, vendorFile)
-	if err := os.WriteFile(outputPath, buf.Bytes(), 0o644); err != nil {
-		return 0, err
-	}
-
-	return len(m.Mod), nil
+	return buf.Bytes(), len(m.Mod), nil
 }
 
 func (v *Vendor) findModFiles() (modFiles []string, missing []Result, err error) {
