@@ -1,6 +1,8 @@
 package vendor
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"slices"
 
@@ -57,11 +59,37 @@ func Parse(data []byte) (*Manifest, error) {
 	if err := toml.Unmarshal(data, &m); err != nil {
 		return nil, err
 	}
+	if err := validateManifest(&m); err != nil {
+		return nil, err
+	}
 	for path, cfg := range m.Mod {
 		cfg.Path = path
 		m.Mod[path] = cfg
 	}
 	return &m, nil
+}
+
+func validateManifest(m *Manifest) error {
+	if m.Schema == 0 {
+		return errors.New("govendor.toml: missing required 'schema' field")
+	}
+	if m.Mod == nil {
+		return errors.New("govendor.toml: missing required '[mod]' section")
+	}
+	if m.Workspace != nil {
+		if m.Workspace.Go == "" {
+			return errors.New("govendor.toml: [workspace] missing required 'go' field")
+		}
+		if len(m.Workspace.Modules) == 0 {
+			return errors.New("govendor.toml: [workspace] missing required 'modules' field")
+		}
+	}
+	for pkg, cfg := range m.Tool {
+		if cfg.Version == "" {
+			return fmt.Errorf("govendor.toml: [tool.%q] missing required 'version' field", pkg)
+		}
+	}
+	return nil
 }
 
 // WriteTo encodes the manifest as TOML into w.
