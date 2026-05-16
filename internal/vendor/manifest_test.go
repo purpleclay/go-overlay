@@ -67,6 +67,63 @@ func TestParseWithWorkspace(t *testing.T) {
 	assert.Equal(t, []string{"github.com/fatih/color"}, dep.Packages)
 }
 
+func TestParseValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    string
+		wantErr string
+	}{
+		{
+			name:    "MissingSchema",
+			data:    `[mod]`,
+			wantErr: "missing required 'schema' field",
+		},
+		{
+			name:    "MissingModSection",
+			data:    `schema = 3`,
+			wantErr: "missing required '[mod]' section",
+		},
+		{
+			name: "WorkspaceMissingGo",
+			data: `schema = 3
+
+[workspace]
+  modules = ["./api"]
+
+[mod]`,
+			wantErr: "[workspace] missing required 'go' field",
+		},
+		{
+			name: "WorkspaceMissingModules",
+			data: `schema = 3
+
+[workspace]
+  go = "1.26.0"
+
+[mod]`,
+			wantErr: "[workspace] missing required 'modules' field",
+		},
+		{
+			name: "ToolMissingVersion",
+			data: `schema = 3
+
+[tool]
+  [tool."golang.org/x/tools/cmd/stringer"]
+
+[mod]`,
+			wantErr: "missing required 'version' field",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := vendor.Parse([]byte(tt.data))
+			require.Error(t, err)
+			assert.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}
+
 func TestWriteTo(t *testing.T) {
 	manifest := vendor.New(
 		[]mod.ModuleConfig{
