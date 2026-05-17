@@ -301,12 +301,3 @@ func TestVendor_UnchangedManifestSkipsWrite(t *testing.T) {
 	require.Len(t, results, 1)
 	assert.Equal(t, vendor.StatusOK, results[0].Status)
 }
-
-func TestVendorWithForce_RegeneratesUnchangedManifest(t *testing.T) {
-	dir := setupModDir(t, nil)
-	vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDep}})
-
-	results := vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDep}}, vendor.WithForce())
-	require.Len(t, results, 1)
-	assert.Equal(t, vendor.StatusGenerated, results[0].Status)
-}

@@ -16,7 +16,6 @@ const vendorFile = "govendor.toml"
 
 type vendorOptions struct {
 	detectDrift    bool
-	force          bool
 	paths          []string
 	recursive      bool
 	maxDepth       int
@@ -29,12 +28,6 @@ type Option func(*vendorOptions)
 func WithDriftDetection() Option {
 	return func(opts *vendorOptions) {
 		opts.detectDrift = true
-	}
-}
-
-func WithForce() Option {
-	return func(opts *vendorOptions) {
-		opts.force = true
 	}
 }
 
@@ -199,7 +192,7 @@ func (v *Vendor) processSource(src dependencySource, displayPath string, workspa
 		return resultDrift(displayPath)
 	}
 
-	if unchanged && !v.opts.force {
+	if unchanged {
 		return resultOK(displayPath)
 	}
 

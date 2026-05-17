@@ -14,7 +14,6 @@ import (
 func Execute(version cli.VersionInfo) error {
 	var (
 		check            bool
-		force            bool
 		recursive        bool
 		workspace        bool
 		depth            int
@@ -61,9 +60,6 @@ func Execute(version cli.VersionInfo) error {
 
 		# Include additional platforms for cross-compilation
 		govendor --include-platform=freebsd/amd64 --include-platform=openbsd/amd64
-
-		# Force regeneration of govendor.toml, bypassing hash check
-		govendor --force
 		`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -80,10 +76,6 @@ func Execute(version cli.VersionInfo) error {
 
 			if check {
 				opts = append(opts, vendor.WithDriftDetection())
-			}
-
-			if force {
-				opts = append(opts, vendor.WithForce())
 			}
 
 			if recursive {
@@ -113,13 +105,11 @@ func Execute(version cli.VersionInfo) error {
 	}
 
 	cmd.Flags().BoolVarP(&check, "check", "c", false, "check if manifests have drifted and need updating")
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "force regeneration of govendor.toml, bypassing hash check")
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "recursively scan for go.mod files (ignores go.work)")
 	cmd.Flags().BoolVarP(&workspace, "workspace", "w", false, "reverse scan from a submodule path for a govendor.toml containing a workspace manifest (requires --check)")
 	cmd.Flags().IntVarP(&depth, "depth", "d", 0, "limit directory traversal depth (0 = unlimited)")
 	cmd.Flags().StringArrayVar(&includePlatforms, "include-platform", nil, "extend platform list for dependency resolution (e.g., freebsd/amd64)")
 	cmd.MarkFlagsMutuallyExclusive("recursive", "workspace")
-	cmd.MarkFlagsMutuallyExclusive("force", "check")
 
 	return cli.Execute(cmd,
 		cli.WithVersionFlag(version),
