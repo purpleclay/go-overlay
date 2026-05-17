@@ -178,7 +178,12 @@ func (v *Vendor) processSource(src dependencySource, displayPath string, workspa
 	}
 
 	platforms := append(mod.DefaultPlatforms(), extraPlatforms...)
-	newData, depCount, err := v.generate(src, platforms, extraPlatforms, workspace)
+	deps, rawTools, excludes, err := v.resolveSource(src, platforms)
+	if err != nil {
+		return resultError(displayPath, err)
+	}
+
+	newData, depCount, err := v.generate(deps, rawTools, excludes, extraPlatforms, workspace)
 	if err != nil {
 		return resultError(displayPath, err)
 	}
@@ -203,12 +208,9 @@ func (v *Vendor) processSource(src dependencySource, displayPath string, workspa
 	return resultGenerated(displayPath, depCount)
 }
 
-func (v *Vendor) generate(src dependencySource, platforms, includePlatforms []string, workspace *mod.WorkspaceConfig) ([]byte, int, error) {
-	var deps []mod.ModuleConfig
-	var rawTools []string
-	var excludes map[string][]string
-	var err error
-
+// resolveSource dispatches to the appropriate resolver based on the source
+// type and returns the raw inputs needed to build a manifest.
+func (v *Vendor) resolveSource(src dependencySource, platforms []string) (deps []mod.ModuleConfig, rawTools []string, excludes map[string][]string, err error) {
 	switch s := src.(type) {
 	case *mod.GoModFile:
 		deps, err = v.resolver.ResolveModule(s, platforms)
@@ -219,11 +221,12 @@ func (v *Vendor) generate(src dependencySource, platforms, includePlatforms []st
 	case *mod.GoWorkFile:
 		deps, err = v.resolver.ResolveWorkspace(s, platforms)
 		if err != nil {
-			return nil, 0, err
+			return
 		}
-		members, err := s.ParseMembers()
-		if err != nil {
-			return nil, 0, err
+		members, merr := s.ParseMembers()
+		if merr != nil {
+			err = merr
+			return
 		}
 		merged := make(map[string][]string)
 		for _, m := range members {
@@ -240,12 +243,14 @@ func (v *Vendor) generate(src dependencySource, platforms, includePlatforms []st
 			excludes = merged
 		}
 	default:
-		return nil, 0, fmt.Errorf("unsupported dependency source: %T", src)
+		err = fmt.Errorf("unsupported dependency source: %T", src)
 	}
-	if err != nil {
-		return nil, 0, err
-	}
+	return
+}
 
+// generate builds and serialises a manifest from already-resolved dependency
+// data. It has no knowledge of the source type.
+func (v *Vendor) generate(deps []mod.ModuleConfig, rawTools []string, excludes map[string][]string, includePlatforms []string, workspace *mod.WorkspaceConfig) ([]byte, int, error) {
 	// Build a package→version lookup from resolved deps so each tool entry
 	// records its own module version rather than the application version.
 	var tool mod.ToolConfig
