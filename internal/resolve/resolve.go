@@ -9,10 +9,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nix-community/go-nix/pkg/nar"
 	"github.com/purpleclay/go-overlay/internal/mod"
 	"github.com/sourcegraph/conc/pool"
 	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/semver"
 )
 
 // Resolver resolves Go module dependencies via the Go toolchain. All external
@@ -132,26 +132,19 @@ func (r *Resolver) ResolveWorkspace(goWork *mod.GoWorkFile, platforms []string) 
 		memberGoMods[modDir] = goMod
 	}
 
-	// Gather packages per member with GOWORK=off so each member's build graph
-	// is queried independently, then merge the results.
-	pkgsByMod := make(map[string][]string)
-	remoteRepls := make(map[string]mod.Replacement)
-
-	for _, modDir := range goWork.Modules {
-		goMod := memberGoMods[modDir]
-
-		memberPkgs, err := r.packagesByModule(goMod, platforms)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list packages for %s: %w", modDir, err)
-		}
-		for m, pkgs := range memberPkgs {
-			pkgsByMod[m] = MergePackages(pkgsByMod[m], pkgs)
-		}
-
-		maps.Copy(remoteRepls, goMod.RemoteReplacements())
+	// List packages for all workspace members in a single go list invocation per
+	// platform from the workspace root, keeping GOWORK active so workspace-level
+	// replace directives (including local replaces) are respected.
+	pkgsByMod, err := r.packagesByWorkspace(goWork, memberGoMods, platforms)
+	if err != nil {
+		return nil, err
 	}
 
-	// Workspace-level replace directives take precedence over member-level ones.
+	// Gather remote replacements from all members, workspace-level taking precedence.
+	remoteRepls := make(map[string]mod.Replacement)
+	for _, modDir := range goWork.Modules {
+		maps.Copy(remoteRepls, memberGoMods[modDir].RemoteReplacements())
+	}
 	maps.Copy(remoteRepls, goWork.RemoteReplacements())
 
 	remoteDeps, err := r.resolveRemoteModules(remoteRepls, downloads, pkgsByMod)
@@ -172,8 +165,20 @@ func (r *Resolver) ResolveWorkspace(goWork *mod.GoWorkFile, platforms []string) 
 			return nil, fmt.Errorf("failed to resolve local modules for %s: %w", modDir, err)
 		}
 		for _, dep := range localDeps {
-			allDeps[dep.Path] = dep
+			// Workspace-level remote replacements take precedence — do not
+			// overwrite an entry already resolved from go.work replace directives.
+			if _, exists := allDeps[dep.Path]; !exists {
+				allDeps[dep.Path] = dep
+			}
 		}
+	}
+
+	workspaceLocalDeps, err := r.resolveWorkspaceLocalModules(goWork, memberGoMods, downloads, pkgsByMod)
+	if err != nil {
+		return nil, err
+	}
+	for _, dep := range workspaceLocalDeps {
+		allDeps[dep.Path] = dep
 	}
 
 	modules := make([]mod.ModuleConfig, 0, len(allDeps))
@@ -276,6 +281,98 @@ func (r *Resolver) packagesByModuleForPlatform(goMod *mod.GoModFile, goos, goarc
 	return pkgsByMod, nil
 }
 
+// packagesByWorkspace resolves package-to-module attribution for all workspace
+// members in a single go list invocation per platform, run from the workspace
+// root with GOWORK active. This ensures workspace-level replace directives
+// (including local replaces) are respected, unlike per-member GOWORK=off listing.
+func (r *Resolver) packagesByWorkspace(goWork *mod.GoWorkFile, memberGoMods map[string]*mod.GoModFile, platforms []string) (map[string][]string, error) {
+	p := pool.NewWithResults[map[string][]string]().WithErrors()
+
+	seen := make(map[string]struct{}, len(platforms))
+	for _, plat := range platforms {
+		goos, goarch, ok := strings.Cut(plat, "/")
+		if !ok {
+			continue
+		}
+		if _, dup := seen[plat]; dup {
+			continue
+		}
+		seen[plat] = struct{}{}
+		p.Go(func() (map[string][]string, error) {
+			return r.packagesByWorkspaceForPlatform(goWork, memberGoMods, goos, goarch)
+		})
+	}
+
+	results, err := p.Wait()
+	if err != nil {
+		return nil, err
+	}
+
+	merged := make(map[string][]string)
+	for _, result := range results {
+		for m, pkgs := range result {
+			merged[m] = append(merged[m], pkgs...)
+		}
+	}
+
+	for modPath := range merged {
+		sort.Strings(merged[modPath])
+		merged[modPath] = slices.Compact(merged[modPath])
+	}
+
+	return merged, nil
+}
+
+func (r *Resolver) packagesByWorkspaceForPlatform(goWork *mod.GoWorkFile, memberGoMods map[string]*mod.GoModFile, goos, goarch string) (map[string][]string, error) {
+	// Build import path patterns for every workspace member so a single go list
+	// spans the full workspace, keeping GOWORK active so workspace-level replace
+	// directives are respected.
+	patterns := make([]string, 0, len(memberGoMods))
+	for _, goMod := range memberGoMods {
+		patterns = append(patterns, goMod.ModulePath+"/...")
+	}
+	sort.Strings(patterns)
+
+	listFmt := `{{if not .Standard}}{{if .Module}}{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}`
+	args := append([]string{"go", "list", "-deps", "-test", "-f", listFmt}, patterns...)
+
+	env := []string{
+		"GOOS=" + goos,
+		"GOARCH=" + goarch,
+	}
+
+	out, err := r.exec.Run(args, goWork.Dir, env)
+	if err != nil {
+		return nil, err
+	}
+
+	pkgsByMod := ParsePackagesByModule(out)
+
+	// Tool packages are module-scoped and cannot be batched from the workspace
+	// root, so they are listed per-member with GOWORK=off.
+	toolEnv := []string{
+		"GOWORK=off",
+		"GOOS=" + goos,
+		"GOARCH=" + goarch,
+	}
+
+	for _, goMod := range memberGoMods {
+		if !goMod.HasTools() {
+			continue
+		}
+		toolFmt := fmt.Sprintf(`{{if not .Standard}}{{if .Module}}{{if ne .Module.Path "%s"}}{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}{{end}}`, goMod.ModulePath)
+		toolOut, err := r.exec.Run([]string{"go", "list", "-deps", "-f", toolFmt, "tool"}, goMod.Dir, toolEnv)
+		if err != nil {
+			return nil, err
+		}
+		for m, pkgs := range ParsePackagesByModule(toolOut) {
+			pkgsByMod[m] = append(pkgsByMod[m], pkgs...)
+		}
+	}
+
+	return pkgsByMod, nil
+}
+
 func (r *Resolver) downloadModules(goMod *mod.GoModFile) ([]ModuleDownload, error) {
 	args := []string{"go", "mod", "download", "-json"}
 	env := []string{"GOWORK=off"}
@@ -366,13 +463,7 @@ func (r *Resolver) resolveLocalModules(goMod *mod.GoModFile, pkgsByMod map[strin
 				return mod.ModuleConfig{}, fmt.Errorf("failed to list git tracked files for local module %s: %w", repl.LocalPath, err)
 			}
 
-			hash, err := NARHashFiltered(localDir, func(path string, _ nar.NodeType) bool {
-				if strings.ToLower(filepath.Base(path)) == ".ds_store" {
-					return false
-				}
-				_, ok := tracked[path]
-				return ok
-			})
+			hash, err := NARHashGitTracked(localDir, tracked)
 			if err != nil {
 				return mod.ModuleConfig{}, fmt.Errorf("failed to hash local module %s: %w", repl.LocalPath, err)
 			}
@@ -386,6 +477,87 @@ func (r *Resolver) resolveLocalModules(goMod *mod.GoModFile, pkgsByMod map[strin
 			}
 
 			version := requires[repl.OldPath]
+			if version == "" {
+				version = "v0.0.0"
+			}
+
+			return mod.ModuleConfig{
+				Path:      repl.OldPath,
+				Version:   version,
+				Packages:  pkgsByMod[repl.OldPath],
+				Hash:      hash,
+				GoVersion: goVersion,
+				Local:     repl.LocalPath,
+			}, nil
+		})
+	}
+
+	return p.Wait()
+}
+
+// resolveWorkspaceLocalModules hashes and builds ModuleConfig entries for
+// local replace directives declared at the workspace level in go.work. These
+// are not visible to per-member go.mod parsing, so they must be resolved
+// separately using the workspace root as the base for relative path resolution.
+func (r *Resolver) resolveWorkspaceLocalModules(goWork *mod.GoWorkFile, memberGoMods map[string]*mod.GoModFile, downloads []ModuleDownload, pkgsByMod map[string][]string) ([]mod.ModuleConfig, error) {
+	workspaceLocalRepls := goWork.LocalReplacements()
+	if len(workspaceLocalRepls) == 0 {
+		return nil, nil
+	}
+
+	// Prefer the workspace build list (downloadWorkspaceModules applies full
+	// MVS across all members and transitive dependencies) for version selection.
+	// Fall back to member requires — highest version wins — for any module not
+	// present in the build list (e.g. a pure local-only replacement).
+	downloadVersions := make(map[string]string, len(downloads))
+	for _, dl := range downloads {
+		downloadVersions[dl.Path] = dl.Version
+	}
+
+	allRequires := make(map[string]string)
+	for _, modDir := range goWork.Modules {
+		for path, version := range memberGoMods[modDir].Requires {
+			if existing, exists := allRequires[path]; !exists || semver.Compare(version, existing) > 0 {
+				allRequires[path] = version
+			}
+		}
+	}
+
+	p := pool.NewWithResults[mod.ModuleConfig]().WithErrors().WithMaxGoroutines(8)
+
+	for _, repl := range workspaceLocalRepls {
+		p.Go(func() (mod.ModuleConfig, error) {
+			localDir := repl.LocalPath
+			if !filepath.IsAbs(localDir) {
+				localDir = filepath.Join(goWork.Dir, localDir)
+			}
+			localDir, err := filepath.Abs(localDir)
+			if err != nil {
+				return mod.ModuleConfig{}, fmt.Errorf("failed to resolve workspace local module path %s: %w", repl.LocalPath, err)
+			}
+
+			tracked, err := GitTrackedFiles(r.exec, localDir)
+			if err != nil {
+				return mod.ModuleConfig{}, fmt.Errorf("failed to list git tracked files for workspace local module %s: %w", repl.LocalPath, err)
+			}
+
+			hash, err := NARHashGitTracked(localDir, tracked)
+			if err != nil {
+				return mod.ModuleConfig{}, fmt.Errorf("failed to hash workspace local module %s: %w", repl.LocalPath, err)
+			}
+
+			var goVersion string
+			localGoMod := filepath.Join(localDir, mod.GoModFilename)
+			if modData, err := os.ReadFile(localGoMod); err == nil {
+				if mf, err := modfile.Parse(localGoMod, modData, nil); err == nil && mf.Go != nil {
+					goVersion = mf.Go.Version
+				}
+			}
+
+			version := downloadVersions[repl.OldPath]
+			if version == "" {
+				version = allRequires[repl.OldPath]
+			}
 			if version == "" {
 				version = "v0.0.0"
 			}

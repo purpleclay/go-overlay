@@ -113,6 +113,10 @@ func TestVendorWorkspace(t *testing.T) {
 			name: "workspace-with-tools",
 			dir:  "testdata/workspace-with-tools",
 		},
+		{
+			name: "workspace-local-replace",
+			dir:  "testdata/workspace-local-replace",
+		},
 	}
 
 	resolver := resolve.New(resolve.OSExecutor{})
