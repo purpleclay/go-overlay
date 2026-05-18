@@ -30,7 +30,6 @@ The template bootstraps a new project with a dev shell, builder, and drift detec
 
 ```bash
 nix flake new -t github:purpleclay/go-overlay my-app
-cd my-app && nix develop
 ```
 
 ### Create a workspace project
@@ -39,7 +38,14 @@ The workspace template bootstraps a minimal multi-module monorepo with a dev she
 
 ```bash
 nix flake new -t github:purpleclay/go-overlay#workspace my-monorepo
-cd my-monorepo && nix develop
+```
+
+### Create a container image project
+
+The image template bootstraps a Go application pre-configured to produce a `buildLayeredImage` container image alongside the binary:
+
+```bash
+nix flake new -t github:purpleclay/go-overlay#image my-app
 ```
 
 ### Onboard an existing project

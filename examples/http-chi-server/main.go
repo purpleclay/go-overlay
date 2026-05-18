@@ -2,10 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
-	"log"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -43,6 +46,18 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"name": randomName()})
 	})
 
-	log.Printf("project-namer listening on %s", *addr)
-	log.Fatal(http.ListenAndServe(*addr, r))
+	srv := &http.Server{
+		Addr:              *addr,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	slog.Info("project-namer listening", "addr", *addr)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		slog.Error("server failed", "err", err)
+		os.Exit(1)
+	}
 }

@@ -5,13 +5,12 @@
   commit ? "unknown",
 }: let
   pname = "govendor";
-  version = "v0.14.0";
+  version = "v1.0.0";
   buildDate = "2026-05-13T00:00:00Z";
 in
   buildGoApplication {
     inherit pname version go;
     src = ./.;
-    modules = ./govendor.toml;
     subPackages = ["cmd/govendor"];
     CGO_ENABLED = 0;
 
