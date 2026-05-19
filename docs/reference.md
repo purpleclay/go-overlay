@@ -246,7 +246,8 @@ Go 1.24+ `tool` directives in `go.mod` are first-class citizens in go-overlay. W
 
 ```toml
 [tool]
-  packages = ["github.com/a-h/templ/cmd/templ"]
+  [tool."github.com/a-h/templ/cmd/templ"]
+    version = "v0.3.960"
 ```
 
 Both `buildGoApplication` and `buildGoWorkspace` read this section and compile each tool for the **host** platform, injecting the resulting binaries into `nativeBuildInputs`. Tools are available in `$PATH` during `preBuild` without any extra configuration:

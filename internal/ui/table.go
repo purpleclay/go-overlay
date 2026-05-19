@@ -7,14 +7,21 @@ import (
 	"github.com/purpleclay/go-overlay/internal/vendor"
 )
 
+// ANSI color codes matching the standard palette used by the theme package.
+const (
+	colorGreen = lipgloss.Color("2")
+	colorRed   = lipgloss.Color("1")
+	colorGray  = lipgloss.Color("8")
+)
+
 var (
-	greenStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	redStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	greenStyle = lipgloss.NewStyle().Foreground(colorGreen)
+	redStyle   = lipgloss.NewStyle().Foreground(colorRed)
 
 	headerStyle  = lipgloss.NewStyle().Bold(true).Padding(0, 1)
 	cellStyle    = lipgloss.NewStyle().Padding(0, 1)
-	messageStyle = lipgloss.NewStyle().Padding(0, 1).Foreground(lipgloss.Color("8"))
-	borderStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	messageStyle = lipgloss.NewStyle().Padding(0, 1).Foreground(colorGray)
+	borderStyle  = lipgloss.NewStyle().Foreground(colorGray)
 )
 
 const messageWrapWidth = 90

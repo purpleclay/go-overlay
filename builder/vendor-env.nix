@@ -130,7 +130,7 @@ in {
     localModuleSources =
       builtins.mapAttrs (
         goPackagePath: meta:
-          if localReplaces ? ${goPackagePath}
+          if builtins.hasAttr goPackagePath localReplaces
           then localReplaces.${goPackagePath}
           else if src != null
           then "${src}/${meta.local}"

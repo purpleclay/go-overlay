@@ -2,6 +2,7 @@ package vendor_test
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -60,7 +61,7 @@ func TestVendor(t *testing.T) {
 			if len(tt.includePlatforms) > 0 {
 				platforms = append(platforms, tt.includePlatforms...)
 			}
-			deps, err := resolver.ResolveModule(goMod, platforms)
+			deps, err := resolver.ResolveModule(context.Background(), goMod, platforms)
 			require.NoError(t, err)
 
 			var tool mod.ToolConfig
@@ -131,7 +132,7 @@ func TestVendorWorkspace(t *testing.T) {
 			if len(tt.includePlatforms) > 0 {
 				platforms = append(platforms, tt.includePlatforms...)
 			}
-			deps, err := resolver.ResolveWorkspace(goWork, platforms)
+			deps, err := resolver.ResolveWorkspace(context.Background(), goWork, platforms)
 			require.NoError(t, err)
 
 			members, err := goWork.ParseMembers()
@@ -187,11 +188,11 @@ type fakeResolver struct {
 	deps []mod.ModuleConfig
 }
 
-func (f *fakeResolver) ResolveModule(_ *mod.GoModFile, _ []string) ([]mod.ModuleConfig, error) {
+func (f *fakeResolver) ResolveModule(_ context.Context, _ *mod.GoModFile, _ []string) ([]mod.ModuleConfig, error) {
 	return f.deps, nil
 }
 
-func (f *fakeResolver) ResolveWorkspace(_ *mod.GoWorkFile, _ []string) ([]mod.ModuleConfig, error) {
+func (f *fakeResolver) ResolveWorkspace(_ context.Context, _ *mod.GoWorkFile, _ []string) ([]mod.ModuleConfig, error) {
 	return f.deps, nil
 }
 
@@ -209,7 +210,7 @@ func vendorResults(t *testing.T, dir string, r vendor.Resolver, opts ...vendor.O
 	t.Helper()
 	opts = append([]vendor.Option{vendor.WithPaths(dir)}, opts...)
 	v := vendor.NewVendor(r, opts...)
-	results, _ := v.VendorFiles()
+	results, _ := v.VendorFiles(context.Background())
 	return results
 }
 

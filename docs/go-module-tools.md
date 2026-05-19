@@ -2,7 +2,7 @@
 
 Go 1.24 introduced `tool` directives in `go.mod` as a first-class way to pin code-generation and other build tools alongside your module dependencies:
 
-```
+```go.mod
 tool github.com/a-h/templ/cmd/templ
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 ```

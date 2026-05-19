@@ -3,6 +3,7 @@ package modproxy
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -122,11 +123,11 @@ type modEnvExecutor struct {
 	baseEnv []string
 }
 
-func (e modEnvExecutor) Run(args []string, dir string, env []string) (string, error) {
-	return resolve.OSExecutor{}.Run(args, dir, append(e.baseEnv, env...))
+func (e modEnvExecutor) Run(ctx context.Context, args []string, dir string, env []string) (string, error) {
+	return resolve.OSExecutor{}.Run(ctx, args, dir, append(e.baseEnv, env...))
 }
 
-func generateManifest(module, ver string, subPackages []string) (*toolManifest, error) {
+func generateManifest(ctx context.Context, module, ver string, subPackages []string) (*toolManifest, error) {
 	var (
 		info      *proxy.ModuleInfo
 		goVersion string
@@ -177,7 +178,7 @@ func generateManifest(module, ver string, subPackages []string) (*toolManifest, 
 	// downloaded module source contains an in-tree vendor directory; without
 	// it, go list fails with incomplete vendored dependencies.
 	resolver := resolve.New(modEnvExecutor{baseEnv: []string{"GOFLAGS=-mod=mod"}})
-	deps, err := resolver.ResolveModule(goModFile, nixPlatforms)
+	deps, err := resolver.ResolveModule(ctx, goModFile, nixPlatforms)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +280,7 @@ func newGenerateCmd() *cobra.Command {
 
 			for _, ver := range versions {
 				p.Go(func() (*toolManifest, error) {
-					return generateManifest(module, ver, subPackages)
+					return generateManifest(cmd.Context(), module, ver, subPackages)
 				})
 			}
 

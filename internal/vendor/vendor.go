@@ -2,6 +2,7 @@ package vendor
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -66,8 +67,8 @@ func WithIncludePlatforms(platforms []string) Option {
 // time. This keeps the vendor package free of process-execution concerns
 // and allows the orchestrator to be exercised against fake resolvers.
 type Resolver interface {
-	ResolveModule(goMod *mod.GoModFile, platforms []string) ([]mod.ModuleConfig, error)
-	ResolveWorkspace(goWork *mod.GoWorkFile, platforms []string) ([]mod.ModuleConfig, error)
+	ResolveModule(ctx context.Context, goMod *mod.GoModFile, platforms []string) ([]mod.ModuleConfig, error)
+	ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, platforms []string) ([]mod.ModuleConfig, error)
 }
 
 type Vendor struct {
@@ -89,9 +90,9 @@ var errVendorFailed = fmt.Errorf("vendor failed")
 // Type switches on this value are used to dispatch to type-specific behaviour.
 type dependencySource = any
 
-func (v *Vendor) VendorFiles() ([]Result, error) {
+func (v *Vendor) VendorFiles(ctx context.Context) ([]Result, error) {
 	if v.opts.workspace {
-		return v.processWorkspaceMode()
+		return v.processWorkspaceMode(ctx)
 	}
 
 	if !v.opts.recursive {
@@ -104,7 +105,7 @@ func (v *Vendor) VendorFiles() ([]Result, error) {
 			return nil, err
 		}
 		if goWork != nil {
-			return v.toResults(v.processSource(goWork, filepath.Join(goWork.Dir, mod.GoWorkFilename), goWork.WorkspaceConfig()))
+			return v.toResults(v.processSource(ctx, goWork, filepath.Join(goWork.Dir, mod.GoWorkFilename), goWork.WorkspaceConfig()))
 		}
 	}
 
@@ -120,7 +121,7 @@ func (v *Vendor) VendorFiles() ([]Result, error) {
 			if err != nil {
 				return resultError(modFile, err)
 			}
-			return v.processSource(goMod, modFile, nil)
+			return v.processSource(ctx, goMod, modFile, nil)
 		})
 	}
 
@@ -151,7 +152,7 @@ func (v *Vendor) toResults(r Result) ([]Result, error) {
 // resolution and compares the resulting manifest against the existing one —
 // byte-for-byte equality is the drift signal. This catches all classes of
 // change including package list updates, not just go.mod-level directives.
-func (v *Vendor) processSource(src dependencySource, displayPath string, workspace *mod.WorkspaceConfig) Result {
+func (v *Vendor) processSource(ctx context.Context, src dependencySource, displayPath string, workspace *mod.WorkspaceConfig) Result {
 	dir := filepath.Dir(displayPath)
 	vendorPath := filepath.Join(dir, vendorFile)
 
@@ -178,7 +179,7 @@ func (v *Vendor) processSource(src dependencySource, displayPath string, workspa
 	}
 
 	platforms := append(mod.DefaultPlatforms(), extraPlatforms...)
-	deps, rawTools, excludes, err := v.resolveSource(src, platforms)
+	deps, rawTools, excludes, err := v.resolveSource(ctx, src, platforms)
 	if err != nil {
 		return resultError(displayPath, err)
 	}
@@ -210,16 +211,16 @@ func (v *Vendor) processSource(src dependencySource, displayPath string, workspa
 
 // resolveSource dispatches to the appropriate resolver based on the source
 // type and returns the raw inputs needed to build a manifest.
-func (v *Vendor) resolveSource(src dependencySource, platforms []string) (deps []mod.ModuleConfig, rawTools []string, excludes map[string][]string, err error) {
+func (v *Vendor) resolveSource(ctx context.Context, src dependencySource, platforms []string) (deps []mod.ModuleConfig, rawTools []string, excludes map[string][]string, err error) {
 	switch s := src.(type) {
 	case *mod.GoModFile:
-		deps, err = v.resolver.ResolveModule(s, platforms)
+		deps, err = v.resolver.ResolveModule(ctx, s, platforms)
 		rawTools = s.Tools
 		if len(s.Excludes) > 0 {
 			excludes = s.Excludes
 		}
 	case *mod.GoWorkFile:
-		deps, err = v.resolver.ResolveWorkspace(s, platforms)
+		deps, err = v.resolver.ResolveWorkspace(ctx, s, platforms)
 		if err != nil {
 			return
 		}
@@ -324,7 +325,7 @@ func (v *Vendor) findModFiles() (modFiles []string, missing []Result, err error)
 	return modFiles, missing, nil
 }
 
-func (v *Vendor) processWorkspaceMode() ([]Result, error) {
+func (v *Vendor) processWorkspaceMode(ctx context.Context) ([]Result, error) {
 	path := "."
 	if len(v.opts.paths) > 0 {
 		path = v.opts.paths[0]
@@ -346,7 +347,7 @@ func (v *Vendor) processWorkspaceMode() ([]Result, error) {
 		} else if goWork == nil {
 			result = resultError(manifestPath, fmt.Errorf("invalid workspace manifest"))
 		} else {
-			result = v.processSource(goWork, filepath.Join(manifestDir, mod.GoWorkFilename), goWork.WorkspaceConfig())
+			result = v.processSource(ctx, goWork, filepath.Join(manifestDir, mod.GoWorkFilename), goWork.WorkspaceConfig())
 		}
 	}
 

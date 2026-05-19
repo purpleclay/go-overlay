@@ -107,7 +107,7 @@ nix build .#integration-workspace-no-gowork
 
 This project follows the [Conventional Commits](https://www.conventionalcommits.org/) specification. Your commit messages should be structured as:
 
-```
+```text
 <type>(<scope>): <description>
 
 [optional body]
@@ -121,7 +121,7 @@ Common types include `feat`, `fix`, `docs`, `refactor`, `test`, and `chore`.
 
 All commits must be signed off to certify that you have the right to submit the code under the project's license. This is done by adding a `Signed-off-by` line to your commit message:
 
-```
+```text
 Signed-off-by: Your Name <your.email@example.com>
 ```
 

@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 )
@@ -10,9 +11,13 @@ import (
 // between dir and each tracked file. The returned set is suitable for use as
 // a file filter when hashing a local module — only git-tracked paths are
 // included, ensuring untracked files are excluded from the NAR hash.
-func GitTrackedFiles(exec Executor, dir string) (map[string]struct{}, error) {
-	dir = filepath.Clean(dir)
-	out, err := exec.Run([]string{"git", "ls-files"}, dir, nil)
+func GitTrackedFiles(ctx context.Context, exec Executor, dir string) (map[string]struct{}, error) {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+	dir = filepath.Clean(absDir)
+	out, err := exec.Run(ctx, []string{"git", "ls-files"}, dir, nil)
 	if err != nil {
 		return nil, err
 	}

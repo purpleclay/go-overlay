@@ -2,6 +2,7 @@ package resolve
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,7 +13,7 @@ import (
 // allows the Resolver to be tested with canned responses, avoiding the need
 // for a real Go toolchain or network access during unit tests.
 type Executor interface {
-	Run(args []string, dir string, env []string) (string, error)
+	Run(ctx context.Context, args []string, dir string, env []string) (string, error)
 }
 
 // ExecError wraps a command failure with its stderr output for diagnostics.
@@ -35,12 +36,12 @@ func (e *ExecError) Unwrap() error {
 // OSExecutor runs commands using os/exec.
 type OSExecutor struct{}
 
-func (OSExecutor) Run(args []string, dir string, env []string) (string, error) {
+func (OSExecutor) Run(ctx context.Context, args []string, dir string, env []string) (string, error) {
 	if len(args) == 0 {
 		return "", fmt.Errorf("empty command")
 	}
 
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), env...)
 

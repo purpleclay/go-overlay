@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -30,7 +31,7 @@ internal/server/serve.go`
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tracked, err := GitTrackedFiles(exec, tt.dir)
+			tracked, err := GitTrackedFiles(context.Background(), exec, tt.dir)
 			require.NoError(t, err)
 
 			// Regardless of input form, results are keyed by cleaned paths.

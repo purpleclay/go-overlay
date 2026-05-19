@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,7 +21,7 @@ type fakeExecutor struct {
 	responses map[string]string
 }
 
-func (f *fakeExecutor) Run(args []string, _ string, _ []string) (string, error) {
+func (f *fakeExecutor) Run(_ context.Context, args []string, _ string, _ []string) (string, error) {
 	full := strings.Join(args, " ")
 	if out, ok := f.responses[full]; ok {
 		return out, nil
@@ -52,7 +53,7 @@ func TestValidatePlatforms(t *testing.T) {
 	}
 	r := New(exec)
 
-	require.NoError(t, r.ValidatePlatforms([]string{"linux/amd64", "darwin/arm64"}))
+	require.NoError(t, r.ValidatePlatforms(context.Background(), []string{"linux/amd64", "darwin/arm64"}))
 }
 
 func TestValidatePlatformsRejectsUnsupportedPlatform(t *testing.T) {
@@ -63,7 +64,7 @@ func TestValidatePlatformsRejectsUnsupportedPlatform(t *testing.T) {
 	}
 	r := New(exec)
 
-	err := r.ValidatePlatforms([]string{"plan9/386"})
+	err := r.ValidatePlatforms(context.Background(), []string{"plan9/386"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "plan9/386")
 }
@@ -100,7 +101,7 @@ github.com/mattn/go-isatty	github.com/mattn/go-isatty`,
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveModule(goMod, nil)
+	deps, err := r.ResolveModule(context.Background(), goMod, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 3)
 
@@ -146,7 +147,7 @@ replace example.com/localmod => ./localmod
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveModule(goMod, nil)
+	deps, err := r.ResolveModule(context.Background(), goMod, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 1)
 
@@ -184,7 +185,7 @@ replace gopkg.in/ini.v1 => github.com/go-ini/ini v1.67.0
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveModule(goMod, nil)
+	deps, err := r.ResolveModule(context.Background(), goMod, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 1)
 
@@ -243,7 +244,7 @@ github.com/mattn/go-isatty	github.com/mattn/go-isatty`,
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveWorkspace(goWork, nil)
+	deps, err := r.ResolveWorkspace(context.Background(), goWork, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 3)
 
@@ -288,7 +289,7 @@ go 1.25.4
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveWorkspace(goWork, nil)
+	deps, err := r.ResolveWorkspace(context.Background(), goWork, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 1)
 

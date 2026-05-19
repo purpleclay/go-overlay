@@ -26,7 +26,7 @@ func main() {
 
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(indexHTML) //nolint:errcheck
+		_, _ = w.Write(indexHTML)
 	})
 
 	sub, err := fs.Sub(staticFiles, "static")

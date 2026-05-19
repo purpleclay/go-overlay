@@ -63,7 +63,7 @@ func Execute(version cli.VersionInfo) error {
 		`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if workspace && !check {
 				return fmt.Errorf("--workspace requires --check")
 			}
@@ -89,14 +89,14 @@ func Execute(version cli.VersionInfo) error {
 			resolver := resolve.New(resolve.OSExecutor{})
 
 			if len(includePlatforms) > 0 {
-				if err := resolver.ValidatePlatforms(includePlatforms); err != nil {
+				if err := resolver.ValidatePlatforms(cmd.Context(), includePlatforms); err != nil {
 					return err
 				}
 				opts = append(opts, vendor.WithIncludePlatforms(includePlatforms))
 			}
 
 			v := vendor.NewVendor(resolver, opts...)
-			results, err := v.VendorFiles()
+			results, err := v.VendorFiles(cmd.Context())
 			if len(results) > 0 {
 				fmt.Println(ui.RenderResultsTable(results))
 			}
