@@ -3,7 +3,9 @@ package govendor
 import (
 	"fmt"
 
-	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/resolve"
+	"github.com/purpleclay/go-overlay/internal/ui"
+	"github.com/purpleclay/go-overlay/internal/vendor"
 	"github.com/purpleclay/x/cli"
 	"github.com/purpleclay/x/theme"
 	"github.com/spf13/cobra"
@@ -12,7 +14,6 @@ import (
 func Execute(version cli.VersionInfo) error {
 	var (
 		check            bool
-		force            bool
 		recursive        bool
 		workspace        bool
 		depth            int
@@ -59,59 +60,56 @@ func Execute(version cli.VersionInfo) error {
 
 		# Include additional platforms for cross-compilation
 		govendor --include-platform=freebsd/amd64 --include-platform=openbsd/amd64
-
-		# Force regeneration of govendor.toml, bypassing hash check
-		govendor --force
 		`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if workspace && !check {
 				return fmt.Errorf("--workspace requires --check")
 			}
 
-			var opts []mod.VendorOption
+			var opts []vendor.Option
 
 			if len(args) > 0 {
-				opts = append(opts, mod.WithPaths(args...))
+				opts = append(opts, vendor.WithPaths(args...))
 			}
 
 			if check {
-				opts = append(opts, mod.WithDriftDetection())
-			}
-
-			if force {
-				opts = append(opts, mod.WithForce())
+				opts = append(opts, vendor.WithDriftDetection())
 			}
 
 			if recursive {
-				opts = append(opts, mod.WithRecursive(depth))
+				opts = append(opts, vendor.WithRecursive(depth))
 			}
 
 			if workspace {
-				opts = append(opts, mod.WithWorkspace())
+				opts = append(opts, vendor.WithWorkspace())
 			}
+
+			resolver := resolve.New(resolve.OSExecutor{})
 
 			if len(includePlatforms) > 0 {
-				if err := mod.ValidatePlatforms(includePlatforms); err != nil {
+				if err := resolver.ValidatePlatforms(cmd.Context(), includePlatforms); err != nil {
 					return err
 				}
-				opts = append(opts, mod.WithIncludePlatforms(includePlatforms))
+				opts = append(opts, vendor.WithIncludePlatforms(includePlatforms))
 			}
 
-			v := mod.NewVendor(opts...)
-			return v.VendorFiles()
+			v := vendor.NewVendor(resolver, opts...)
+			results, err := v.VendorFiles(cmd.Context())
+			if len(results) > 0 {
+				fmt.Println(ui.RenderResultsTable(results))
+			}
+			return err
 		},
 	}
 
 	cmd.Flags().BoolVarP(&check, "check", "c", false, "check if manifests have drifted and need updating")
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "force regeneration of govendor.toml, bypassing hash check")
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "recursively scan for go.mod files (ignores go.work)")
 	cmd.Flags().BoolVarP(&workspace, "workspace", "w", false, "reverse scan from a submodule path for a govendor.toml containing a workspace manifest (requires --check)")
 	cmd.Flags().IntVarP(&depth, "depth", "d", 0, "limit directory traversal depth (0 = unlimited)")
 	cmd.Flags().StringArrayVar(&includePlatforms, "include-platform", nil, "extend platform list for dependency resolution (e.g., freebsd/amd64)")
 	cmd.MarkFlagsMutuallyExclusive("recursive", "workspace")
-	cmd.MarkFlagsMutuallyExclusive("force", "check")
 
 	return cli.Execute(cmd,
 		cli.WithVersionFlag(version),

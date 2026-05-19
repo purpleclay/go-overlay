@@ -1,24 +1,36 @@
 package mod
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"golang.org/x/mod/modfile"
 )
 
+const GoWorkFilename = "go.work"
+
+// WorkspaceMember holds the parsed metadata for a single workspace
+// member's go.mod.
+type WorkspaceMember struct {
+	Dir          string
+	ModulePath   string
+	Requires     map[string]string
+	Tools        []string
+	Replacements map[string]Replacement
+	Excludes     map[string][]string
+}
+
+// GoWorkFile is a parsed go.work file. All fields are extracted at
+// parse time. No methods shell out to external processes.
 type GoWorkFile struct {
-	dir             string
-	modules         []string
-	hash            string
-	workfile        *modfile.WorkFile
-	workspaceConfig *WorkspaceConfig
+	Dir          string
+	GoVersion    string
+	Toolchain    string
+	Modules      []string
+	Replacements map[string]Replacement
 }
 
 func ParseGoWorkFile(path string) (*GoWorkFile, error) {
@@ -32,208 +44,151 @@ func ParseGoWorkFile(path string) (*GoWorkFile, error) {
 		return nil, fmt.Errorf("failed to parse go.work: %w", err)
 	}
 
-	var modules []string
-	for _, use := range wf.Use {
-		modules = append(modules, use.Path)
+	modules := make([]string, len(wf.Use))
+	for i, use := range wf.Use {
+		modules[i] = use.Path
 	}
 
-	dir := filepath.Dir(path)
-	hash, err := computeWorkspaceHash(dir, modules)
-	if err != nil {
-		return nil, err
+	var goVersion string
+	if wf.Go != nil {
+		goVersion = wf.Go.Version
+	}
+
+	var toolchain string
+	if wf.Toolchain != nil {
+		toolchain = wf.Toolchain.Name
 	}
 
 	return &GoWorkFile{
-		dir:      dir,
-		modules:  modules,
-		hash:     hash,
-		workfile: wf,
+		Dir:          filepath.Dir(path),
+		GoVersion:    goVersion,
+		Toolchain:    toolchain,
+		Modules:      modules,
+		Replacements: parseReplacements(wf.Replace),
 	}, nil
 }
 
 func NewGoWorkFileFromManifest(dir string, config *WorkspaceConfig) (*GoWorkFile, error) {
+	if config == nil {
+		return nil, fmt.Errorf("workspace config is required")
+	}
+
 	modules := make([]string, len(config.Modules))
 	for i, mod := range config.Modules {
 		modules[i] = strings.TrimPrefix(mod, "./")
 	}
 
-	hash, err := computeWorkspaceHash(dir, modules)
-	if err != nil {
-		return nil, err
-	}
-
 	return &GoWorkFile{
-		dir:             dir,
-		modules:         modules,
-		hash:            hash,
-		workspaceConfig: config,
+		Dir:       dir,
+		GoVersion: config.Go,
+		Toolchain: config.Toolchain,
+		Modules:   modules,
 	}, nil
 }
 
-func computeWorkspaceHash(dir string, modules []string) (string, error) {
-	h := sha256.New()
-
-	sortedModules := slices.Clone(modules)
-	slices.Sort(sortedModules)
-
-	for _, mod := range sortedModules {
-		modPath := filepath.Join(dir, mod, goModFile)
-		content, err := os.ReadFile(modPath)
-		if err != nil {
-			return "", fmt.Errorf("failed to read %s: %w", modPath, err)
+// LocalReplacements returns only workspace-level local replace directives,
+// sorted by original module path. These take precedence over member go.mod replaces.
+func (w *GoWorkFile) LocalReplacements() []Replacement {
+	var local []Replacement
+	for _, repl := range w.Replacements {
+		if repl.IsLocal {
+			local = append(local, repl)
 		}
-		h.Write(content)
 	}
-
-	return "sha256-" + base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
+	slices.SortFunc(local, func(a, b Replacement) int {
+		return strings.Compare(a.OldPath, b.OldPath)
+	})
+	return local
 }
 
-func (w *GoWorkFile) Dir() string {
-	return w.dir
-}
-
-func (w *GoWorkFile) Hash() string {
-	return w.hash
-}
-
-func (w *GoWorkFile) Modules() []string {
-	return w.modules
+// RemoteReplacements returns workspace-level remote replace directives keyed by
+// the replacement target path. These take precedence over member go.mod replaces.
+func (w *GoWorkFile) RemoteReplacements() map[string]Replacement {
+	remote := make(map[string]Replacement)
+	for _, repl := range w.Replacements {
+		if !repl.IsLocal {
+			remote[repl.NewPath] = repl
+		}
+	}
+	return remote
 }
 
 func (w *GoWorkFile) ModulePaths() []string {
-	var paths []string
-	for _, mod := range w.modules {
-		paths = append(paths, filepath.Join(w.dir, mod))
+	paths := make([]string, len(w.Modules))
+	for i, mod := range w.Modules {
+		paths[i] = filepath.Join(w.Dir, mod)
 	}
 	return paths
 }
 
-func (w *GoWorkFile) Dependencies(platforms []string) ([]GoModule, error) {
-	allDeps := make(map[string]GoModule)
-	workspaceMembers := w.workspaceModulePaths()
-
-	for _, modDir := range w.modules {
-		goModPath := filepath.Join(w.dir, modDir, goModFile)
-		goMod, err := ParseGoModFile(goModPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse %s: %w", goModPath, err)
-		}
-
-		deps, err := goMod.Dependencies(platforms)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get dependencies for %s: %w", modDir, err)
-		}
-
-		for _, dep := range deps {
-			// Post-process workspace members: clear hash and packages
-			// They're resolved from source, not fetched
-			if localPath, isWorkspace := workspaceMembers[dep.Path]; isWorkspace {
-				dep.Hash = ""
-				dep.Packages = nil
-
-				// Convert local path to be relative to workspace root
-				if dep.Local != "" {
-					dep.Local = localPath
-				}
-			}
-
-			// Dedup/merge dependencies
-			if existing, ok := allDeps[dep.Path]; ok {
-				existing.Packages = mergePackages(existing.Packages, dep.Packages)
-				allDeps[dep.Path] = existing
-			} else {
-				allDeps[dep.Path] = dep
-			}
-		}
-	}
-
-	modules := make([]GoModule, 0, len(allDeps))
-	for _, mod := range allDeps {
-		modules = append(modules, mod)
-	}
-	sort.Slice(modules, func(i, j int) bool {
-		return modules[i].Path < modules[j].Path
-	})
-
-	return modules, nil
-}
-
-func mergePackages(a, b []string) []string {
-	if len(a) == 0 {
-		return b
-	}
-	if len(b) == 0 {
-		return a
-	}
-
-	seen := make(map[string]bool)
-	for _, p := range a {
-		seen[p] = true
-	}
-	for _, p := range b {
-		seen[p] = true
-	}
-
-	result := make([]string, 0, len(seen))
-	for p := range seen {
-		result = append(result, p)
-	}
-	sort.Strings(result)
-	return result
-}
-
 func (w *GoWorkFile) WorkspaceConfig() *WorkspaceConfig {
-	if w.workspaceConfig != nil {
-		return w.workspaceConfig
-	}
-
-	modules := make([]string, 0, len(w.modules))
-	for _, mod := range w.modules {
-		path := mod
-		if !strings.HasPrefix(path, "./") {
-			path = "./" + path
-		}
-		modules = append(modules, path)
+	modules := make([]string, len(w.Modules))
+	for i, mod := range w.Modules {
+		modules[i] = normalizeWorkspaceMemberPath(mod)
 	}
 	slices.Sort(modules)
 
-	config := &WorkspaceConfig{
-		Modules: modules,
+	return &WorkspaceConfig{
+		Go:        w.GoVersion,
+		Toolchain: w.Toolchain,
+		Modules:   modules,
 	}
-
-	if w.workfile.Go != nil {
-		config.Go = w.workfile.Go.Version
-	}
-
-	if w.workfile.Toolchain != nil {
-		config.Toolchain = w.workfile.Toolchain.Name
-	}
-
-	return config
 }
 
-func (w *GoWorkFile) workspaceModulePaths() map[string]string {
-	members := make(map[string]string)
+// ParseMembers reads and parses each workspace member's go.mod in one
+// pass, returning the module path, relative directory, and requires for
+// each member.
+func (w *GoWorkFile) ParseMembers() ([]WorkspaceMember, error) {
+	members := make([]WorkspaceMember, 0, len(w.Modules))
 
-	for _, mod := range w.modules {
-		modFilePath := filepath.Join(w.dir, mod, goModFile)
+	for _, mod := range w.Modules {
+		modFilePath := filepath.Join(w.Dir, mod, GoModFilename)
 		content, err := os.ReadFile(modFilePath)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("failed to read workspace member %s: %w", modFilePath, err)
 		}
 
 		mf, err := modfile.Parse(modFilePath, content, nil)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("failed to parse workspace member %s: %w", modFilePath, err)
 		}
 
-		path := mod
-		if !strings.HasPrefix(path, "./") {
-			path = "./" + path
+		if mf.Module == nil || mf.Module.Mod.Path == "" {
+			return nil, fmt.Errorf("workspace member %s is missing a module directive", modFilePath)
 		}
 
-		members[mf.Module.Mod.Path] = path
+		requires := make(map[string]string, len(mf.Require))
+		for _, req := range mf.Require {
+			requires[req.Mod.Path] = req.Mod.Version
+		}
+
+		tools := make([]string, len(mf.Tool))
+		for i, t := range mf.Tool {
+			tools[i] = t.Path
+		}
+
+		replacements := parseReplacements(mf.Replace)
+		excludes := parseExcludes(mf.Exclude)
+
+		members = append(members, WorkspaceMember{
+			Dir:          normalizeWorkspaceMemberPath(mod),
+			ModulePath:   mf.Module.Mod.Path,
+			Requires:     requires,
+			Tools:        tools,
+			Replacements: replacements,
+			Excludes:     excludes,
+		})
 	}
 
-	return members
+	return members, nil
+}
+
+// normalizeWorkspaceMemberPath prepends "./" to bare relative paths (e.g.
+// "cli" → "./cli") while leaving absolute paths, ".", "./…" and "../…"
+// unchanged.
+func normalizeWorkspaceMemberPath(path string) string {
+	if filepath.IsAbs(path) || path == "." || strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../") {
+		return path
+	}
+	return "./" + path
 }

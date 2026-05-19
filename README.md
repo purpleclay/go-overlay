@@ -30,7 +30,6 @@ The template bootstraps a new project with a dev shell, builder, and drift detec
 
 ```bash
 nix flake new -t github:purpleclay/go-overlay my-app
-cd my-app && nix develop
 ```
 
 ### Create a workspace project
@@ -39,7 +38,14 @@ The workspace template bootstraps a minimal multi-module monorepo with a dev she
 
 ```bash
 nix flake new -t github:purpleclay/go-overlay#workspace my-monorepo
-cd my-monorepo && nix develop
+```
+
+### Create a container image project
+
+The image template bootstraps a Go application pre-configured to produce a `buildLayeredImage` container image alongside the binary:
+
+```bash
+nix flake new -t github:purpleclay/go-overlay#image my-app
 ```
 
 ### Onboard an existing project
@@ -236,7 +242,7 @@ nix build --impure
 ## Further Reading
 
 - [reference.md](docs/reference.md) — Full option tables for all builder functions, library functions, and traditional Nix installation.
-- [govendor-toml-v2.md](docs/govendor-toml-v2.md) — `govendor.toml` schema reference.
+- [govendor-toml-v3.md](docs/govendor-toml-v3.md) — `govendor.toml` schema reference.
 - [migrating.md](docs/migrating.md) — Migration guides from gomod2nix and buildGoModule.
 
 ---

@@ -25,8 +25,14 @@
         pkgs = final;
       };
 
-      # Builder for Go applications using govendor.toml
-      inherit (final.callPackage ./builder {}) buildGoApplication buildGoWorkspace mkVendorEnv;
+      inherit
+        (final.callPackage ./builder {})
+        buildGoApplication
+        buildGoWorkspace
+        buildGoVendoredApplication
+        buildGoVendoredWorkspace
+        mkVendorEnv
+        ;
     };
   in
     {
@@ -36,11 +42,15 @@
       templates = {
         default = {
           path = ./templates/default;
-          description = "A basic Go application using go-overlay";
+          description = "A Go application";
         };
         workspace = {
           path = ./templates/workspace;
-          description = "A Go workspace (go.work) application using go-overlay";
+          description = "A Go workspace application";
+        };
+        image = {
+          path = ./templates/image;
+          description = "A Go application packaged as a container image";
         };
       };
 
