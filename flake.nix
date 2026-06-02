@@ -19,21 +19,7 @@
     flake-utils,
     git-hooks,
   }: let
-    overlay = final: prev: {
-      go-bin = import ./lib {
-        lib = final.lib;
-        pkgs = final;
-      };
-
-      inherit
-        (final.callPackage ./builder {})
-        buildGoApplication
-        buildGoWorkspace
-        buildGoVendoredApplication
-        buildGoVendoredWorkspace
-        mkVendorEnv
-        ;
-    };
+    overlay = import ./default.nix;
   in
     {
       overlays.default = overlay;

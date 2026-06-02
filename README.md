@@ -75,7 +75,7 @@ Add go-overlay to your `flake.nix` inputs and apply the overlay:
 ```
 
 > [!TIP]
-> Not using flakes? See the [traditional Nix installation guide](docs/reference.md#traditional-nix-installation).
+> Not using flakes? `default.nix` is an overlay. See the [traditional Nix installation guide](docs/reference.md#traditional-nix-installation) for more.
 
 #### 2. Add govendor to your dev shell
 
