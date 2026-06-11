@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - main
-      - v1
     paths:
       - "flake.nix"
       - "flake.lock"
@@ -16,7 +15,6 @@ on:
   pull_request:
     branches:
       - main
-      - v1
     paths:
       - "flake.nix"
       - "flake.lock"

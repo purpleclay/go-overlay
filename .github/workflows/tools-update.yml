@@ -104,10 +104,10 @@ jobs:
 
       - name: GPG Import
         if: steps.generate.outputs.generated == 'true'
-        env:
-          GPG_PRIVATE_KEY: "${{ secrets.GPG_PRIVATE_KEY }}"
-          GPG_PASSPHRASE: "${{ secrets.GPG_PASSPHRASE }}"
-        run: nix run github:purpleclay/gpg-import
+        uses: purpleclay/gpg-import-action@a39506c3eff9b02459e033e3551e556934f266fc # v0
+        with:
+          key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Create PR
         if: steps.generate.outputs.generated == 'true'
