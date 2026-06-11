@@ -15,6 +15,7 @@ Full option tables and API documentation for go-overlay.
   - [`mkVendorEnv`](#mkvendorenv)
 - [Go Module Tool Directives](#go-module-tool-directives)
 - [Cross-Compilation](#cross-compilation)
+- [Using with devenv](#using-with-devenv)
 - [Traditional Nix Installation](#traditional-nix-installation)
 
 ## Selecting a Go Version
@@ -279,6 +280,39 @@ govendor --include-platform=freebsd/amd64
 ```
 
 The additional platforms are persisted in `govendor.toml` and automatically used on subsequent runs. See the [cross-compile example](../examples/cross-compile/).
+
+## Using with devenv
+
+When pulling go-overlay into a [devenv](https://devenv.sh) project, two things keep store paths stable so tools are cache hits from a pre-built image:
+
+- **Match the Go version** between devenv and go-overlay:
+
+  > [!NOTE]
+  > `go-bin` comes from the go-overlay flake input — make sure it's added to
+  > your flake's `inputs` and passed through to your devenv modules.
+
+  ```nix
+  let
+    goVersion = "1.22.3";
+    goToolchain = go-bin.versions.${goVersion};
+  in {
+    languages.go.version = goVersion;
+
+    packages = [
+      goToolchain.tools.gopls.latest
+      goToolchain.tools.golangci-lint.latest
+    ];
+  }
+  ```
+
+  A mismatch produces different toolchain derivations for devenv (`languages.go.version`) and go-overlay (`goToolchain.tools.*`), so tools won't be cache hits even with identical content.
+- **Pin the flake input to a commit, not `main`:**
+
+  ```nix
+  inputs.go-overlay.url = "github:purpleclay/go-overlay/<commit-sha>";
+  ```
+
+  Pinning to `main` ties the input to the branch HEAD at evaluation time, which moves whenever go-overlay merges new commits and produces unstable store paths across builds.
 
 ## Traditional Nix Installation
 
