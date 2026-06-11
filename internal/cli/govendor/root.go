@@ -98,7 +98,7 @@ func Execute(version cli.VersionInfo) error {
 			v := vendor.NewVendor(resolver, opts...)
 			results, err := v.VendorFiles(cmd.Context())
 			if len(results) > 0 {
-				fmt.Println(ui.RenderResultsTable(results))
+				fmt.Fprintln(cmd.OutOrStdout(), ui.RenderResultsTable(results))
 			}
 			return err
 		},
