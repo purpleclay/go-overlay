@@ -39,10 +39,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: GPG Import
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.gpg-private-key }}
-          GPG_PASSPHRASE: ${{ secrets.gpg-passphrase }}
-        run: nix run github:purpleclay/gpg-import
+        uses: purpleclay/gpg-import-action@a39506c3eff9b02459e033e3551e556934f266fc # v0
+        with:
+          key: ${{ secrets.gpg-private-key }}
+          passphrase: ${{ secrets.gpg-passphrase }}
 
       - name: Update govendor.toml
         working-directory: ${{ inputs.working-directory }}
