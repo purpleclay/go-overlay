@@ -16,12 +16,12 @@ import (
 	"time"
 
 	"github.com/nix-community/go-nix/pkg/nar"
+	"github.com/purpleclay/conker/pool"
 	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/purpleclay/go-overlay/internal/mod"
 	"github.com/purpleclay/go-overlay/internal/proxy"
 	"github.com/purpleclay/go-overlay/internal/resolve"
 	"github.com/purpleclay/go-overlay/internal/version"
-	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
 )
 
@@ -134,14 +134,14 @@ func generateManifest(ctx context.Context, module, ver string, subPackages []str
 		srcDir    string
 	)
 
-	g := pool.New().WithErrors()
-	g.Go(func() error {
+	g := pool.New().WithContext(ctx)
+	g.Go(func(_ context.Context) error {
 		var err error
 		info, err = proxy.FetchInfo(module, ver)
 		return err
 	})
 
-	g.Go(func() error {
+	g.Go(func(_ context.Context) error {
 		raw, err := proxy.FetchGoMod(module, ver)
 		if err != nil {
 			return err
@@ -150,7 +150,7 @@ func generateManifest(ctx context.Context, module, ver string, subPackages []str
 		return err
 	})
 
-	g.Go(func() error {
+	g.Go(func(_ context.Context) error {
 		var err error
 		srcDir, err = downloadModule(module, ver)
 		return err
@@ -276,11 +276,11 @@ func newGenerateCmd() *cobra.Command {
 				return err
 			}
 
-			p := pool.NewWithResults[*toolManifest]().WithMaxGoroutines(4).WithErrors()
+			p := pool.NewWithResults[*toolManifest]().WithMaxGoroutines(4).WithContext(cmd.Context())
 
 			for _, ver := range versions {
-				p.Go(func() (*toolManifest, error) {
-					return generateManifest(cmd.Context(), module, ver, subPackages)
+				p.Go(func(ctx context.Context) (*toolManifest, error) {
+					return generateManifest(ctx, module, ver, subPackages)
 				})
 			}
 

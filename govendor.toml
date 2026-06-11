@@ -97,10 +97,6 @@ schema = 3
     hash = "sha256-XWlYH0c8IcxAwQTnIi6WYqq44nOKUylSWxWO/vi+8pE="
     go = "1.18"
     packages = ["github.com/inconshreveable/mousetrap"]
-  [mod."github.com/kr/pretty"]
-    version = "v0.3.1"
-    hash = "sha256-DlER7XM+xiaLjvebcIPiB12oVNjyZHuJHoRGITzzpKU="
-    go = "1.12"
   [mod."github.com/lucasb-eyer/go-colorful"]
     version = "v1.4.0"
     hash = "sha256-i/3GDHKEMLCy0kc3mtyk58UWYOPmKoUVaq6QCAWXKP0="
@@ -165,6 +161,11 @@ schema = 3
     hash = "sha256-1J+cpb/XEhXY0eizgbzD0SFByUmbGpYEWv4TW1WmitA="
     go = "1.22.12"
     packages = ["github.com/purpleclay/chomp"]
+  [mod."github.com/purpleclay/conker"]
+    version = "v0.4.1"
+    hash = "sha256-y4ppr+deSE1Q0D8+vqATYMbh3/bJQDHPc+0VEQGKfJk="
+    go = "1.25.0"
+    packages = ["github.com/purpleclay/conker/panics", "github.com/purpleclay/conker/pool"]
   [mod."github.com/purpleclay/x/cli"]
     version = "v0.7.2"
     hash = "sha256-Dulc7Vk3OtWYwF6fnCfNUnAU0GeHnMptORqquORcVUk="
@@ -180,15 +181,6 @@ schema = 3
     hash = "sha256-rDcdNYH6ZD8KouyyiZCUEy8JrjOQoAkxHBhugrfHjFo="
     go = "1.18"
     packages = ["github.com/rivo/uniseg"]
-  [mod."github.com/rogpeppe/go-internal"]
-    version = "v1.14.1"
-    hash = "sha256-6NzhXCCD1Qhj05WHbCDxH5hwfNM6psoAk7uIxm7N55E="
-    go = "1.23"
-  [mod."github.com/sourcegraph/conc"]
-    version = "v0.3.0"
-    hash = "sha256-mIdMs9MLAOBKf3/0quf1iI3v8uNWydy7ae5MFa+F2Ko="
-    go = "1.19"
-    packages = ["github.com/sourcegraph/conc", "github.com/sourcegraph/conc/internal/multierror", "github.com/sourcegraph/conc/panics", "github.com/sourcegraph/conc/pool"]
   [mod."github.com/spf13/cobra"]
     version = "v1.10.2"
     hash = "sha256-nbRCTFiDCC2jKK7AHi79n7urYCMP5yDZnWtNVJrDi+k="
@@ -209,10 +201,6 @@ schema = 3
     hash = "sha256-GyCDxxMQhXA3Pi/TsWXpA8cX5akEoZV7CFx4RO3rARU="
     go = "1.19"
     packages = ["github.com/xo/terminfo"]
-  [mod."go.uber.org/multierr"]
-    version = "v1.11.0"
-    hash = "sha256-Lb6rHHfR62Ozg2j2JZy3MKOMKdsfzd1IYTR57r3Mhp0="
-    go = "1.19"
   [mod."golang.org/x/mod"]
     version = "v0.37.0"
     hash = "sha256-dspScRv3KO4nytvjavhNO2b03P4UtiJQyWVGuEy9OUk="

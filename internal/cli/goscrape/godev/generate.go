@@ -3,6 +3,7 @@ package godev
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"fmt"
 	"html/template"
 	"os"
@@ -11,11 +12,11 @@ import (
 	"time"
 
 	"github.com/purpleclay/chomp"
+	"github.com/purpleclay/conker/pool"
 	"github.com/purpleclay/go-overlay/internal/github"
 	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/purpleclay/go-overlay/internal/scrape"
 	"github.com/purpleclay/go-overlay/internal/version"
-	"github.com/sourcegraph/conc/pool"
 	"github.com/spf13/cobra"
 )
 
@@ -189,10 +190,10 @@ func newGenerateCmd() *cobra.Command {
 				}
 			}
 
-			p := pool.NewWithResults[*Scrape]().WithMaxGoroutines(10).WithErrors()
+			p := pool.NewWithResults[*Scrape]().WithMaxGoroutines(10).WithContext(cmd.Context())
 
 			for _, ver := range versions {
-				p.Go(func() (*Scrape, error) {
+				p.Go(func(_ context.Context) (*Scrape, error) {
 					downloadSection, _, err := scrape.SeekDownloadSection(ver)(page)
 					if err != nil {
 						return nil, fmt.Errorf("failed to find download section for %s: %w", ver, err)
