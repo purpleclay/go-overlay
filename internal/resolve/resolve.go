@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/purpleclay/conker/pool"
 	"github.com/purpleclay/go-overlay/internal/mod"
-	"github.com/sourcegraph/conc/pool"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/semver"
 )
@@ -200,7 +200,7 @@ func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile,
 }
 
 func (r *Resolver) packagesByModule(ctx context.Context, goMod *mod.GoModFile, platforms []string) (map[string][]string, error) {
-	p := pool.NewWithResults[map[string][]string]().WithErrors()
+	p := pool.NewWithResults[map[string][]string]().WithContext(ctx)
 
 	seen := make(map[string]struct{}, len(platforms))
 	for _, plat := range platforms {
@@ -212,7 +212,7 @@ func (r *Resolver) packagesByModule(ctx context.Context, goMod *mod.GoModFile, p
 			continue
 		}
 		seen[plat] = struct{}{}
-		p.Go(func() (map[string][]string, error) {
+		p.Go(func(ctx context.Context) (map[string][]string, error) {
 			return r.packagesByModuleForPlatform(ctx, goMod, goos, goarch)
 		})
 	}
@@ -287,7 +287,7 @@ func (r *Resolver) packagesByModuleForPlatform(ctx context.Context, goMod *mod.G
 // root with GOWORK active. This ensures workspace-level replace directives
 // (including local replaces) are respected, unlike per-member GOWORK=off listing.
 func (r *Resolver) packagesByWorkspace(ctx context.Context, goWork *mod.GoWorkFile, memberGoMods map[string]*mod.GoModFile, platforms []string) (map[string][]string, error) {
-	p := pool.NewWithResults[map[string][]string]().WithErrors()
+	p := pool.NewWithResults[map[string][]string]().WithContext(ctx)
 
 	seen := make(map[string]struct{}, len(platforms))
 	for _, plat := range platforms {
@@ -299,7 +299,7 @@ func (r *Resolver) packagesByWorkspace(ctx context.Context, goWork *mod.GoWorkFi
 			continue
 		}
 		seen[plat] = struct{}{}
-		p.Go(func() (map[string][]string, error) {
+		p.Go(func(ctx context.Context) (map[string][]string, error) {
 			return r.packagesByWorkspaceForPlatform(ctx, goWork, memberGoMods, goos, goarch)
 		})
 	}
@@ -399,11 +399,11 @@ func (r *Resolver) downloadWorkspaceModules(ctx context.Context, goWork *mod.GoW
 	return ParseDownloadOutput(out)
 }
 
-func (r *Resolver) resolveRemoteModules(_ context.Context, remoteReplacements map[string]mod.Replacement, downloads []ModuleDownload, pkgsByMod map[string][]string) ([]mod.ModuleConfig, error) {
-	p := pool.NewWithResults[mod.ModuleConfig]().WithErrors().WithMaxGoroutines(8)
+func (r *Resolver) resolveRemoteModules(ctx context.Context, remoteReplacements map[string]mod.Replacement, downloads []ModuleDownload, pkgsByMod map[string][]string) ([]mod.ModuleConfig, error) {
+	p := pool.NewWithResults[mod.ModuleConfig]().WithMaxGoroutines(8).WithContext(ctx)
 
 	for _, meta := range downloads {
-		p.Go(func() (mod.ModuleConfig, error) {
+		p.Go(func(_ context.Context) (mod.ModuleConfig, error) {
 			hash, err := NARHash(meta.Dir)
 			if err != nil {
 				return mod.ModuleConfig{}, fmt.Errorf("failed to hash downloaded module %s@%s: %w", meta.Path, meta.Version, err)
@@ -446,10 +446,10 @@ func (r *Resolver) resolveLocalModules(ctx context.Context, goMod *mod.GoModFile
 	}
 
 	requires := goMod.Requires
-	p := pool.NewWithResults[mod.ModuleConfig]().WithErrors().WithMaxGoroutines(8)
+	p := pool.NewWithResults[mod.ModuleConfig]().WithMaxGoroutines(8).WithContext(ctx)
 
 	for _, repl := range localRepls {
-		p.Go(func() (mod.ModuleConfig, error) {
+		p.Go(func(ctx context.Context) (mod.ModuleConfig, error) {
 			localDir := repl.LocalPath
 			if !filepath.IsAbs(localDir) {
 				localDir = filepath.Join(goMod.Dir, localDir)
@@ -524,10 +524,10 @@ func (r *Resolver) resolveWorkspaceLocalModules(ctx context.Context, goWork *mod
 		}
 	}
 
-	p := pool.NewWithResults[mod.ModuleConfig]().WithErrors().WithMaxGoroutines(8)
+	p := pool.NewWithResults[mod.ModuleConfig]().WithMaxGoroutines(8).WithContext(ctx)
 
 	for _, repl := range workspaceLocalRepls {
-		p.Go(func() (mod.ModuleConfig, error) {
+		p.Go(func(ctx context.Context) (mod.ModuleConfig, error) {
 			localDir := repl.LocalPath
 			if !filepath.IsAbs(localDir) {
 				localDir = filepath.Join(goWork.Dir, localDir)

@@ -9,8 +9,8 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/purpleclay/conker/pool"
 	"github.com/purpleclay/go-overlay/internal/mod"
-	"github.com/sourcegraph/conc/pool"
 )
 
 const vendorFile = "govendor.toml"
@@ -114,18 +114,19 @@ func (v *Vendor) VendorFiles(ctx context.Context) ([]Result, error) {
 		return nil, err
 	}
 
-	p := pool.NewWithResults[Result]()
+	p := pool.NewWithResults[Result]().WithContext(ctx)
 	for _, modFile := range modFiles {
-		p.Go(func() Result {
+		p.Go(func(ctx context.Context) (Result, error) {
 			goMod, err := mod.ParseGoModFile(modFile)
 			if err != nil {
-				return resultError(modFile, err)
+				return resultError(modFile, err), nil
 			}
-			return v.processSource(ctx, goMod, modFile, nil)
+			return v.processSource(ctx, goMod, modFile, nil), nil
 		})
 	}
 
-	results := append(missingResults, p.Wait()...)
+	processed, _ := p.Wait()
+	results := append(missingResults, processed...)
 
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].Path < results[j].Path
@@ -287,9 +288,9 @@ func (v *Vendor) findModFiles() (modFiles []string, missing []Result, err error)
 	}
 
 	if v.opts.recursive {
-		p := pool.NewWithResults[[]string]().WithErrors()
+		p := pool.NewWithResults[[]string]()
 		for _, path := range paths {
-			p.Go(func() ([]string, error) {
+			p.Go(func(_ context.Context) ([]string, error) {
 				scanner := NewFileTreeScanner(WithMaxDepth(v.opts.maxDepth))
 				return scanner.ScanFrom(path)
 			})

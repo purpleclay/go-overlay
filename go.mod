@@ -9,9 +9,9 @@ require (
 	github.com/muesli/reflow v0.3.0
 	github.com/nix-community/go-nix v0.0.0-20250101154619-4bdde671e0a1
 	github.com/purpleclay/chomp v0.7.0
+	github.com/purpleclay/conker v0.4.1
 	github.com/purpleclay/x/cli v0.7.2
 	github.com/purpleclay/x/theme v0.4.0
-	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/mod v0.37.0
@@ -35,7 +35,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/kr/pretty v0.3.1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mattn/go-runewidth v0.0.23 // indirect
@@ -47,10 +46,8 @@ require (
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.44.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
