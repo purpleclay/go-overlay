@@ -5,6 +5,7 @@
 #   vendor-env.nix    — mkVendorEnv (constructs the vendor/ directory from a manifest)
 #   host-tool.nix     — mkHostTool, parseGoWorkModules
 #   common.nix        — commonRemovedAttrs, mkCommonAttrs (shared builder infrastructure)
+#   test-packages.nix — mkTestPackages (computes the go test package list, honouring excludedPackages)
 #   application.nix   — buildGoApplication, buildGoVendoredApplication
 #   workspace.nix     — buildGoWorkspace, buildGoVendoredWorkspace
 {
@@ -27,8 +28,10 @@
   commonModule = import ./common.nix {inherit lib;};
   inherit (commonModule) commonRemovedAttrs mkCommonAttrs;
 
+  inherit (import ./test-packages.nix {inherit lib;}) mkTestPackages;
+
   applicationModule = import ./application.nix {
-    inherit lib stdenv mkVendorEnv mkHostTool commonRemovedAttrs mkCommonAttrs;
+    inherit lib stdenv mkVendorEnv mkHostTool commonRemovedAttrs mkCommonAttrs mkTestPackages;
   };
 
   workspaceModule = import ./workspace.nix {
@@ -42,6 +45,7 @@
       parseGoWorkModules
       commonRemovedAttrs
       mkCommonAttrs
+      mkTestPackages
       ;
   };
 in {
