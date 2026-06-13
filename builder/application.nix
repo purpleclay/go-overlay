@@ -8,9 +8,10 @@
   mkHostTool,
   commonRemovedAttrs,
   mkCommonAttrs,
+  mkTestPackages,
 }: let
   inherit (builtins) fromTOML readFile;
-  inherit (lib) concatMapStringsSep escapeShellArg optionalString pathExists;
+  inherit (lib) optionalString pathExists;
 in {
   # Build a single-module Go application from a govendor.toml manifest.
   # Defaults to src + "/govendor.toml" — run `govendor` to generate it.
@@ -76,10 +77,11 @@ in {
         runHook postConfigure
       '';
 
-    testPackages =
-      if excludedPackages == []
-      then "./..."
-      else "$(go list ./... | grep -F -v -- ${concatMapStringsSep " | grep -F -v -- " (p: escapeShellArg p) excludedPackages} || echo './...')";
+    testPackages = mkTestPackages {
+      listCmd = "go list ./...";
+      basePackages = "./...";
+      inherit excludedPackages;
+    };
 
     hostTools = map (pkg:
       mkHostTool {
@@ -146,10 +148,11 @@ in {
           runHook postConfigure
         '';
 
-      testPackages =
-        if excludedPackages == []
-        then "./..."
-        else "$(go list ./... | grep -F -v -- ${concatMapStringsSep " | grep -F -v -- " (p: escapeShellArg p) excludedPackages} || echo './...')";
+      testPackages = mkTestPackages {
+        listCmd = "go list ./...";
+        basePackages = "./...";
+        inherit excludedPackages;
+      };
 
       passthru = {inherit go;};
     in

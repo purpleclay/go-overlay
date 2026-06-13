@@ -11,6 +11,7 @@
   parseGoWorkModules,
   commonRemovedAttrs,
   mkCommonAttrs,
+  mkTestPackages,
 }: let
   inherit (builtins) fromTOML readFile;
   inherit (lib) concatMapStringsSep escapeShellArg optionalString pathExists;
@@ -231,10 +232,11 @@ in {
     workspaceTestTargets =
       concatMapStringsSep " " (mod: "${mod}/...") (workspaceConfig.modules or []);
 
-    testPackages =
-      if excludedPackages == []
-      then workspaceTestTargets
-      else "$(go list ${workspaceTestTargets} | grep -F -v -- ${concatMapStringsSep " | grep -F -v -- " (p: escapeShellArg p) excludedPackages} || echo ${escapeShellArg workspaceTestTargets})";
+    testPackages = mkTestPackages {
+      listCmd = "go list ${workspaceTestTargets}";
+      basePackages = workspaceTestTargets;
+      inherit excludedPackages;
+    };
 
     hostTools = map (pkg:
       mkHostTool {
@@ -318,10 +320,11 @@ in {
           then concatMapStringsSep " " (mod: "${mod}/...") workspaceModules
           else "./...";
 
-        testPackages =
-          if excludedPackages == []
-          then workspaceTestTargets
-          else "$(go list ${workspaceTestTargets} | grep -F -v -- ${concatMapStringsSep " | grep -F -v -- " (p: escapeShellArg p) excludedPackages} || echo ${escapeShellArg workspaceTestTargets})";
+        testPackages = mkTestPackages {
+          listCmd = "go list ${workspaceTestTargets}";
+          basePackages = workspaceTestTargets;
+          inherit excludedPackages;
+        };
 
         configurePhase =
           attrs.configurePhase or ''

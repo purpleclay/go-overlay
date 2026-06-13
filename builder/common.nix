@@ -2,7 +2,7 @@
 # - commonRemovedAttrs: builder-owned parameters stripped before passing to stdenv
 # - mkCommonAttrs: env setup, build, check, and install phases shared across builders
 {lib}: let
-  inherit (lib) concatMapStringsSep concatStringsSep escapeShellArg optionalString;
+  inherit (lib) concatStringsSep escapeShellArg optionalString;
 in {
   # Builder-owned parameters stripped from attrs before passing to stdenv.mkDerivation.
   commonRemovedAttrs = [
@@ -114,13 +114,18 @@ in {
 
           export GOFLAGS=''${GOFLAGS//-trimpath/}
 
-          go test \
-            -v \
-            -p $NIX_BUILD_CORES \
-            -vet=off \
-            ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"} \
-            ${optionalString (checkFlags != []) (concatStringsSep " " checkFlags)} \
-            ${testPackages}
+          testPkgs="${testPackages}"
+          if [ -z "$testPkgs" ]; then
+            echo "go-overlay: skipping checkPhase, excludedPackages excludes all packages"
+          else
+            go test \
+              -v \
+              -p $NIX_BUILD_CORES \
+              -vet=off \
+              ${optionalString (tags != []) "-tags=${concatStringsSep "," tags}"} \
+              ${optionalString (checkFlags != []) (concatStringsSep " " checkFlags)} \
+              $testPkgs
+          fi
 
           runHook postCheck
         '';

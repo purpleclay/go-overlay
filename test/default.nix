@@ -4,6 +4,9 @@
   # Direct access to tool-manifests internals for ordering assertions
   toolManifests = import ../lib/tool-manifests.nix {lib = pkgs.lib;};
 
+  # Direct access to the testPackages shell-expression builder
+  inherit (import ../builder/test-packages.nix {inherit (pkgs) lib;}) mkTestPackages;
+
   # Returns the index of x in xs, or null if not found.
   # Returning null (rather than a sentinel integer) ensures ordering assertions
   # fail explicitly when an expected version is absent from the list.
@@ -52,6 +55,28 @@
         echo "Test '${name}' failed: ${path} not found in ${drv}"
         exit 1
       fi
+    '';
+
+  # Evaluates the shell expression produced by mkTestPackages and asserts its
+  # output matches expected.
+  testTestPackages = name: {
+    listCmd,
+    basePackages,
+    excludedPackages,
+    expected,
+  }: let
+    expr = mkTestPackages {inherit listCmd basePackages excludedPackages;};
+  in
+    pkgs.runCommand "test-${name}" {} ''
+      actual="${expr}"
+      expected=${pkgs.lib.escapeShellArg expected}
+      if [ "$actual" != "$expected" ]; then
+        echo "Test '${name}' failed"
+        echo "Expected: $expected"
+        echo "Actual: $actual"
+        exit 1
+      fi
+      touch $out
     '';
 in {
   # latest
@@ -149,4 +174,45 @@ in {
     stable = indexOf sorted "0.21.1";
   in
     assertEq "tools-gopls-pre-release-above-older-stable" true (pre2 != null && stable != null && pre2 < stable);
+
+  # excludedPackages - no exclusions returns basePackages unchanged
+  testPackages-no-exclusions = testTestPackages "testPackages-no-exclusions" {
+    listCmd = "printf '%s\\n' a ab b";
+    basePackages = "./...";
+    excludedPackages = [];
+    expected = "./...";
+  };
+
+  # excludedPackages - exact match only, not substring (excluding "a" must not exclude "ab")
+  testPackages-exact-match = testTestPackages "testPackages-exact-match" {
+    listCmd = "printf '%s\\n' a ab b";
+    basePackages = "./...";
+    excludedPackages = ["a"];
+    expected = "ab\nb";
+  };
+
+  # excludedPackages - excluding every package yields an empty result, not basePackages
+  testPackages-all-excluded = testTestPackages "testPackages-all-excluded" {
+    listCmd = "printf '%s\\n' a b";
+    basePackages = "./...";
+    excludedPackages = ["a" "b"];
+    expected = "";
+  };
+
+  # excludedPackages - a failing listCmd must propagate, not be swallowed into an
+  # empty result (which checkPhase would otherwise treat as "all excluded")
+  testPackages-listCmd-failure-propagates = let
+    expr = mkTestPackages {
+      listCmd = "exit 7";
+      basePackages = "./...";
+      excludedPackages = ["a"];
+    };
+  in
+    pkgs.runCommand "test-testPackages-listCmd-failure-propagates" {} ''
+      if (set -e; actual="${expr}"); then
+        echo "Test 'testPackages-listCmd-failure-propagates' failed: expected listCmd failure to propagate"
+        exit 1
+      fi
+      touch $out
+    '';
 }
