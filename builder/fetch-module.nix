@@ -18,7 +18,7 @@
 }:
 stdenvNoCC.mkDerivation (
   {
-    name = "${baseNameOf goPackagePath}_${version}";
+    name = "${lib.replaceStrings ["/"] ["-"] goPackagePath}_${version}";
     builder = ./fetch.sh;
     inherit goPackagePath version;
     nativeBuildInputs = [
