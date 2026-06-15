@@ -299,6 +299,12 @@ func newGenerateCmd() *cobra.Command {
 				}
 			}
 
+			if outputDir != "" {
+				if err := writeIndex(outputDir); err != nil {
+					return err
+				}
+			}
+
 			return nil
 		},
 	}

@@ -66,7 +66,7 @@
     files = builtins.readDir toolDir;
     nixFiles =
       lib.filterAttrs
-      (name: type: type == "regular" && lib.hasSuffix ".nix" name)
+      (name: type: type == "regular" && lib.hasSuffix ".nix" name && name != "index.nix")
       files;
 
     manifests =
@@ -78,8 +78,10 @@
       nixFiles;
 
     sortedVersions = lib.sort (a: b: compareToolVersions a b > 0) (builtins.attrNames manifests);
+
+    index = import (toolDir + "/index.nix");
   in {
-    inherit manifests sortedVersions;
+    inherit manifests sortedVersions index;
     latest = builtins.head sortedVersions;
   };
 
