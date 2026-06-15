@@ -120,7 +120,7 @@ jobs:
           branch="${{ steps.generate.outputs.branch }}"
 
           git checkout -b "$branch"
-          git add "$manifest"
+          git add "$manifest" "manifests/${name}/index.nix"
           git commit -s -m "chore(tool): generated nix manifest for ${name} ${version#v}"
           git push -u origin "$branch"
 

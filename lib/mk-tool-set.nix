@@ -51,6 +51,15 @@ in
     goVersion = go.version;
 
     mkToolVersionSet = toolName: toolData: let
+      # Falls back to the full manifest when index.nix is missing a version
+      # (e.g. stale or not yet regenerated), so a single out-of-sync entry
+      # only costs an extra import for that version rather than failing
+      # evaluation entirely.
+      requiredGoFor = v:
+        if builtins.hasAttr v toolData.index
+        then toolData.index.${v}.go
+        else toolData.manifests.${v}.go;
+
       versionAttrs =
         lib.mapAttrs (
           version: manifest: let
@@ -58,7 +67,7 @@ in
 
             latestCompatible = builtins.head (
               builtins.filter
-              (v: isGoCompatible goVersion toolData.manifests.${v}.go)
+              (v: isGoCompatible goVersion (requiredGoFor v))
               toolData.sortedVersions
               ++ ["none"]
             );
@@ -81,7 +90,7 @@ in
 
       compatibleVersions =
         builtins.filter
-        (v: isGoCompatible goVersion toolData.manifests.${v}.go)
+        (v: isGoCompatible goVersion (requiredGoFor v))
         toolData.sortedVersions;
 
       latestAttr =
