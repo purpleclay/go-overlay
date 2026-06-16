@@ -13,6 +13,14 @@
 }: let
   inherit (lib) concatStringsSep;
 
+  # Map SPDX identifiers (as recorded in tool manifests) to nixpkgs license sets.
+  licenseBySpdxId = lib.listToAttrs (
+    map (l: lib.nameValuePair l.spdxId l)
+    (builtins.filter (l: l ? spdxId) (builtins.attrValues lib.licenses))
+  );
+
+  license = manifest.license or "";
+
   # Fetch the tool's own source from the Go module proxy
   toolSrc = fetchGoModule {
     goPackagePath = manifest.module;
@@ -104,10 +112,13 @@ in
 
     passthru = {inherit go vendorEnv;};
 
-    meta = {
-      description = "${pname} - built from ${manifest.module}@v${manifest.version}";
-      homepage = "https://pkg.go.dev/${manifest.module}";
-      license = lib.licenses.bsd3;
-      mainProgram = pname;
-    };
+    meta =
+      {
+        description = "${pname} - built from ${manifest.module}@v${manifest.version}";
+        homepage = "https://pkg.go.dev/${manifest.module}";
+        mainProgram = pname;
+      }
+      // lib.optionalAttrs (licenseBySpdxId ? ${license}) {
+        license = licenseBySpdxId.${license};
+      };
   }

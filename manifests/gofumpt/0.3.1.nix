@@ -5,6 +5,7 @@
   module = "mvdan.cc/gofumpt";
   subPackages = ["."];
   go = "1.17";
+  license = "BSD-3-Clause";
   hash = "sha256-uXRYVLFDyRZ83mth8Fh+MG9fNv2lUfE3BTljM9v9rjI=";
 
   mod = {

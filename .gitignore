@@ -1,32 +1,30 @@
 # Ignore everything and selectively allow files
 *
 
+!**/.zed/*
+!**/testdata/*
+!*.go
+!*.golden
+!*.nix
+!.envrc
+!.github/**/*
 !.gitignore
-!README.md
-!LICENSE
+!.golangci.yaml
+!builder/fetch.sh
 !CODE_OF_CONDUCT.md
 !CONTRIBUTING.md
-!.zed/*
-!.github/**/*
-!typos.toml
 !docs/**/*
-
 !flake.lock
 !flake.nix
-!*.nix
-!builder/fetch.sh
-!.envrc
-!test/fixtures/*
-
-!*.go
-!go.sum
 !go.mod
+!go.sum
 !go.work
 !go.work.sum
-!**/testdata/*
-!.golangci.yaml
-!*.golden
 !govendor.toml
+!LICENSE
+!README.md
+!test/fixtures/*
+!typos.toml
 
 # Recurse through sub-directories applying the same patterns
 !*/

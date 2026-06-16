@@ -5,6 +5,7 @@
   module = "golang.org/x/vuln";
   subPackages = ["cmd/govulncheck"];
   go = "1.18";
+  license = "BSD-3-Clause";
   hash = "sha256-6iANgHNGUrnGHtN2R7PFNTJZEMxgOrgafGAJXQ2xaic=";
 
   mod = {

@@ -5,6 +5,7 @@
   module = "github.com/golangci/golangci-lint";
   subPackages = ["cmd/golangci-lint"];
   go = "1.22.1";
+  license = "GPL-3.0-only";
   hash = "sha256-qUfadNO+9CkT4siQDWBF5yGbmKlUZq53moWhtZekYjc=";
 
   mod = {
