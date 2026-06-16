@@ -5,6 +5,7 @@
   module = "github.com/go-delve/delve";
   subPackages = ["cmd/dlv"];
   go = "1.21";
+  license = "MIT";
   hash = "sha256-SVu1xX/nuV5hdtDOngpBFS+B39Pbe/EvaJb0T0piPqc=";
 
   mod = {

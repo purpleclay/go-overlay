@@ -72,6 +72,7 @@
           hooks = {
             alejandra = {
               enable = true;
+              excludes = ["^manifests/"];
               settings = {
                 check = true;
               };

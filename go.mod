@@ -6,6 +6,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/charlievieth/fastwalk v1.0.14
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/google/licensecheck v0.3.1
 	github.com/muesli/reflow v0.3.0
 	github.com/nix-community/go-nix v0.0.0-20250101154619-4bdde671e0a1
 	github.com/purpleclay/chomp v0.7.0

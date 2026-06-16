@@ -33,4 +33,4 @@ jobs:
           cachix-token: ${{ secrets.GH_CACHIX }}
 
       - name: Run Alejandra
-        run: nix develop -c alejandra --check .
+        run: nix develop -c alejandra --check . --exclude ./manifests

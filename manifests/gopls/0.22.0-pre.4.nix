@@ -5,6 +5,7 @@
   module = "golang.org/x/tools/gopls";
   subPackages = ["."];
   go = "1.26.0";
+  license = "BSD-3-Clause";
   hash = "sha256-LdoqCpQsslj9gfVwEqmqfKMPee3V51lM46UlEJgsU8o=";
 
   mod = {

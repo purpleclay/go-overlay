@@ -5,6 +5,7 @@
   module = "honnef.co/go/tools";
   subPackages = ["cmd/staticcheck"];
   go = "1.19";
+  license = "MIT";
   hash = "sha256-cf8uY3g3dr4U8Dne5L6M1s6d3pMaCxZr7dKcFjIxe9s=";
 
   mod = {
