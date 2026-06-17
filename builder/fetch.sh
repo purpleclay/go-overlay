@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export HOME=$(mktemp -d)
+# Variables injected by the Nix fetchGoModule derivation.
+: "${goPackagePath:?}" "${version:?}" "${out:?}"
+
+HOME=$(mktemp -d)
+export HOME
 export GOPATH="$HOME/go"
 export GOCACHE="$HOME/go-cache"
 
@@ -9,7 +13,7 @@ export GOCACHE="$HOME/go-cache"
 # Both Go's HTTP client and git (via libcurl) read ~/.netrc for credentials
 # when accessing private module hosts.
 if [ -n "${NETRC_CONTENT:-}" ]; then
-  printf '%s' "$NETRC_CONTENT" > "$HOME/.netrc"
+  printf '%s' "$NETRC_CONTENT" >"$HOME/.netrc"
   chmod 600 "$HOME/.netrc"
 fi
 

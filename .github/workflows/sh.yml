@@ -1,0 +1,54 @@
+name: sh
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.sh"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/*.sh"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-24.04
+    if: github.actor != 'renovate[bot]'
+    name: shellcheck
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cachix-token: ${{ secrets.GH_CACHIX }}
+
+      - name: Run Shellcheck
+        run: nix develop -c shellcheck builder/*.sh
+
+  shfmt:
+    runs-on: ubuntu-24.04
+    if: github.actor != 'renovate[bot]'
+    name: shfmt
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cachix-token: ${{ secrets.GH_CACHIX }}
+
+      - name: Run shfmt
+        run: nix develop -c shfmt -d -i 2 builder/*.sh
