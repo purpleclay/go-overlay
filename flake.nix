@@ -63,6 +63,8 @@
           ])
           nil
           self.packages.${system}.govendor
+          shellcheck
+          shfmt
           typos
         ];
 
@@ -91,6 +93,20 @@
                 "templates/"
               ];
               pass_filenames = true;
+            };
+
+            shellcheck = {
+              enable = true;
+              entry = "${pkgs.shellcheck}/bin/shellcheck";
+              files = "\\.sh$";
+              excludes = ["^examples/vendored/"];
+            };
+
+            shfmt = {
+              enable = true;
+              entry = "${pkgs.shfmt}/bin/shfmt -d -i 2";
+              files = "\\.sh$";
+              excludes = ["^examples/vendored/"];
             };
 
             typos = {
