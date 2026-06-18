@@ -7,44 +7,11 @@
   buildGoTool,
   toolManifests,
 }: let
-  # Parse a Go version string into comparable components.
-  # Handles "1.22.0", "1.18", and "1.25rc1" formats.
-  parseGoVersion = v: let
-    parts = lib.splitString "." v;
-    major = lib.toInt (builtins.elemAt parts 0);
-    minorPart = builtins.elemAt parts 1;
-    hasRc = builtins.match "([0-9]+)rc([0-9]+)" minorPart;
-  in
-    if hasRc != null
-    then {
-      inherit major;
-      minor = lib.toInt (builtins.elemAt hasRc 0);
-      patch = 0;
-      rc = lib.toInt (builtins.elemAt hasRc 1);
-    }
-    else {
-      inherit major;
-      minor = lib.toInt minorPart;
-      patch =
-        if builtins.length parts > 2
-        then lib.toInt (builtins.elemAt parts 2)
-        else 0;
-      # Stable releases sort after all RCs
-      rc = 999999;
-    };
+  inherit (import ./version.nix {inherit lib;}) compareVersions;
 
   # Returns true if goVersion >= requiredVersion
-  isGoCompatible = goVersion: requiredVersion: let
-    go = parseGoVersion goVersion;
-    req = parseGoVersion requiredVersion;
-  in
-    if go.major != req.major
-    then go.major > req.major
-    else if go.minor != req.minor
-    then go.minor > req.minor
-    else if go.patch != req.patch
-    then go.patch > req.patch
-    else go.rc >= req.rc;
+  isGoCompatible = goVersion: requiredVersion:
+    compareVersions goVersion requiredVersion >= 0;
 in
   # go: the Go toolchain derivation (has .version attribute)
   go: let
