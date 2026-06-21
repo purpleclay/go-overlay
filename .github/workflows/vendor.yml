@@ -24,7 +24,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           dirs=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
-            | grep -E '(^|/)go\.(mod|sum)$' \
+            | awk '/(^|\/)go\.(mod|sum)$/{print}' \
             | xargs -r -n1 dirname | sort -u)
 
           {
