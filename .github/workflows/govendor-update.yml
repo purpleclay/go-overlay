@@ -3,7 +3,7 @@ on:
   workflow_call:
     inputs:
       working-directory:
-        description: "Working directory for govendor manifest generation"
+        description: "Working directory (or newline-separated list of directories) for govendor manifest generation"
         required: false
         type: string
         default: "."
@@ -45,13 +45,23 @@ jobs:
           passphrase: ${{ secrets.gpg-passphrase }}
 
       - name: Update govendor.toml
-        working-directory: ${{ inputs.working-directory }}
         env:
           CO_AUTHOR: ${{ inputs.co-author }}
+          DIRS: ${{ inputs.working-directory }}
         run: |
-          nix run github:purpleclay/go-overlay#govendor
+          while IFS= read -r dir; do
+            [ -z "$dir" ] && continue
+            echo "::group::govendor ($dir)"
+            (cd "$dir" && nix run github:purpleclay/go-overlay#govendor) || {
+              echo "::error::govendor failed for $dir"
+              exit 1
+            }
+            echo "::endgroup::"
 
-          if git diff --quiet govendor.toml; then
+            git add "$dir/govendor.toml"
+          done <<< "$DIRS"
+
+          if git diff --cached --quiet; then
             echo "No changes to govendor.toml"
             exit 0
           fi
@@ -60,6 +70,5 @@ jobs:
             CO_AUTHOR="$(git config user.name) <$(git config user.email)>"
           fi
 
-          git add govendor.toml
           git commit --amend --no-edit --trailer "Co-authored-by: $CO_AUTHOR"
           git push --force-with-lease
