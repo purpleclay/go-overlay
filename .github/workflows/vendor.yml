@@ -5,9 +5,36 @@ on:
     paths: ["**/go.mod", "**/go.sum"]
 
 jobs:
-  vendor:
+  detect:
     if: startsWith(github.head_ref, 'renovate/')
-    uses: purpleclay/go-overlay/.github/workflows/govendor-update.yml@main
+    runs-on: ubuntu-24.04
+    outputs:
+      dirs: ${{ steps.detect.outputs.dirs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed module directories
+        id: detect
+        run: |
+          dirs=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" \
+            | grep -E '(^|/)go\.(mod|sum)$' \
+            | xargs -r -n1 dirname | sort -u)
+
+          {
+            echo "dirs<<EOF"
+            echo "$dirs"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  vendor:
+    needs: detect
+    if: needs.detect.outputs.dirs != ''
+    uses: purpleclay/go-overlay/.github/workflows/govendor-update.yml@renovate/test-505-govendor-fix
+    with:
+      working-directory: ${{ needs.detect.outputs.dirs }}
     secrets:
       token: ${{ secrets.GH_NSV }}
       gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
