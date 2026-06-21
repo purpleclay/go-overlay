@@ -8,6 +8,8 @@ jobs:
   detect:
     if: startsWith(github.head_ref, 'renovate/')
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     outputs:
       dirs: ${{ steps.detect.outputs.dirs }}
     steps:
@@ -36,6 +38,8 @@ jobs:
   vendor:
     needs: detect
     if: needs.detect.outputs.dirs != ''
+    permissions:
+      contents: read
     uses: purpleclay/go-overlay/.github/workflows/govendor-update.yml@renovate/test-505-govendor-fix
     with:
       working-directory: ${{ needs.detect.outputs.dirs }}
