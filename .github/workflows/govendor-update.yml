@@ -53,7 +53,10 @@ jobs:
           while IFS= read -r dir; do
             [ -z "$dir" ] && continue
             echo "::group::govendor ($dir)"
-            (cd "$dir" && nix run github:purpleclay/go-overlay#govendor)
+            (cd "$dir" && nix run github:purpleclay/go-overlay#govendor) || {
+              echo "::error::govendor failed for $dir"
+              exit 1
+            }
             echo "::endgroup::"
 
             if ! git diff --quiet -- "$dir/govendor.toml"; then
