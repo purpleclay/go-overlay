@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"runtime"
 
@@ -24,8 +23,9 @@ func main() {
 		Platform:  runtime.GOOS + "/" + runtime.GOARCH,
 	}
 
+	// cli.Execute already renders the error to stderr via the configured
+	// error handler before returning it here.
 	if err := govendor.Execute(version); err != nil {
-		fmt.Println(err.Error())
 		os.Exit(1)
 	}
 }

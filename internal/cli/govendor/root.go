@@ -1,7 +1,9 @@
 package govendor
 
 import (
+	"errors"
 	"fmt"
+	"io"
 
 	"github.com/purpleclay/go-overlay/internal/resolve"
 	"github.com/purpleclay/go-overlay/internal/ui"
@@ -18,6 +20,7 @@ func Execute(version cli.VersionInfo) error {
 		workspace        bool
 		depth            int
 		includePlatforms []string
+		tableRendered    bool
 	)
 
 	cmd := &cobra.Command{
@@ -98,6 +101,7 @@ func Execute(version cli.VersionInfo) error {
 			v := vendor.NewVendor(resolver, opts...)
 			results, err := v.VendorFiles(cmd.Context())
 			if len(results) > 0 {
+				tableRendered = true
 				fmt.Fprintln(cmd.OutOrStdout(), ui.RenderResultsTable(results))
 			}
 			return err
@@ -111,8 +115,17 @@ func Execute(version cli.VersionInfo) error {
 	cmd.Flags().StringArrayVar(&includePlatforms, "include-platform", nil, "extend platform list for dependency resolution (e.g., freebsd/amd64)")
 	cmd.MarkFlagsMutuallyExclusive("recursive", "workspace")
 
-	return cli.Execute(cmd,
+	return cli.Execute(
+		cmd,
 		cli.WithVersionFlag(version),
 		cli.WithTheme(theme.PurpleClayCLI()),
+		cli.WithErrorHandler(func(w io.Writer, t cli.Theme, err error) {
+			// The results table already reports per-result failures; printing
+			// the generic sentinel underneath it adds nothing new.
+			if tableRendered && errors.Is(err, vendor.ErrVendorFailed) {
+				return
+			}
+			cli.DefaultErrorHandler(w, t, err)
+		}),
 	)
 }
