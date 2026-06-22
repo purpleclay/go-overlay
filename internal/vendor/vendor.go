@@ -84,7 +84,10 @@ func NewVendor(resolver Resolver, opts ...Option) *Vendor {
 	return v
 }
 
-var errVendorFailed = fmt.Errorf("vendor failed")
+// ErrVendorFailed indicates one or more results in the rendered table failed.
+// It carries no information beyond what the table already shows, so callers
+// that have rendered the results table may choose to suppress its message.
+var ErrVendorFailed = fmt.Errorf("vendor failed")
 
 // dependencySource is satisfied by *mod.GoModFile and *mod.GoWorkFile.
 // Type switches on this value are used to dispatch to type-specific behaviour.
@@ -134,7 +137,7 @@ func (v *Vendor) VendorFiles(ctx context.Context) ([]Result, error) {
 
 	for _, r := range results {
 		if r.Status.IsFailure() {
-			return results, errVendorFailed
+			return results, ErrVendorFailed
 		}
 	}
 
@@ -143,7 +146,7 @@ func (v *Vendor) VendorFiles(ctx context.Context) ([]Result, error) {
 
 func (v *Vendor) toResults(r Result) ([]Result, error) {
 	if r.Status.IsFailure() {
-		return []Result{r}, errVendorFailed
+		return []Result{r}, ErrVendorFailed
 	}
 	return []Result{r}, nil
 }
