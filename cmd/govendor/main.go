@@ -25,7 +25,7 @@ func main() {
 
 	// cli.Execute already renders the error to stderr via the configured
 	// error handler before returning it here.
-	if err := govendor.Execute(version); err != nil {
-		os.Exit(1)
+	if code, err := govendor.Execute(version, os.Args[1:]); err != nil {
+		os.Exit(code)
 	}
 }

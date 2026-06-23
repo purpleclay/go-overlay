@@ -100,6 +100,20 @@ This creates a `govendor.toml` with NAR hashes for all dependencies. Commit it t
 > [!IMPORTANT]
 > Re-run `govendor` whenever you add, remove, or upgrade a dependency. Use `govendor --check` in CI to catch drift before it reaches production.
 
+`govendor` exits with a distinct code depending on the outcome, so CI can tell drift apart from a hard failure:
+
+| Code | Meaning                                                     |
+| :--- | :---------------------------------------------------------- |
+| `0`  | all manifests up to date / generated                        |
+| `1`  | drift or missing manifest detected (`--check`)              |
+| `2`  | execution error (toolchain failure, parse error, bad flags) |
+
+A run across multiple paths reports the most severe code.
+
+> [!WARNING]
+> Automation that previously treated any non-zero exit as a single failure mode should 
+> now branch on `1` (drift/missing manifest) versus `2` (execution error).
+
 #### 4. Build
 
 Create a `default.nix` file to define your package:
