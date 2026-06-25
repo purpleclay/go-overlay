@@ -22,9 +22,11 @@ func detectVersion(page, ver string, includePrerelease bool) (string, error) {
 }
 
 // latestFromPage returns the highest Go version listed on the download page,
-// including release candidates and betas. The stable VERSION endpoint never
-// reports pre-releases, so a new minor's release candidate (e.g. 1.27rc1) is
-// only discoverable by scanning the download page directly.
+// selected by semantic order across stable releases, release candidates and
+// betas. The stable VERSION endpoint never reports pre-releases, so a new
+// minor's release candidate (e.g. 1.27rc1) is only discoverable by scanning
+// the download page directly. When no pre-release outranks the latest stable,
+// the stable version is returned.
 func latestFromPage(page, prefix string) (string, error) {
 	versions, err := listVersions(page, prefix)
 	if err != nil {
