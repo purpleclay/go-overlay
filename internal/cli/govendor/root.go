@@ -13,7 +13,41 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Execute(version cli.VersionInfo) error {
+// Exit code convention, matching gofmt / terraform fmt -check:
+//
+//	0: all manifests up to date / generated
+//	1: drift or missing manifest detected (--check)
+//	2: execution error (toolchain failure, parse error, bad flags)
+//
+// Mixed results report the most severe code.
+const (
+	exitOK    = 0
+	exitDrift = 1
+	exitError = 2
+)
+
+// resultsExitCode returns the most severe exit code implied by results.
+// Callers only invoke this when VendorFiles has already returned a non-nil
+// error, which it only does when at least one result is a failure — the
+// exitError fallback below guards that invariant rather than mislabelling an
+// unexpected all-success set as drift.
+func resultsExitCode(results []vendor.Result) int {
+	sawDrift := false
+	for _, r := range results {
+		if r.Status == vendor.StatusError {
+			return exitError
+		}
+		if r.Status == vendor.StatusDrift || r.Status == vendor.StatusMissing {
+			sawDrift = true
+		}
+	}
+	if sawDrift {
+		return exitDrift
+	}
+	return exitError
+}
+
+func Execute(version cli.VersionInfo, args []string) (int, error) {
 	var (
 		check            bool
 		recursive        bool
@@ -21,6 +55,7 @@ func Execute(version cli.VersionInfo) error {
 		depth            int
 		includePlatforms []string
 		tableRendered    bool
+		exitCode         int
 	)
 
 	cmd := &cobra.Command{
@@ -104,6 +139,9 @@ func Execute(version cli.VersionInfo) error {
 				tableRendered = true
 				fmt.Fprintln(cmd.OutOrStdout(), ui.RenderResultsTable(results))
 			}
+			if err != nil {
+				exitCode = resultsExitCode(results)
+			}
 			return err
 		},
 	}
@@ -114,8 +152,16 @@ func Execute(version cli.VersionInfo) error {
 	cmd.Flags().IntVarP(&depth, "depth", "d", 0, "limit directory traversal depth (0 = unlimited)")
 	cmd.Flags().StringArrayVar(&includePlatforms, "include-platform", nil, "extend platform list for dependency resolution (e.g., freebsd/amd64)")
 	cmd.MarkFlagsMutuallyExclusive("recursive", "workspace")
+	cmd.SetArgs(args)
 
-	return cli.Execute(
+	cli.ExitCodes(
+		cmd,
+		cli.ExitCode{Code: exitOK, Desc: "manifests up to date/generated"},
+		cli.ExitCode{Code: exitDrift, Desc: "drift or missing manifest detected (--check)"},
+		cli.ExitCode{Code: exitError, Desc: "execution error (toolchain failure, parse error, bad flags)"},
+	)
+
+	err := cli.Execute(
 		cmd,
 		cli.WithVersionFlag(version),
 		cli.WithTheme(theme.PurpleClayCLI()),
@@ -128,4 +174,14 @@ func Execute(version cli.VersionInfo) error {
 			cli.DefaultErrorHandler(w, t, err)
 		}),
 	)
+
+	// RunE may never set exitCode (e.g. cobra's own flag-parsing errors occur
+	// before RunE runs), or may exit early via a bare error return (e.g. bad
+	// flag combinations). Either way, an error with no severity already
+	// assigned is an execution error, not a drift signal.
+	if err != nil && exitCode == exitOK {
+		exitCode = exitError
+	}
+
+	return exitCode, err
 }
