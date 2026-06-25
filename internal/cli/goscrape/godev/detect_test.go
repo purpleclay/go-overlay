@@ -12,9 +12,20 @@ func TestDetectPatchVersion(t *testing.T) {
 	fd, err := os.ReadFile("testdata/index-20260215.html")
 	require.NoError(t, err)
 
-	version, err := detectVersion(string(fd), "1.25")
+	version, err := detectVersion(string(fd), "1.25", false)
 	require.NoError(t, err)
 	assert.Equal(t, "1.25.7", version)
+}
+
+func TestLatestFromPageIncludesPrerelease(t *testing.T) {
+	fd, err := os.ReadFile("testdata/index-20260215.html")
+	require.NoError(t, err)
+
+	// Scanning the page must use semantic ordering, not the lexicographic sort
+	// used for listing: 1.26.0 outranks every 1.25 patch and 1.26 candidate.
+	version, err := latestFromPage(string(fd), "")
+	require.NoError(t, err)
+	assert.Equal(t, "1.26.0", version)
 }
 
 func TestListVersions(t *testing.T) {

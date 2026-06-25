@@ -29,7 +29,12 @@ jobs:
           LATEST=$(nix run .#goscrape -- go-dev detect)
           PREV_MINOR="1.$(($(echo "$LATEST" | cut -d. -f2) - 1))"
           PREV=$(nix run .#goscrape -- go-dev detect "$PREV_MINOR")
-          echo "GO_VERSIONS=$LATEST $PREV" >> $GITHUB_ENV
+          # The stable VERSION endpoint never reports release candidates, so
+          # detect the latest pre-release separately to pick up a new minor's
+          # rc (e.g. 1.27rc1) before it reaches GA. Duplicates are de-duped by
+          # the existing manifest/PR checks below.
+          PRE=$(nix run .#goscrape -- go-dev detect --include-prerelease)
+          echo "GO_VERSIONS=$LATEST $PREV $PRE" >> $GITHUB_ENV
 
       - name: GPG Import
         uses: purpleclay/gpg-import-action@a39506c3eff9b02459e033e3551e556934f266fc # v0
