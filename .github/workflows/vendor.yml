@@ -40,7 +40,7 @@ jobs:
     if: needs.detect.outputs.dirs != ''
     permissions:
       contents: read
-    uses: purpleclay/go-overlay/.github/workflows/govendor-update.yml@d4dbfafe2569ca3e58c60b9f65993a872b6bee94 # main
+    uses: ./.github/workflows/govendor-update.yml
     with:
       working-directory: ${{ needs.detect.outputs.dirs }}
     secrets:
