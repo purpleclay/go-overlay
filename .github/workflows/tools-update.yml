@@ -130,4 +130,9 @@ jobs:
             --base main \
             --head "$branch"
 
-          gh pr merge --auto --squash "$branch"
+          # enablePullRequestAutoMerge only succeeds while something is still
+          # pending; if checks already completed by this point, the PR is
+          # already mergeable and --auto is rejected, so merge directly.
+          if ! gh pr merge --auto --squash "$branch"; then
+            gh pr merge --squash "$branch"
+          fi
