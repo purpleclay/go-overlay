@@ -244,10 +244,11 @@ in {
         inherit (vendorEnv) useSymlinks;
         vendorEnv = vendorEnv;
         version = manifest.tool.${pkg}.version;
+        members = workspaceMemberPaths;
       })
     (builtins.attrNames (manifest.tool or {}));
 
-    passthru = {inherit go vendorEnv workspaceConfig;};
+    passthru = {inherit go vendorEnv workspaceConfig hostTools;};
   in
     assert lib.versionAtLeast go.version "1.22"
     || throw ''

@@ -52,10 +52,32 @@ in {
     useSymlinks,
     GOWORK ? null, # "off" for buildGoApplication; null for workspace
     goWorkContent ? null, # generated go.work content for manifest-only workspaces
-  }:
+    members ? [], # workspace member paths (relative to src); [] for a single module
+  }: let
+    # go install builds entirely from go.mod/go.sum + vendor/ in -mod=vendor
+    # mode — it never touches the application's .go sources. Restricting src
+    # to just those files means editing application code doesn't change this
+    # derivation's input hash, so the tool only rebuilds when the dependency
+    # graph (go.mod/go.sum) actually changes.
+    toolSrc = lib.fileset.toSource {
+      root = src;
+      fileset = lib.fileset.unions (
+        [
+          (lib.fileset.maybeMissing (src + "/go.mod"))
+          (lib.fileset.maybeMissing (src + "/go.sum"))
+        ]
+        ++ lib.concatMap (m: [
+          (lib.fileset.maybeMissing (src + "/${m}/go.mod"))
+          (lib.fileset.maybeMissing (src + "/${m}/go.sum"))
+        ])
+        members
+      );
+    };
+  in
     stdenv.mkDerivation {
       pname = baseNameOf pkg;
-      inherit version src;
+      inherit version;
+      src = toolSrc;
 
       nativeBuildInputs = [go];
 

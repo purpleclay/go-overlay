@@ -57,6 +57,29 @@
       fi
     '';
 
+  # Recursively collects relative file paths under dir, e.g. ["go.mod" "app/go.sum"].
+  collectFiles = dir: prefix:
+    builtins.concatLists (
+      pkgs.lib.mapAttrsToList (
+        name: type:
+          if type == "directory"
+          then collectFiles (dir + "/${name}") "${prefix}${name}/"
+          else ["${prefix}${name}"]
+      ) (builtins.readDir dir)
+    );
+
+  # Asserts every host tool's own src contains exactly expectedFiles,
+  # regardless of whatever else exists in the application source
+  # (go-overlay#507): go install only ever needs go.mod/go.sum, so each host
+  # tool's src must be filtered down to just those rather than inheriting
+  # the application's full source tree. Checks every entry in hostTools, not
+  # just the first, since toolSrc filtering doesn't vary per tool.
+  assertHostToolSrcIsMinimal = name: drv: expectedFiles: let
+    expected = builtins.sort (a: b: a < b) expectedFiles;
+    actual = map (tool: builtins.sort (a: b: a < b) (collectFiles tool.src "")) drv.hostTools;
+  in
+    assertEq name (map (_: expected) drv.hostTools) actual;
+
   # Evaluates the shell expression produced by mkTestPackages and asserts its
   # output matches expected.
   testTestPackages = name: {
@@ -215,4 +238,50 @@ in {
       fi
       touch $out
     '';
+
+  # mkHostTool - a go.mod `tool` directive must produce a working host tool
+  # binary for both single-module and workspace builders (go-overlay#507).
+  # Regression coverage for decoupling the host tool derivation's src from
+  # the application's own source tree.
+  hostTool-application-has-binary = let
+    drv = pkgs.buildGoApplication {
+      pname = "host-tool-app";
+      version = "0.1.0";
+      src = ./fixtures/host-tool-app;
+      go = go-bin.fromGoMod ./fixtures/host-tool-app/go.mod;
+    };
+  in
+    testBinaryExists "hostTool-application-has-binary" (builtins.head drv.hostTools) "bin/stringer";
+
+  hostTool-workspace-has-binary = let
+    drv = pkgs.buildGoWorkspace {
+      pname = "host-tool-workspace";
+      version = "0.1.0";
+      src = ./fixtures/host-tool-workspace;
+      subPackages = ["app"];
+      go = go-bin.fromGoMod ./fixtures/host-tool-workspace/app/go.mod;
+    };
+  in
+    testBinaryExists "hostTool-workspace-has-binary" (builtins.head drv.hostTools) "bin/stringer";
+
+  hostTool-application-src-is-minimal = let
+    drv = pkgs.buildGoApplication {
+      pname = "host-tool-app";
+      version = "0.1.0";
+      src = ./fixtures/host-tool-app;
+      go = go-bin.fromGoMod ./fixtures/host-tool-app/go.mod;
+    };
+  in
+    assertHostToolSrcIsMinimal "hostTool-application-src-is-minimal" drv ["go.mod" "go.sum"];
+
+  hostTool-workspace-src-is-minimal = let
+    drv = pkgs.buildGoWorkspace {
+      pname = "host-tool-workspace";
+      version = "0.1.0";
+      src = ./fixtures/host-tool-workspace;
+      subPackages = ["app"];
+      go = go-bin.fromGoMod ./fixtures/host-tool-workspace/app/go.mod;
+    };
+  in
+    assertHostToolSrcIsMinimal "hostTool-workspace-src-is-minimal" drv ["app/go.mod" "app/go.sum"];
 }

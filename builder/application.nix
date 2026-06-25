@@ -93,7 +93,7 @@ in {
       })
     (builtins.attrNames (manifest.tool or {}));
 
-    passthru = {inherit go vendorEnv;};
+    passthru = {inherit go vendorEnv hostTools;};
   in
     stdenv.mkDerivation (
       builtins.removeAttrs attrs commonRemovedAttrs
