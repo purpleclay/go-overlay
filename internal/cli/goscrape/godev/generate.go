@@ -171,7 +171,7 @@ func newGenerateCmd() *cobra.Command {
 
 			var versions []string
 			if len(args) == 0 {
-				latestVersion, err := detectVersion(page, "")
+				latestVersion, err := detectVersion(page, "", false)
 				if err != nil {
 					return err
 				}
