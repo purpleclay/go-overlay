@@ -28,6 +28,19 @@ func TestLatestFromPageIncludesPrerelease(t *testing.T) {
 	assert.Equal(t, "1.26.0", version)
 }
 
+func TestLatestFromPagePrereleaseWins(t *testing.T) {
+	// A new minor's release candidate outranks the latest stable. This is the
+	// core motivation: the stable VERSION endpoint would only report 1.26.4.
+	const page = `<a class="download" href="/dl/go1.25.10.linux-amd64.tar.gz">go1.25.10</a>
+<a class="download" href="/dl/go1.26.4.linux-amd64.tar.gz">go1.26.4</a>
+<a class="download" href="/dl/go1.27rc1.linux-amd64.tar.gz">go1.27rc1</a>
+`
+
+	version, err := latestFromPage(page, "")
+	require.NoError(t, err)
+	assert.Equal(t, "1.27rc1", version)
+}
+
 func TestListVersions(t *testing.T) {
 	fd, err := os.ReadFile("testdata/index-20260215.html")
 	require.NoError(t, err)
