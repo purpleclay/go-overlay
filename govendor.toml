@@ -167,8 +167,8 @@ schema = 3
     go = "1.22.12"
     packages = ["github.com/purpleclay/chomp"]
   [mod."github.com/purpleclay/conker"]
-    version = "v0.4.1"
-    hash = "sha256-y4ppr+deSE1Q0D8+vqATYMbh3/bJQDHPc+0VEQGKfJk="
+    version = "v0.5.0"
+    hash = "sha256-+Yp0GrX3n4lEVH27g6pApznvwV2x4ffBf5ITq0xLBoY="
     go = "1.25.0"
     packages = ["github.com/purpleclay/conker/panics", "github.com/purpleclay/conker/pool"]
   [mod."github.com/purpleclay/x/cli"]
