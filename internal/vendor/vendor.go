@@ -206,7 +206,7 @@ func (v *Vendor) processSource(ctx context.Context, src dependencySource, displa
 		return resultOK(displayPath)
 	}
 
-	if err := os.WriteFile(vendorPath, newData, 0o644); err != nil {
+	if err := atomicWrite(vendorPath, newData); err != nil {
 		return resultError(displayPath, err)
 	}
 
