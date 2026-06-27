@@ -171,6 +171,9 @@ Not sure how to configure a specific feature? Each example is a self-contained, 
 | [wasm-build](examples/wasm-build/)                           | `mkVendorEnv` + `stdenv.mkDerivation`                  |
 | [nixpkgs-build-go-module](examples/nixpkgs-build-go-module/) | `buildGoModule.override` with go-overlay toolchain     |
 
+> [!TIP]
+> `oapi-codegen` and `sqlc-codegen` demonstrate the two ways to provide a build-time code generation tool — a `go.mod` `tool` directive versus `nativeBuildInputs`. See [`tool` directive vs `nativeBuildInputs`](docs/go-module-tools.md#tool-directive-vs-nativebuildinputs) for which to pick.
+
 Build or run any example directly:
 
 ```bash
