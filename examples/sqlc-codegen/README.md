@@ -19,6 +19,10 @@ Available categories: `build`, `tests`, `deploy`, `review`, `meeting`.
 ## The Nix bit
 
 ```nix
+{
+  pkgs,
+  go,
+}:
 pkgs.buildGoApplication {
   inherit go;
 

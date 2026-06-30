@@ -15,6 +15,10 @@ Then open [http://localhost:8080](http://localhost:8080) in your browser.
 ## The Nix bit
 
 ```nix
+{
+  pkgs,
+  go,
+}:
 pkgs.buildGoWorkspace {
   inherit go;
 

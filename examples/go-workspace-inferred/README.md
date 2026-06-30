@@ -15,6 +15,10 @@ Then open [http://localhost:8080](http://localhost:8080) in your browser.
 ## The Nix bit
 
 ```nix
+{
+  pkgs,
+  go,
+}:
 # There is no go.work in this source tree — buildGoWorkspace infers the workspace
 # structure from the govendor.toml manifest and generates go.work at build time.
 pkgs.buildGoWorkspace {

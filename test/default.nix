@@ -80,6 +80,19 @@
   in
     assertEq name (map (_: expected) drv.hostTools) actual;
 
+  # Asserts a host tool's drvPath is identical for two src values that
+  # differ only in files outside go.mod/go.sum. This is the property that
+  # actually matters for avoiding host tool rebuilds — assertHostToolSrcIsMinimal
+  # checks the resulting file set is correct, but doesn't catch a toolSrc
+  # construction that still embeds the full src as a derivation input
+  # (which keeps the file set minimal yet still busts the store path on
+  # every unrelated change — exactly the regression this guards against).
+  assertHostToolDrvPathStable = name: mkDrv: srcA: srcB: let
+    toolA = builtins.head (mkDrv srcA).hostTools;
+    toolB = builtins.head (mkDrv srcB).hostTools;
+  in
+    assertEq name toolA.drvPath toolB.drvPath;
+
   # Evaluates the shell expression produced by mkTestPackages and asserts its
   # output matches expected.
   testTestPackages = name: {
@@ -284,4 +297,63 @@ in {
     };
   in
     assertHostToolSrcIsMinimal "hostTool-workspace-src-is-minimal" drv ["app/go.mod" "app/go.sum"];
+
+  # A caller may pass an already-filtered src (e.g. their own
+  # lib.fileset.toSource call) rather than a raw path. The minimal-src
+  # extraction happens at build time precisely so it isn't limited to
+  # literal paths, so this must still produce a minimal src, not just avoid
+  # crashing (go-overlay#531).
+  hostTool-application-non-path-src-is-minimal = let
+    rawSrc = ./fixtures/host-tool-app;
+    filteredSrc = pkgs.lib.fileset.toSource {
+      root = rawSrc;
+      fileset = pkgs.lib.fileset.fromSource (pkgs.lib.sources.cleanSource rawSrc);
+    };
+    drv = pkgs.buildGoApplication {
+      pname = "host-tool-app";
+      version = "0.1.0";
+      src = filteredSrc;
+      go = go-bin.fromGoMod (rawSrc + "/go.mod");
+    };
+  in
+    assertHostToolSrcIsMinimal "hostTool-application-non-path-src-is-minimal" drv ["go.mod" "go.sum"];
+
+  hostTool-application-drvpath-stable-across-unrelated-changes = let
+    baseSrc = ./fixtures/host-tool-app;
+    touchedSrc =
+      pkgs.runCommand "host-tool-app-touched" {}
+      ''
+        cp -r ${baseSrc} $out
+        chmod -R u+w $out
+        echo "// unrelated change" >> $out/main.go
+      '';
+    mkDrv = src:
+      pkgs.buildGoApplication {
+        pname = "host-tool-app";
+        version = "0.1.0";
+        inherit src;
+        go = go-bin.fromGoMod (baseSrc + "/go.mod");
+      };
+  in
+    assertHostToolDrvPathStable "hostTool-application-drvpath-stable-across-unrelated-changes" mkDrv baseSrc touchedSrc;
+
+  hostTool-workspace-drvpath-stable-across-unrelated-changes = let
+    baseSrc = ./fixtures/host-tool-workspace;
+    touchedSrc =
+      pkgs.runCommand "host-tool-workspace-touched" {}
+      ''
+        cp -r ${baseSrc} $out
+        chmod -R u+w $out
+        echo "// unrelated change" >> $out/app/main.go
+      '';
+    mkDrv = src:
+      pkgs.buildGoWorkspace {
+        pname = "host-tool-workspace";
+        version = "0.1.0";
+        inherit src;
+        subPackages = ["app"];
+        go = go-bin.fromGoMod (baseSrc + "/app/go.mod");
+      };
+  in
+    assertHostToolDrvPathStable "hostTool-workspace-drvpath-stable-across-unrelated-changes" mkDrv baseSrc touchedSrc;
 }
