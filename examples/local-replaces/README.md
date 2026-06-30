@@ -19,9 +19,12 @@ nix run .#example-local-replaces
 ## The Nix bit
 
 ```nix
+{
+  pkgs,
+  go,
+}:
 pkgs.buildGoApplication {
   inherit go;
-
   pname = "local-replaces";
   version = "0.1.0";
   src = ./.;

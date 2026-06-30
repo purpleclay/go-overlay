@@ -20,6 +20,10 @@ curl http://localhost:8080/name
 ## The Nix bit
 
 ```nix
+{
+  pkgs,
+  go,
+}:
 pkgs.buildGoApplication {
   inherit go;
 

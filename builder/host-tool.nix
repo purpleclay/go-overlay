@@ -7,8 +7,9 @@
 {
   lib,
   stdenv,
+  runCommand,
 }: let
-  inherit (lib) escapeShellArg optionalString splitString;
+  inherit (lib) concatMapStringsSep escapeShellArg optionalString splitString;
 in {
   # Parse workspace member paths from a go.work file's content.
   # Handles both single-line (use ./path) and block (use (\n  ./path\n)) forms.
@@ -55,24 +56,44 @@ in {
     members ? [], # workspace member paths (relative to src); [] for a single module
   }: let
     # go install builds entirely from go.mod/go.sum + vendor/ in -mod=vendor
-    # mode — it never touches the application's .go sources. Restricting src
-    # to just those files means editing application code doesn't change this
-    # derivation's input hash, so the tool only rebuilds when the dependency
-    # graph (go.mod/go.sum) actually changes.
-    toolSrc = lib.fileset.toSource {
-      root = src;
-      fileset = lib.fileset.unions (
-        [
-          (lib.fileset.maybeMissing (src + "/go.mod"))
-          (lib.fileset.maybeMissing (src + "/go.sum"))
-        ]
-        ++ lib.concatMap (m: [
-          (lib.fileset.maybeMissing (src + "/${m}/go.mod"))
-          (lib.fileset.maybeMissing (src + "/${m}/go.sum"))
-        ])
-        members
-      );
-    };
+    # mode — it never touches the application's .go sources. Restricting
+    # toolSrc to just those files means editing application code doesn't
+    # change this derivation's input hash, so the tool only rebuilds when
+    # the dependency graph (go.mod/go.sum) actually changes.
+    #
+    # Each file's *content* is read at evaluation time — via readFile/
+    # pathExists, which transparently realise whatever src resolves to,
+    # whether that's a literal path, a derivation, or an already-filtered
+    # lib.fileset/lib.sources value — then re-wrapped with builtins.toFile,
+    # a store path that's a pure function of the file's bytes alone.
+    # toolSrc's own inputs are therefore these toFile paths, never src
+    # itself, so its hash never changes just because some unrelated part of
+    # src did, for any form src takes (go-overlay#531).
+    goModPaths = ["go.mod" "go.sum"] ++ lib.concatMap (m: ["${m}/go.mod" "${m}/go.sum"]) members;
+
+    toolFiles = builtins.filter (f: f != null) (
+      map (
+        p: let
+          fullPath = src + "/${p}";
+        in
+          if builtins.pathExists fullPath
+          then {
+            path = p;
+            file = builtins.toFile (baseNameOf p) (builtins.readFile fullPath);
+          }
+          else null
+      )
+      goModPaths
+    );
+
+    toolSrc = runCommand "${baseNameOf pkg}-tool-src" {} (
+      "mkdir -p $out\n"
+      + concatMapStringsSep "\n" (f: ''
+        mkdir -p "$out/$(dirname ${escapeShellArg f.path})"
+        cp ${f.file} "$out/${f.path}"
+      '')
+      toolFiles
+    );
   in
     stdenv.mkDerivation {
       pname = baseNameOf pkg;

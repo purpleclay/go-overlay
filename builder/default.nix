@@ -22,7 +22,7 @@
   vendorEnvModule = import ./vendor-env.nix {inherit lib runCommand fetchGoModule;};
   inherit (vendorEnvModule) mkVendorEnv mkModuleCopyCommands;
 
-  hostToolModule = import ./host-tool.nix {inherit lib stdenv;};
+  hostToolModule = import ./host-tool.nix {inherit lib stdenv runCommand;};
   inherit (hostToolModule) mkHostTool parseGoWorkModules;
 
   commonModule = import ./common.nix {inherit lib;};
