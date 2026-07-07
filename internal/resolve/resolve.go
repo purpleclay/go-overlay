@@ -20,12 +20,13 @@ import (
 // commands go through the Executor interface, making the resolver testable
 // with injected output.
 type Resolver struct {
-	exec Executor
+	exec   Executor
+	hasher Hasher
 }
 
 // New creates a Resolver with the given executor.
 func New(exec Executor) *Resolver {
-	return &Resolver{exec: exec}
+	return &Resolver{exec: exec, hasher: NARHasher{}}
 }
 
 // ValidatePlatforms checks that all given platform strings are supported by
@@ -62,7 +63,8 @@ func (r *Resolver) ValidatePlatforms(ctx context.Context, platforms []string) er
 }
 
 // ResolveModule resolves all dependencies for a single Go module.
-func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, platforms []string) ([]mod.ModuleConfig, error) {
+// existingMods is the parsed existing manifest's module map; pass nil for a cold run.
+func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, platforms []string, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
 	if platforms == nil {
 		platforms = mod.DefaultPlatforms()
 	}
@@ -77,7 +79,7 @@ func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, plat
 		return nil, err
 	}
 
-	modules, err := r.resolveRemoteModules(ctx, goMod.RemoteReplacements(), downloads, pkgsByMod)
+	modules, err := r.resolveRemoteModules(ctx, goMod.RemoteReplacements(), downloads, pkgsByMod, existingMods)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +100,8 @@ func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, plat
 // ResolveWorkspace resolves dependencies across all modules in a Go workspace.
 // It runs a single go mod download from the workspace root so Go's MVS applies
 // across all members, then gathers per-member package attribution with GOWORK=off.
-func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, platforms []string) ([]mod.ModuleConfig, error) {
+// existingMods is the parsed existing manifest's module map; pass nil for a cold run.
+func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, platforms []string, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
 	if platforms == nil {
 		platforms = mod.DefaultPlatforms()
 	}
@@ -148,7 +151,7 @@ func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile,
 	}
 	maps.Copy(remoteRepls, goWork.RemoteReplacements())
 
-	remoteDeps, err := r.resolveRemoteModules(ctx, remoteRepls, downloads, pkgsByMod)
+	remoteDeps, err := r.resolveRemoteModules(ctx, remoteRepls, downloads, pkgsByMod, existingMods)
 	if err != nil {
 		return nil, err
 	}
@@ -399,31 +402,66 @@ func (r *Resolver) downloadWorkspaceModules(ctx context.Context, goWork *mod.GoW
 	return ParseDownloadOutput(out)
 }
 
-func (r *Resolver) resolveRemoteModules(ctx context.Context, remoteReplacements map[string]mod.Replacement, downloads []ModuleDownload, pkgsByMod map[string][]string) ([]mod.ModuleConfig, error) {
+// goVersionFromMod best-effort reads the go directive from a downloaded
+// module's go.mod. Returns "" when the path is empty, unreadable, or unparsable.
+func goVersionFromMod(goModPath string) string {
+	if goModPath == "" {
+		return ""
+	}
+	data, err := os.ReadFile(goModPath)
+	if err != nil {
+		return ""
+	}
+	mf, err := modfile.Parse(goModPath, data, nil)
+	if err != nil || mf.Go == nil {
+		return ""
+	}
+	return mf.Go.Version
+}
+
+func (r *Resolver) resolveRemoteModules(ctx context.Context, remoteReplacements map[string]mod.Replacement, downloads []ModuleDownload, pkgsByMod map[string][]string, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
 	p := pool.NewWithResults[mod.ModuleConfig]().WithMaxGoroutines(8).WithContext(ctx)
 
 	for _, meta := range downloads {
 		p.Go(func(_ context.Context) (mod.ModuleConfig, error) {
-			hash, err := NARHash(meta.Dir)
-			if err != nil {
-				return mod.ModuleConfig{}, fmt.Errorf("failed to hash downloaded module %s@%s: %w", meta.Path, meta.Version, err)
-			}
-
-			var goVersion string
-			if meta.GoMod != "" {
-				if modData, err := os.ReadFile(meta.GoMod); err == nil {
-					if mf, err := modfile.Parse(meta.GoMod, modData, nil); err == nil && mf.Go != nil {
-						goVersion = mf.Go.Version
-					}
-				}
-			}
-
+			// Determine the manifest key and replacement path before any I/O.
 			path := meta.Path
 			var replacedPath string
 			if repl, ok := remoteReplacements[path]; ok {
 				path = repl.OldPath
 				replacedPath = meta.Path
 			}
+
+			// Remote (path, version) pairs are immutable under the checksum DB.
+			// Reuse hash and go version from the existing manifest when the
+			// (path, version, replacedPath) triple matches and the entry is remote.
+			if existingMods != nil {
+				if entry, ok := existingMods[path]; ok &&
+					entry.Version == meta.Version &&
+					entry.Local == "" &&
+					entry.Hash != "" &&
+					entry.ReplacedPath == replacedPath {
+					goVersion := entry.GoVersion
+					if goVersion == "" {
+						goVersion = goVersionFromMod(meta.GoMod)
+					}
+					return mod.ModuleConfig{
+						Path:         path,
+						Version:      meta.Version,
+						Packages:     pkgsByMod[path],
+						Hash:         entry.Hash,
+						GoVersion:    goVersion,
+						ReplacedPath: replacedPath,
+					}, nil
+				}
+			}
+
+			hash, err := r.hasher.Hash(meta.Dir)
+			if err != nil {
+				return mod.ModuleConfig{}, fmt.Errorf("failed to hash downloaded module %s@%s: %w", meta.Path, meta.Version, err)
+			}
+
+			goVersion := goVersionFromMod(meta.GoMod)
 
 			return mod.ModuleConfig{
 				Path:         path,

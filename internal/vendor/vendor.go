@@ -67,8 +67,8 @@ func WithIncludePlatforms(platforms []string) Option {
 // time. This keeps the vendor package free of process-execution concerns
 // and allows the orchestrator to be exercised against fake resolvers.
 type Resolver interface {
-	ResolveModule(ctx context.Context, goMod *mod.GoModFile, platforms []string) ([]mod.ModuleConfig, error)
-	ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, platforms []string) ([]mod.ModuleConfig, error)
+	ResolveModule(ctx context.Context, goMod *mod.GoModFile, platforms []string, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error)
+	ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, platforms []string, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error)
 }
 
 type Vendor struct {
@@ -162,6 +162,7 @@ func (v *Vendor) processSource(ctx context.Context, src dependencySource, displa
 
 	existingData, err := os.ReadFile(vendorPath)
 	extraPlatforms := v.opts.extraPlatforms
+	var existingMods map[string]mod.ModuleConfig
 
 	if os.IsNotExist(err) {
 		if v.opts.detectDrift {
@@ -180,10 +181,11 @@ func (v *Vendor) processSource(ctx context.Context, src dependencySource, displa
 		if len(extraPlatforms) == 0 {
 			extraPlatforms = existing.IncludePlatforms
 		}
+		existingMods = existing.Mod
 	}
 
 	platforms := append(mod.DefaultPlatforms(), extraPlatforms...)
-	deps, rawTools, excludes, err := v.resolveSource(ctx, src, platforms)
+	deps, rawTools, excludes, err := v.resolveSource(ctx, src, platforms, existingMods)
 	if err != nil {
 		return resultError(displayPath, err)
 	}
@@ -215,16 +217,16 @@ func (v *Vendor) processSource(ctx context.Context, src dependencySource, displa
 
 // resolveSource dispatches to the appropriate resolver based on the source
 // type and returns the raw inputs needed to build a manifest.
-func (v *Vendor) resolveSource(ctx context.Context, src dependencySource, platforms []string) (deps []mod.ModuleConfig, rawTools []string, excludes map[string][]string, err error) {
+func (v *Vendor) resolveSource(ctx context.Context, src dependencySource, platforms []string, existingMods map[string]mod.ModuleConfig) (deps []mod.ModuleConfig, rawTools []string, excludes map[string][]string, err error) {
 	switch s := src.(type) {
 	case *mod.GoModFile:
-		deps, err = v.resolver.ResolveModule(ctx, s, platforms)
+		deps, err = v.resolver.ResolveModule(ctx, s, platforms, existingMods)
 		rawTools = s.Tools
 		if len(s.Excludes) > 0 {
 			excludes = s.Excludes
 		}
 	case *mod.GoWorkFile:
-		deps, err = v.resolver.ResolveWorkspace(ctx, s, platforms)
+		deps, err = v.resolver.ResolveWorkspace(ctx, s, platforms, existingMods)
 		if err != nil {
 			return
 		}
