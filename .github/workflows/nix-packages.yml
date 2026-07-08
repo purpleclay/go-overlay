@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - govendor-resolution-performance
     paths:
       - "goscrape.nix"
       - "govendor.nix"
@@ -15,6 +16,7 @@ on:
   pull_request:
     branches:
       - main
+      - govendor-resolution-performance
     paths:
       - "goscrape.nix"
       - "govendor.nix"

@@ -3,12 +3,14 @@ on:
   push:
     branches:
       - main
+      - govendor-resolution-performance
     paths:
       - "**.go"
       - "go.mod"
   pull_request:
     branches:
       - main
+      - govendor-resolution-performance
     paths:
       - "**.go"
       - "go.mod"
