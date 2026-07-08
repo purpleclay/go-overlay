@@ -1,0 +1,7 @@
+# github.com/foo/bar v1.2.3
+## explicit; go 1.22
+github.com/foo/bar
+# github.com/foo/baz v1.0.0
+## explicit; go 1.21
+github.com/foo/baz
+# github.com/foo/bar => github.com/foo/fork v1.2.3

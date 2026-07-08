@@ -140,6 +140,29 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			// go mod vendor appends version-less "# path => replacement" summary
+			// lines after all module entries. The versioned entry for the same path
+			// must be kept; the trailing line must be silently dropped.
+			name:    "TrailerLineSkipped",
+			fixture: "testdata/trailer-skip.txt",
+			want: []modulestxt.Module{
+				{
+					Path:      "github.com/foo/bar",
+					Version:   "v1.2.3",
+					Explicit:  true,
+					GoVersion: "1.22",
+					Packages:  []string{"github.com/foo/bar"},
+				},
+				{
+					Path:      "github.com/foo/baz",
+					Version:   "v1.0.0",
+					Explicit:  true,
+					GoVersion: "1.21",
+					Packages:  []string{"github.com/foo/baz"},
+				},
+			},
+		},
+		{
 			name:    "GoVersionOnlyAnnotation",
 			fixture: "testdata/go-version-only.txt",
 			want: []modulestxt.Module{
