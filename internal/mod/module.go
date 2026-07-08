@@ -10,6 +10,7 @@ type ModuleConfig struct {
 	Packages     []string `toml:"packages,omitempty"`
 	ReplacedPath string   `toml:"replaced,omitempty"`
 	Local        string   `toml:"local,omitempty"`
+	Implicit     bool     `toml:"implicit,omitempty"`
 }
 
 // WorkspaceConfig holds Go workspace metadata recorded in the manifest. It is

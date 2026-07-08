@@ -18,13 +18,21 @@
       else if isRemoteReplace
       then "# ${goPackagePath} ${meta.version} => ${meta.replaced} ${meta.version}"
       else "# ${goPackagePath} ${meta.version}";
-    explicit =
-      if meta.go or "" != ""
-      then "## explicit; go ${meta.go}"
-      else "## explicit";
+    isImplicit = meta.implicit or false;
+    goVersion = meta.go or "";
+    annotation =
+      if !isImplicit && goVersion != ""
+      then "## explicit; go ${goVersion}"
+      else if !isImplicit
+      then "## explicit"
+      else if goVersion != ""
+      then "## go ${goVersion}"
+      else "";
     packages = concatMapStringsSep "\n" (p: p) (meta.packages or []);
   in
-    header + "\n" + explicit + optionalString (packages != "") ("\n" + packages);
+    header
+    + optionalString (annotation != "") ("\n" + annotation)
+    + optionalString (packages != "") ("\n" + packages);
 
   # Generate shell commands to copy fetched modules into $out directory.
   # Handles overlapping module paths by processing deepest paths first and
