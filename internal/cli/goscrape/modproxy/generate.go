@@ -185,7 +185,7 @@ func generateManifest(ctx context.Context, module, ver string, subPackages []str
 	// downloaded module source contains an in-tree vendor directory; without
 	// it, go list fails with incomplete vendored dependencies.
 	resolver := resolve.New(modEnvExecutor{baseEnv: []string{"GOFLAGS=-mod=mod"}})
-	deps, err := resolver.ResolveModule(ctx, goModFile, nixPlatforms)
+	deps, err := resolver.ResolveModule(ctx, goModFile, nixPlatforms, nil)
 	if err != nil {
 		return nil, err
 	}

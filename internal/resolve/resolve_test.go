@@ -6,12 +6,29 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/purpleclay/go-overlay/internal/mod"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// countingHasher counts Hash calls and returns a fixed or per-dir hash.
+// Safe for concurrent use by the goroutine pool in resolveRemoteModules.
+type countingHasher struct {
+	count atomic.Int64
+	// returned for every call; defaults to "sha256-"+dir
+	hash string
+}
+
+func (h *countingHasher) Hash(dir string) (string, error) {
+	h.count.Add(1)
+	if h.hash != "" {
+		return h.hash, nil
+	}
+	return "sha256-" + dir, nil
+}
 
 // fakeExecutor returns canned responses keyed by either the full command
 // string or the first two args (e.g. "go list", "go mod", "git ls-files").
@@ -101,7 +118,7 @@ github.com/mattn/go-isatty	github.com/mattn/go-isatty`,
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveModule(context.Background(), goMod, nil)
+	deps, err := r.ResolveModule(context.Background(), goMod, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 3)
 
@@ -147,7 +164,7 @@ replace example.com/localmod => ./localmod
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveModule(context.Background(), goMod, nil)
+	deps, err := r.ResolveModule(context.Background(), goMod, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 1)
 
@@ -185,7 +202,7 @@ replace gopkg.in/ini.v1 => github.com/go-ini/ini v1.67.0
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveModule(context.Background(), goMod, nil)
+	deps, err := r.ResolveModule(context.Background(), goMod, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 1)
 
@@ -244,7 +261,7 @@ github.com/mattn/go-isatty	github.com/mattn/go-isatty`,
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveWorkspace(context.Background(), goWork, nil)
+	deps, err := r.ResolveWorkspace(context.Background(), goWork, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 3)
 
@@ -289,11 +306,191 @@ go 1.25.4
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveWorkspace(context.Background(), goWork, nil)
+	deps, err := r.ResolveWorkspace(context.Background(), goWork, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 1)
 
 	assert.Equal(t, "github.com/purpleclay/example/core", deps[0].Path)
 	assert.Empty(t, deps[0].Hash)
 	assert.Empty(t, deps[0].Packages)
+}
+
+func TestResolveRemoteModulesHashReuse(t *testing.T) {
+	fooDownload := ModuleDownload{Path: "example.com/foo", Version: "v1.2.3", Dir: "/cache/foo"}
+	barDownload := ModuleDownload{Path: "example.com/bar", Version: "v2.0.0", Dir: "/cache/bar"}
+
+	fooExisting := mod.ModuleConfig{
+		Path:      "example.com/foo",
+		Version:   "v1.2.3",
+		Hash:      "sha256-cached-foo",
+		GoVersion: "1.22",
+	}
+	barExisting := mod.ModuleConfig{
+		Path:      "example.com/bar",
+		Version:   "v2.0.0",
+		Hash:      "sha256-cached-bar",
+		GoVersion: "1.23",
+	}
+
+	tests := []struct {
+		name          string
+		downloads     []ModuleDownload
+		existingMods  map[string]mod.ModuleConfig
+		remoteRepls   map[string]mod.Replacement // nil → derived from existingMods
+		wantHashCalls int64
+		wantHash      string
+		wantGoVersion string
+	}{
+		{
+			name:          "ReusesHashWhenVersionMatches",
+			downloads:     []ModuleDownload{fooDownload},
+			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": fooExisting},
+			wantHashCalls: 0,
+			wantHash:      "sha256-cached-foo",
+			wantGoVersion: "1.22",
+		},
+		{
+			name:          "HashesWhenVersionDiffers",
+			downloads:     []ModuleDownload{fooDownload},
+			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": {Path: "example.com/foo", Version: "v1.0.0", Hash: "sha256-old"}},
+			wantHashCalls: 1,
+		},
+		{
+			name:          "HashesNewModuleNotInExisting",
+			downloads:     []ModuleDownload{barDownload},
+			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": fooExisting},
+			wantHashCalls: 1,
+		},
+		{
+			name:          "HashesAllWhenExistingModsIsNil",
+			downloads:     []ModuleDownload{fooDownload, barDownload},
+			existingMods:  nil,
+			wantHashCalls: 2,
+		},
+		{
+			name:          "ReusesBothWhenAllMatch",
+			downloads:     []ModuleDownload{fooDownload, barDownload},
+			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": fooExisting, "example.com/bar": barExisting},
+			wantHashCalls: 0,
+			wantHash:      "sha256-cached-foo",
+			wantGoVersion: "1.22",
+		},
+		{
+			name:      "HashesWhenCachedHashIsEmpty",
+			downloads: []ModuleDownload{fooDownload},
+			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
+				Path: "example.com/foo", Version: "v1.2.3", Hash: "",
+			}},
+			wantHashCalls: 1,
+		},
+		{
+			name:      "NeverReusesLocalEntryEvenIfVersionMatches",
+			downloads: []ModuleDownload{fooDownload},
+			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
+				Path: "example.com/foo", Version: "v1.2.3", Hash: "sha256-local", Local: "./local/foo",
+			}},
+			wantHashCalls: 1,
+		},
+		{
+			name:      "ReusesRemoteReplaceEntryWhenReplacedPathMatches",
+			downloads: []ModuleDownload{{Path: "example.com/foo-fork", Version: "v1.2.3", Dir: "/cache/fork"}},
+			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
+				Path: "example.com/foo", Version: "v1.2.3",
+				Hash: "sha256-replace-cached", GoVersion: "1.22",
+				ReplacedPath: "example.com/foo-fork",
+			}},
+			wantHashCalls: 0,
+			wantHash:      "sha256-replace-cached",
+			wantGoVersion: "1.22",
+		},
+		{
+			// Cached entry has no GoVersion (e.g. schema 3 manifest). Hash is still
+			// reused, but GoVersion must be populated from the module's go.mod so the
+			// field is filled in on the next generation rather than staying empty.
+			name:      "PopulatesGoVersionFromGoModWhenCachedEntryHasNone",
+			downloads: []ModuleDownload{fooDownload},
+			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
+				Path: "example.com/foo", Version: "v1.2.3", Hash: "sha256-cached-foo",
+				// GoVersion deliberately absent, simulating a schema 3 manifest
+			}},
+			wantHashCalls: 0,
+			wantHash:      "sha256-cached-foo",
+			// fooDownload has no GoMod path, so GoVersion stays empty; a separate
+			// sub-case below uses testdata/module/go.mod to confirm the read path.
+		},
+		{
+			// Same as above but with a real go.mod path so GoVersion is actually read.
+			name: "PopulatesGoVersionFromGoModFileWhenCachedEntryHasNone",
+			downloads: []ModuleDownload{
+				{Path: "example.com/foo", Version: "v1.2.3", Dir: "/cache/foo", GoMod: "testdata/module/go.mod"},
+			},
+			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
+				Path: "example.com/foo", Version: "v1.2.3", Hash: "sha256-cached-foo",
+			}},
+			wantHashCalls: 0,
+			wantHash:      "sha256-cached-foo",
+			wantGoVersion: "1.26.0", // from testdata/module/go.mod
+		},
+		{
+			// The go.mod replace target changed (fork → fork2) since the manifest was
+			// cached. The download IS recognised as a replacement for example.com/foo
+			// (via explicit remoteRepls), but the cached ReplacedPath (foo-fork) no
+			// longer matches the new target (foo-fork2), so the hash must be recomputed.
+			name:      "HashesRemoteReplaceWhenReplacedPathChanged",
+			downloads: []ModuleDownload{{Path: "example.com/foo-fork2", Version: "v1.2.3", Dir: "/cache/fork2"}},
+			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
+				Path: "example.com/foo", Version: "v1.2.3",
+				Hash: "sha256-replace-cached", ReplacedPath: "example.com/foo-fork",
+			}},
+			remoteRepls: map[string]mod.Replacement{
+				"example.com/foo-fork2": {OldPath: "example.com/foo", NewPath: "example.com/foo-fork2"},
+			},
+			wantHashCalls: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hasher := &countingHasher{hash: "sha256-fresh"}
+			r := &Resolver{exec: &fakeExecutor{}, hasher: hasher}
+
+			remoteRepls := tt.remoteRepls
+			if remoteRepls == nil {
+				// Derive remoteRepls from existingMods for cases that don't need
+				// explicit control over the replacement mapping.
+				remoteRepls = make(map[string]mod.Replacement)
+				for _, entry := range tt.existingMods {
+					if entry.ReplacedPath != "" {
+						remoteRepls[entry.ReplacedPath] = mod.Replacement{
+							OldPath: entry.Path,
+							NewPath: entry.ReplacedPath,
+						}
+					}
+				}
+			}
+
+			deps, err := r.resolveRemoteModules(context.Background(), remoteRepls, tt.downloads, nil, tt.existingMods)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantHashCalls, hasher.count.Load(), "hasher call count")
+
+			if len(deps) > 0 {
+				if tt.wantHash != "" {
+					assert.Equal(t, tt.wantHash, deps[0].Hash, "deps[0].Hash")
+				}
+				if tt.wantGoVersion != "" {
+					assert.Equal(t, tt.wantGoVersion, deps[0].GoVersion, "deps[0].GoVersion")
+				}
+			}
+			// For multi-module cases, verify the second dep's cached values too.
+			if len(deps) > 1 && tt.existingMods != nil {
+				entry := tt.existingMods[deps[1].Path]
+				if entry.Hash != "" {
+					assert.Equal(t, entry.Hash, deps[1].Hash, "deps[1].Hash")
+				}
+				if entry.GoVersion != "" {
+					assert.Equal(t, entry.GoVersion, deps[1].GoVersion, "deps[1].GoVersion")
+				}
+			}
+		})
+	}
 }
