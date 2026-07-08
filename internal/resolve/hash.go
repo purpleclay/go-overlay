@@ -10,6 +10,18 @@ import (
 	"github.com/nix-community/go-nix/pkg/nar"
 )
 
+// Hasher computes the NAR hash of a directory. The interface allows tests to
+// inject a counting or deterministic implementation without hitting the real
+// filesystem hasher.
+type Hasher interface {
+	Hash(dir string) (string, error)
+}
+
+// NARHasher is the default Hasher that delegates to NARHash.
+type NARHasher struct{}
+
+func (NARHasher) Hash(dir string) (string, error) { return NARHash(dir) }
+
 // NARHash computes the NAR hash of a directory in SRI format.
 func NARHash(dir string) (string, error) {
 	h := sha256.New()

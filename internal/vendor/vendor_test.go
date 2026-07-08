@@ -61,7 +61,7 @@ func TestVendor(t *testing.T) {
 			if len(tt.includePlatforms) > 0 {
 				platforms = append(platforms, tt.includePlatforms...)
 			}
-			deps, err := resolver.ResolveModule(context.Background(), goMod, platforms)
+			deps, err := resolver.ResolveModule(context.Background(), goMod, platforms, nil)
 			require.NoError(t, err)
 
 			var tool mod.ToolConfig
@@ -132,7 +132,7 @@ func TestVendorWorkspace(t *testing.T) {
 			if len(tt.includePlatforms) > 0 {
 				platforms = append(platforms, tt.includePlatforms...)
 			}
-			deps, err := resolver.ResolveWorkspace(context.Background(), goWork, platforms)
+			deps, err := resolver.ResolveWorkspace(context.Background(), goWork, platforms, nil)
 			require.NoError(t, err)
 
 			members, err := goWork.ParseMembers()
@@ -188,11 +188,11 @@ type fakeResolver struct {
 	deps []mod.ModuleConfig
 }
 
-func (f *fakeResolver) ResolveModule(_ context.Context, _ *mod.GoModFile, _ []string) ([]mod.ModuleConfig, error) {
+func (f *fakeResolver) ResolveModule(_ context.Context, _ *mod.GoModFile, _ []string, _ map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
 	return f.deps, nil
 }
 
-func (f *fakeResolver) ResolveWorkspace(_ context.Context, _ *mod.GoWorkFile, _ []string) ([]mod.ModuleConfig, error) {
+func (f *fakeResolver) ResolveWorkspace(_ context.Context, _ *mod.GoWorkFile, _ []string, _ map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
 	return f.deps, nil
 }
 
