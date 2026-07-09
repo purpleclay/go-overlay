@@ -207,8 +207,8 @@ schema = 3
     go = "1.19"
     packages = ["github.com/xo/terminfo"]
   [mod."golang.org/x/mod"]
-    version = "v0.37.0"
-    hash = "sha256-dspScRv3KO4nytvjavhNO2b03P4UtiJQyWVGuEy9OUk="
+    version = "v0.38.0"
+    hash = "sha256-BpKfvsmb7ecEDvTBKx9ZHauxoWRkOAZCqg4BrHM2/S0="
     go = "1.25.0"
     packages = ["golang.org/x/mod/internal/lazyregexp", "golang.org/x/mod/modfile", "golang.org/x/mod/module", "golang.org/x/mod/semver"]
   [mod."golang.org/x/sync"]
