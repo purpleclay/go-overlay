@@ -37,6 +37,7 @@ type Replace struct {
 func Parse(r io.Reader) ([]Module, error) {
 	var modules []Module
 	var current *Module
+	seen := make(map[string]bool)
 
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
@@ -49,10 +50,20 @@ func Parse(r io.Reader) ([]Module, error) {
 		case strings.HasPrefix(line, "# "):
 			if current != nil {
 				modules = append(modules, *current)
+				seen[current.Path] = true
 			}
 			m, err := parseHeader(line[2:])
 			if err != nil {
 				return nil, err
+			}
+			// go mod vendor appends version-less "# path => replacement" trailer
+			// lines after all module entries to summarise replace directives. Skip
+			// them — the real versioned header for the same path was already parsed.
+			// Version-less entries with a NEW path (wildcard local replace headers)
+			// are kept, as are entries at a different version (MVS conflict rows).
+			if seen[m.Path] && m.Version == "" {
+				current = nil
+				continue
 			}
 			current = &m
 
