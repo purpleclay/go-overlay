@@ -81,10 +81,10 @@ in
   }
 ```
 
-## Updating dependencies
+## The govendor bit
 
-Because `main.go` uses the `//go:build js && wasm` constraint, `govendor` must be told to resolve packages for the WebAssembly target explicitly:
+`main.go` is gated on `//go:build js && wasm`, so the entire dependency graph only exists under that constraint. `govendor` resolves dependencies by running `go mod vendor` with `imports.AnyTags()`, which satisfies all build constraints simultaneously — wasm included — so the right packages are captured without any extra flags:
 
 ```shell
-govendor --include-platform js/wasm
+govendor
 ```

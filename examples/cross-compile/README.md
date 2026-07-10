@@ -61,14 +61,8 @@ example-cross-compile-windows = import ./cross-compile {inherit pkgs go; GOOS = 
 
 ## The govendor bit
 
-`fatih/color`, which pulls in `go-isatty` and `go-colorable` — both have platform-specific implementations for Windows. Running `govendor` with `--include-platform` extends dependency resolution beyond the host:
+`fatih/color`, which pulls in `go-isatty` and `go-colorable` — both have platform-specific implementations for Windows. `govendor` resolves dependencies by running `go mod vendor` with `imports.AnyTags()`, which satisfies every build constraint simultaneously, so all platforms are covered in a single pass without any extra flags:
 
 ```shell
-govendor --include-platform freebsd/amd64 --include-platform windows/amd64
-```
-
-The platforms are recorded in `govendor.toml` so the resolution is reproducible without re-running the flags:
-
-```toml
-include_platforms = ["freebsd/amd64", "windows/amd64"]
+govendor
 ```
