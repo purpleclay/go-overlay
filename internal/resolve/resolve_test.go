@@ -79,30 +79,6 @@ func writeTestFile(t *testing.T, dir, name, content string) string {
 	return path
 }
 
-func TestValidatePlatforms(t *testing.T) {
-	exec := &fakeExecutor{
-		responses: map[string]string{
-			"go tool dist list": "linux/amd64\nlinux/arm64\ndarwin/amd64\ndarwin/arm64\n",
-		},
-	}
-	r := New(exec)
-
-	require.NoError(t, r.ValidatePlatforms(context.Background(), []string{"linux/amd64", "darwin/arm64"}))
-}
-
-func TestValidatePlatformsRejectsUnsupportedPlatform(t *testing.T) {
-	exec := &fakeExecutor{
-		responses: map[string]string{
-			"go tool dist list": "linux/amd64\nlinux/arm64\ndarwin/amd64\ndarwin/arm64\n",
-		},
-	}
-	r := New(exec)
-
-	err := r.ValidatePlatforms(context.Background(), []string{"plan9/386"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "plan9/386")
-}
-
 func TestResolveModule(t *testing.T) {
 	dir := t.TempDir()
 	goModPath := writeTestFile(t, dir, "go.mod", `
@@ -141,7 +117,7 @@ github.com/mattn/go-isatty`,
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveModule(context.Background(), goMod, nil, nil)
+	deps, err := r.ResolveModule(context.Background(), goMod, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 3)
 
@@ -189,7 +165,7 @@ example.com/localmod`,
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveModule(context.Background(), goMod, nil, nil)
+	deps, err := r.ResolveModule(context.Background(), goMod, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 1)
 
@@ -230,7 +206,7 @@ gopkg.in/ini.v1`,
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveModule(context.Background(), goMod, nil, nil)
+	deps, err := r.ResolveModule(context.Background(), goMod, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 1)
 
@@ -296,7 +272,7 @@ github.com/mattn/go-isatty`,
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveWorkspace(context.Background(), goWork, nil, nil)
+	deps, err := r.ResolveWorkspace(context.Background(), goWork, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 3)
 
@@ -343,7 +319,7 @@ go 1.25.4
 	}
 
 	r := New(exec)
-	deps, err := r.ResolveWorkspace(context.Background(), goWork, nil, nil)
+	deps, err := r.ResolveWorkspace(context.Background(), goWork, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 1)
 

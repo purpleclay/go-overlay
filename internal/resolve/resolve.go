@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/purpleclay/conker/pool"
 	"github.com/purpleclay/go-overlay/internal/mod"
@@ -28,42 +27,9 @@ func New(exec Executor) *Resolver {
 	return &Resolver{exec: exec, hasher: NARHasher{}}
 }
 
-// ValidatePlatforms checks that all given platform strings are supported by
-// the current Go toolchain.
-func (r *Resolver) ValidatePlatforms(ctx context.Context, platforms []string) error {
-	if len(platforms) == 0 {
-		return nil
-	}
-
-	out, err := r.exec.Run(ctx, []string{"go", "tool", "dist", "list"}, ".", nil)
-	if err != nil {
-		return fmt.Errorf("failed to get supported platforms: %w", err)
-	}
-
-	supported := make(map[string]bool)
-	for line := range strings.SplitSeq(out, "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			supported[line] = true
-		}
-	}
-
-	var invalid []string
-	for _, p := range platforms {
-		if !supported[p] {
-			invalid = append(invalid, p)
-		}
-	}
-
-	if len(invalid) > 0 {
-		return fmt.Errorf("unsupported platform(s): %s", strings.Join(invalid, ", "))
-	}
-
-	return nil
-}
-
 // ResolveModule resolves all dependencies for a single Go module.
 // existingMods is the parsed existing manifest's module map; pass nil for a cold run.
-func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, _ []string, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
+func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
 	vendored, err := r.vendorModules(ctx, goMod.Dir, []string{"GOWORK=off"}, "mod")
 	if err != nil {
 		return nil, err
@@ -105,7 +71,7 @@ func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, _ []
 // A single go mod vendor pass from the workspace root replaces the per-platform
 // go list fan-out. existingMods is the parsed existing manifest's module map;
 // pass nil for a cold run.
-func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, _ []string, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
+func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
 	members, err := goWork.ParseMembers()
 	if err != nil {
 		return nil, err

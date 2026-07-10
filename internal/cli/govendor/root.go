@@ -96,8 +96,6 @@ func Execute(version cli.VersionInfo, args []string) (int, error) {
 		# Reverse scan from a submodule path for a workspace manifest (govendor.toml)
 		govendor --check --workspace theme/go.mod
 
-		# Include additional platforms for cross-compilation
-		govendor --include-platform=freebsd/amd64 --include-platform=openbsd/amd64
 		`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -124,15 +122,11 @@ func Execute(version cli.VersionInfo, args []string) (int, error) {
 				opts = append(opts, vendor.WithWorkspace())
 			}
 
-			resolver := resolve.New(resolve.OSExecutor{})
-
 			if len(includePlatforms) > 0 {
-				if err := resolver.ValidatePlatforms(cmd.Context(), includePlatforms); err != nil {
-					return err
-				}
-				opts = append(opts, vendor.WithIncludePlatforms(includePlatforms))
+				return fmt.Errorf("--include-platform is no longer supported: resolution is now platform-independent (AnyTags) and covers all platforms unconditionally; remove the flag and regenerate your manifest")
 			}
 
+			resolver := resolve.New(resolve.OSExecutor{})
 			v := vendor.NewVendor(resolver, opts...)
 			results, err := v.VendorFiles(cmd.Context())
 			if len(results) > 0 {
@@ -150,7 +144,7 @@ func Execute(version cli.VersionInfo, args []string) (int, error) {
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "recursively scan for go.mod files (ignores go.work)")
 	cmd.Flags().BoolVarP(&workspace, "workspace", "w", false, "reverse scan from a submodule path for a govendor.toml containing a workspace manifest (requires --check)")
 	cmd.Flags().IntVarP(&depth, "depth", "d", 0, "limit directory traversal depth (0 = unlimited)")
-	cmd.Flags().StringArrayVar(&includePlatforms, "include-platform", nil, "extend platform list for dependency resolution (e.g., freebsd/amd64)")
+	cmd.Flags().StringArrayVar(&includePlatforms, "include-platform", nil, "removed: resolution is now platform-independent, this flag will error if set")
 	cmd.MarkFlagsMutuallyExclusive("recursive", "workspace")
 	cmd.SetArgs(args)
 

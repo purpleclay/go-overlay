@@ -135,7 +135,6 @@ func TestWriteTo(t *testing.T) {
 				Packages:  []string{"github.com/BurntSushi/toml"},
 			},
 		},
-		[]string{"linux/amd64"},
 		&mod.WorkspaceConfig{
 			Go:        "1.25.4",
 			Toolchain: "go1.25.4",
@@ -153,7 +152,6 @@ func TestWriteTo(t *testing.T) {
 	parsed, err := vendor.Parse(buf.Bytes())
 	require.NoError(t, err)
 	assert.Equal(t, manifest.Schema, parsed.Schema)
-	assert.Equal(t, manifest.IncludePlatforms, parsed.IncludePlatforms)
 	assert.Equal(t, manifest.Workspace, parsed.Workspace)
 	assert.Equal(t, manifest.Tool, parsed.Tool)
 	assert.Equal(t, manifest.Mod, parsed.Mod)
