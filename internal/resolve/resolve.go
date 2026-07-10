@@ -158,7 +158,14 @@ func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile,
 		downloadVersions[dl.Path] = dl.Version
 	}
 	for modulePath, localDir := range workspaceMembers {
-		if version, isDep := downloadVersions[modulePath]; isDep {
+		if existing, found := allDeps[modulePath]; found {
+			// resolveLocalModules stores the path relative to the member's
+			// directory (e.g. "../mood" from server/). Correct it to the
+			// workspace-root-relative path so the builder can resolve it from
+			// the govendor.toml location.
+			existing.Local = localDir
+			allDeps[modulePath] = existing
+		} else if version, isDep := downloadVersions[modulePath]; isDep {
 			allDeps[modulePath] = mod.ModuleConfig{
 				Path:    modulePath,
 				Version: version,

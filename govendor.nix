@@ -5,7 +5,7 @@
   commit ? "unknown",
 }: let
   pname = "govendor";
-  version = "v1.2.0";
+  version = "v1.2.1";
   buildDate = "2026-07-10T00:00:00Z";
 in
   buildGoApplication {

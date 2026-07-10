@@ -15,7 +15,7 @@ schema = 4
     version = "v0.0.0"
     hash = "sha256-Y03kL/3Wbf+jeExlxs0BFnsbMHz/pArfoZgElV3m4Mg="
     go = "1.22"
-    local = "../shared"
+    local = "./shared"
   [mod."github.com/davecgh/go-spew"]
     version = "v1.1.1"
     hash = "sha256-nhzSUrE1fCkN0+RL04N4h8jWmRFPPPWbCuDc7Ss0akI="

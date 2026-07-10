@@ -16,10 +16,29 @@
   inherit (builtins) fromTOML readFile;
   inherit (lib) concatMapStringsSep escapeShellArg optionalString pathExists;
 
+  # Normalize a local path to the canonical workspace-root-relative ./X form.
+  # go.work use directives are always ./X; member go.mod replace directives
+  # may use ../X (one level up from the member directory). Both refer to the
+  # same path when the member sits immediately under the workspace root.
+  normalizeLocalPath = p:
+    if lib.hasPrefix "./" p
+    then p
+    else if lib.hasPrefix "../" p
+    then "./" + lib.removePrefix "../" p
+    else "./" + p;
+
   # Generate modules.txt entry for a workspace module.
-  # Workspace deps have no hash — they are resolved from the source tree.
+  # Workspace members appear as `# path version => ./member` in modules.txt,
+  # matching what `go work vendor` produces.
   mkWorkspaceDepEntry = modPath: meta: let
-    header = "# ${modPath} ${meta.version}";
+    localPath =
+      if meta ? local
+      then normalizeLocalPath meta.local
+      else null;
+    header =
+      if localPath != null
+      then "# ${modPath} ${meta.version} => ${localPath}"
+      else "# ${modPath} ${meta.version}";
     explicit =
       if meta.go or "" != ""
       then "## explicit; go ${meta.go}"
@@ -121,11 +140,13 @@ in {
     # from external local replaces in the manifest.
     workspaceMemberPaths = workspaceConfig.modules or [];
 
-    # Modules with hash are fetched; workspace deps have no hash;
-    # local replaces have a local field that is NOT a workspace member path.
+    # Workspace members — their local path appears in workspaceMemberPaths.
+    # Resolved from the source tree; their hash is used only for drift detection.
+    # Local replaces — local path is NOT a workspace member path; copied from src.
+    # Remote modules — no local field; fetched from the module proxy.
     remoteModules = lib.filterAttrs (_: meta: meta ? hash && meta.hash != "" && !(meta ? local)) allModules;
-    workspaceDepModules = lib.filterAttrs (_: meta: (!(meta ? hash) || meta.hash == "") && (!(meta ? local) || builtins.elem meta.local workspaceMemberPaths)) allModules;
-    localWorkspaceModules = lib.filterAttrs (_: meta: (meta ? local) && !(builtins.elem meta.local workspaceMemberPaths)) allModules;
+    workspaceDepModules = lib.filterAttrs (_: meta: (meta ? local) && builtins.elem (normalizeLocalPath meta.local) workspaceMemberPaths) allModules;
+    localWorkspaceModules = lib.filterAttrs (_: meta: (meta ? local) && !(builtins.elem (normalizeLocalPath meta.local) workspaceMemberPaths)) allModules;
 
     externalSources =
       builtins.mapAttrs (
