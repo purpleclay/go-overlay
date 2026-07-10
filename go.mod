@@ -15,7 +15,7 @@ require (
 	github.com/purpleclay/x/theme v0.4.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/mod v0.37.0
+	golang.org/x/mod v0.38.0
 	gotest.tools/v3 v3.5.2
 )
 
