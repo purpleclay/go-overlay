@@ -11,6 +11,7 @@
 
 - **100+ Go versions** — from 1.17 to latest, including release candidates, <u>updated within 4 hours</u> of a new release on [go.dev](https://go.dev/dl/).
 - **No stale `vendorHash`** — dependencies are pinned per-module with NAR hashes. Change a dep, re-run `govendor`. No hash archaeology.
+- **Every platform, one pass** — dependency resolution covers every `GOOS`/`GOARCH` and build tag automatically. Cross-compile anywhere without flags or manifest regeneration.
 - **Workspace support** — build multi-module `go.work` monorepos reproducibly. Neither `buildGoModule` nor gomod2nix can do this.
 - **Go tools pinned to your toolchain** — govulncheck, gopls, golangci-lint, and more, <u>updated within 6 hours</u> of release and version-locked to your selected Go version with a clear error if incompatible.
 - **Private modules** — standard Go authentication via `.netrc`, no custom infrastructure required.
@@ -258,9 +259,11 @@ nix build --impure
 
 ## Further Reading
 
+- [how-it-works.md](docs/how-it-works.md) — Why go-overlay builds on an unpatched toolchain, and how single-pass platform-independent resolution works.
 - [reference.md](docs/reference.md) — Full option tables for all builder functions, library functions, and traditional Nix installation.
-- [govendor-toml-v3.md](docs/govendor-toml-v3.md) — `govendor.toml` schema reference.
-- [migrating.md](docs/migrating.md) — Migration guides from gomod2nix and buildGoModule.
+- [govendor-toml-v4.md](docs/govendor-toml-v4.md) — `govendor.toml` schema reference.
+- [go-module-tools.md](docs/go-module-tools.md) — Go 1.24 `tool` directives: how they're built, and when to prefer `nativeBuildInputs`.
+- [migrating.md](docs/migrating.md) — Migration guides from gomod2nix, buildGoModule, and earlier manifest schemas.
 
 ---
 
