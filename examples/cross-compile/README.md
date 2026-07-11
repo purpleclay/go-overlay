@@ -43,7 +43,7 @@ pkgs.buildGoApplication {
   pname = "cross-compile";
   version = "0.1.0";
   src = ./.;
-  
+
   # CGO_ENABLED = "0" is required for cross-compilation. Pure-Go binaries need
   # no C cross-compiler, no sysroot — just the Go toolchain.
   CGO_ENABLED = "0";
@@ -61,8 +61,21 @@ example-cross-compile-windows = import ./cross-compile {inherit pkgs go; GOOS = 
 
 ## The govendor bit
 
-`fatih/color`, which pulls in `go-isatty` and `go-colorable` — both have platform-specific implementations for Windows. `govendor` resolves dependencies by running `go mod vendor` with `imports.AnyTags()`, which satisfies every build constraint simultaneously, so all platforms are covered in a single pass without any extra flags:
+This example depends on `fatih/color`, which pulls in `go-isatty` and `go-colorable` — both with platform-specific implementations for Windows. There is nothing to configure for this: dependency resolution is platform-independent, so a plain run covers every target this example builds for (and every one it doesn't):
 
 ```shell
 govendor
 ```
+
+The Windows-only packages appear in `govendor.toml` alongside everything else — no flags, nothing extra persisted:
+
+```toml
+[mod."github.com/mattn/go-colorable"]
+  version = "v0.1.13"
+  hash = "sha256-..."
+  go = "1.15"
+  packages = ["github.com/mattn/go-colorable"]
+```
+
+> [!NOTE]
+> Before schema v4, targets beyond the defaults required `govendor --include-platform freebsd/amd64 --include-platform windows/amd64`. That flag no longer exists — see the [migration guide](../../docs/migrating.md#from-schema-v3-to-v4).
