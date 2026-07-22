@@ -45,22 +45,28 @@
     ${concatMapStringsSep "\n" (
         goPackagePath: let
           modSrc = sources.${goPackagePath};
+
+          pkgPath = escapeShellArg goPackagePath;
         in
           if useSymlinks
           then ''
-            if [ -d "$out/${escapeShellArg goPackagePath}" ]; then
-                cp -rs --update=none ${modSrc}/* "$out/${escapeShellArg goPackagePath}/"
+            pkg_path=${pkgPath}
+
+            if [ -d "$out/$pkg_path" ]; then
+                cp -rs --update=none ${modSrc}/* "$out/$pkg_path/"
             else
-                mkdir -p "$out/$(dirname ${escapeShellArg goPackagePath})"
-                ln -s ${modSrc} "$out/${escapeShellArg goPackagePath}"
+                mkdir -p "$out/$(dirname "$pkg_path")"
+                ln -s ${modSrc} "$out/$pkg_path"
             fi
           ''
           else ''
-            if [ -d "$out/${escapeShellArg goPackagePath}" ]; then
-                cp -r --reflink=auto --update=none ${modSrc}/* "$out/${escapeShellArg goPackagePath}/"
+            pkg_path=${pkgPath}
+
+            if [ -d "$out/$pkg_path" ]; then
+                cp -r --reflink=auto --update=none ${modSrc}/* "$out/$pkg_path/"
             else
-                mkdir -p "$out/$(dirname ${escapeShellArg goPackagePath})"
-                cp -r --reflink=auto ${modSrc} "$out/${escapeShellArg goPackagePath}"
+                mkdir -p "$out/$(dirname "$pkg_path")"
+                cp -r --reflink=auto ${modSrc} "$out/$pkg_path"
             fi
           ''
       )

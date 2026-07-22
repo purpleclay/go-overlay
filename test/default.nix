@@ -356,4 +356,52 @@ in {
       };
   in
     assertHostToolDrvPathStable "hostTool-workspace-drvpath-stable-across-unrelated-changes" mkDrv baseSrc touchedSrc;
+
+  mkModuleCopyCommands-works-with-tildes-symlink = let
+    inherit (import ../builder/vendor-env.nix {inherit (pkgs) lib runCommand fetchGoModule;}) mkModuleCopyCommands;
+
+    sources = {
+      "git.sr.ht/~sbinet/gg" = ./fixtures/mkModuleCopyCommands-module;
+    };
+  in
+    pkgs.runCommand "test-mkModuleCopyCommands-works-with-tildes-symlink" {} (
+      ''
+        mkdir -p $out
+      ''
+      + mkModuleCopyCommands {
+        inherit sources;
+        useSymlinks = true;
+      }
+      + ''
+        if [ ! -L "$out/git.sr.ht/~sbinet/gg" ]; then
+          echo "Test 'mkModuleCopyCommands-works-with-tildes-symlink' failed: git.sr.ht/~sbinet/gg not found in $out"
+
+          exit 1
+        fi
+      ''
+    );
+
+  mkModuleCopyCommands-works-with-tildes-copy = let
+    inherit (import ../builder/vendor-env.nix {inherit (pkgs) lib runCommand fetchGoModule;}) mkModuleCopyCommands;
+
+    sources = {
+      "git.sr.ht/~sbinet/gg" = ./fixtures/mkModuleCopyCommands-module;
+    };
+  in
+    pkgs.runCommand "test-mkModuleCopyCommands-works-with-tildes-copy" {} (
+      ''
+        mkdir -p $out
+      ''
+      + mkModuleCopyCommands {
+        inherit sources;
+        useSymlinks = false;
+      }
+      + ''
+        if [ ! -d "$out/git.sr.ht/~sbinet/gg" ]; then
+          echo "Test 'mkModuleCopyCommands-works-with-tildes-copy' failed: git.sr.ht/~sbinet/gg not found in $out"
+
+          exit 1
+        fi
+      ''
+    );
 }
