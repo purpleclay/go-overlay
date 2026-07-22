@@ -7,7 +7,14 @@
   runCommand,
   fetchGoModule,
 }: let
-  inherit (lib) concatMapStringsSep escapeShellArg optionalString;
+  inherit (lib) replaceString concatMapStringsSep optionalString;
+
+  escapeShellArg = arg: let
+    string = toString arg;
+  in
+    if builtins.match "[[:alnum:],._+:@%~/-]+" string == null
+    then "'${replaceString "'" "'\\''" string}'"
+    else string;
 
   # Generate modules.txt entry for a single module
   mkModuleEntry = goPackagePath: meta: let
