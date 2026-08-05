@@ -3,6 +3,8 @@ package version
 import (
 	"fmt"
 	"strings"
+
+	"golang.org/x/mod/semver"
 )
 
 // Latest returns the last element from a sorted list of versions, which is
@@ -12,6 +14,18 @@ func Latest(versions []string, module string) (string, error) {
 		return "", fmt.Errorf("no versions found for module %s", module)
 	}
 	return versions[len(versions)-1], nil
+}
+
+// ExcludePrerelease returns versions with a semver prerelease component
+// (e.g. v1.1.0-rc1) filtered out.
+func ExcludePrerelease(versions []string) []string {
+	result := make([]string, 0, len(versions))
+	for _, v := range versions {
+		if semver.Prerelease(v) == "" {
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 // TrimGlob reports whether pattern ends with a wildcard (*) and returns the

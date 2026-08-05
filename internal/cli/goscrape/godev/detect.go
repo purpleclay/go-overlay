@@ -99,9 +99,9 @@ func newDetectCmd() *cobra.Command {
 		Short: "Detect the latest Go release or list all available versions",
 		Long: `
 		Scrapes the Golang website (https://go.dev/dl/) to detect Go versions.
-		By default, returns the latest version. Use --all to list all available
-		versions. Optionally provide a version prefix to filter results to a
-		specific release line.
+		By default, returns the latest stable version, excluding prereleases.
+		Use --all to list all available versions. Optionally provide a version
+		prefix to filter results to a specific release line.
 		`,
 		Example: `
 		# Detect the latest Go version

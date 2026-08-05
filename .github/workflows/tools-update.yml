@@ -69,7 +69,7 @@ jobs:
       - name: Detect Latest Version
         id: detect
         run: |
-          version=$(nix run .#goscrape -- mod-proxy detect ${{ matrix.tool.module }})
+          version=$(nix run .#goscrape -- mod-proxy detect ${{ matrix.tool.module }} --include-prerelease)
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Check and Generate Manifest
