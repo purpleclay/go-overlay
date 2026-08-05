@@ -10,8 +10,9 @@ import (
 
 func newDetectCmd() *cobra.Command {
 	var (
-		prefix string
-		all    bool
+		prefix            string
+		all               bool
+		includePrerelease bool
 	)
 
 	cmd := &cobra.Command{
@@ -19,13 +20,16 @@ func newDetectCmd() *cobra.Command {
 		Short: "Detect the latest version of a Go module from the module proxy",
 		Long: `
 		Queries the Go module proxy (https://proxy.golang.org) and detects versions
-		of the given module. By default, returns the latest semver-tagged version.
-		Use --all to list all available versions. An optional prefix flag can restrict
-		results to a specific version line.
+		of the given module. By default, returns the latest semver-tagged version,
+		excluding prereleases. Use --all to list all available versions. An optional
+		prefix flag can restrict results to a specific version line.
 		`,
 		Example: `
 		# Detect the latest version of govulncheck
 		goscrape mod-proxy detect golang.org/x/vuln
+
+		# Detect the latest version, including prereleases
+		goscrape mod-proxy detect golang.org/x/vuln --include-prerelease
 
 		# Detect the latest 1.0.x version
 		goscrape mod-proxy detect golang.org/x/vuln --prefix 1.0
@@ -52,6 +56,10 @@ func newDetectCmd() *cobra.Command {
 				return nil
 			}
 
+			if !includePrerelease {
+				versions = version.ExcludePrerelease(versions)
+			}
+
 			latest, err := version.Latest(versions, args[0])
 			if err != nil {
 				return err
@@ -64,5 +72,7 @@ func newDetectCmd() *cobra.Command {
 
 	cmd.Flags().StringVarP(&prefix, "prefix", "p", "", "filter versions by prefix (e.g. 1.1)")
 	cmd.Flags().BoolVar(&all, "all", false, "list all available versions instead of just the latest")
+	cmd.Flags().BoolVar(&includePrerelease, "include-prerelease", false,
+		"include prerelease versions when detecting the latest version")
 	return cmd
 }

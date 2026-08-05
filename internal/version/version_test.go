@@ -20,6 +20,20 @@ func TestLatestNoVersions(t *testing.T) {
 	require.EqualError(t, err, "no versions found for module golang.org/x/vuln")
 }
 
+func TestExcludePrerelease(t *testing.T) {
+	versions := []string{"v1.0.0", "v1.1.0-rc1", "v1.1.0", "v2.0.0-beta.1"}
+
+	got := ExcludePrerelease(versions)
+	assert.Equal(t, []string{"v1.0.0", "v1.1.0"}, got)
+}
+
+func TestExcludePrereleaseNoPrereleases(t *testing.T) {
+	versions := []string{"v1.0.0", "v1.1.0"}
+
+	got := ExcludePrerelease(versions)
+	assert.Equal(t, versions, got)
+}
+
 func TestTrimGlob(t *testing.T) {
 	prefix, ok := TrimGlob("v1.1*")
 	assert.True(t, ok)
