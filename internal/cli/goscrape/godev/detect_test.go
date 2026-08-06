@@ -17,6 +17,36 @@ func TestDetectPatchVersion(t *testing.T) {
 	assert.Equal(t, "1.25.7", version)
 }
 
+func TestDetectPrefixExcludesPrereleaseByDefault(t *testing.T) {
+	fd, err := os.ReadFile("testdata/index-20260806.html")
+	require.NoError(t, err)
+
+	// 1.27 exists only as release candidates (1.27rc1, 1.27rc2) at the time
+	// this fixture was captured, with no stable 1.27.0 yet. Without
+	// --include-prerelease, detecting against that prefix must not silently
+	// return a release candidate.
+	_, err = detectVersion(string(fd), "1.27", false)
+	require.Error(t, err)
+}
+
+func TestDetectPrefixIncludesPrereleaseWhenRequested(t *testing.T) {
+	fd, err := os.ReadFile("testdata/index-20260806.html")
+	require.NoError(t, err)
+
+	version, err := detectVersion(string(fd), "1.27", true)
+	require.NoError(t, err)
+	assert.Equal(t, "1.27rc2", version)
+}
+
+func TestDetectPrefixStillPrefersStableWhenBothExist(t *testing.T) {
+	fd, err := os.ReadFile("testdata/index-20260806.html")
+	require.NoError(t, err)
+
+	version, err := detectVersion(string(fd), "1.26", false)
+	require.NoError(t, err)
+	assert.Equal(t, "1.26.5", version)
+}
+
 func TestLatestFromPageIncludesPrerelease(t *testing.T) {
 	fd, err := os.ReadFile("testdata/index-20260215.html")
 	require.NoError(t, err)

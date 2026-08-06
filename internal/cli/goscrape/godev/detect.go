@@ -11,14 +11,15 @@ import (
 )
 
 func detectVersion(page, ver string, includePrerelease bool) (string, error) {
+	if includePrerelease {
+		return latestFromPage(page, ver)
+	}
+
 	if ver == "" {
-		if includePrerelease {
-			return latestFromPage(page, "")
-		}
 		return scrape.FetchLatestVersion()
 	}
 
-	return parseVersion(page, ver)
+	return latestStableFromPage(page, ver)
 }
 
 // latestFromPage returns the highest Go version listed on the download page,
@@ -45,18 +46,32 @@ func latestFromPage(page, prefix string) (string, error) {
 	return latest, nil
 }
 
-func parseVersion(page, ver string) (string, error) {
-	_, ext, err := scrape.Href(ver)(page)
+// latestStableFromPage returns the highest stable Go version on the download
+// page matching prefix, excluding release candidates and betas.
+func latestStableFromPage(page, prefix string) (string, error) {
+	versions, err := listVersions(page, prefix)
 	if err != nil {
-		return "", fmt.Errorf("version %s not found on https://go.dev/dl/", ver)
+		return "", err
 	}
 
-	var rel string
-	_, rel, err = scrape.GoVersion()(strings.TrimPrefix(ext, "/dl/"))
-	if err != nil {
-		return "", fmt.Errorf("failed to parse version from download link: %w", err)
+	stable := make([]string, 0, len(versions))
+	for _, v := range versions {
+		if !strings.Contains(v, "rc") && !strings.Contains(v, "beta") {
+			stable = append(stable, v)
+		}
 	}
-	return rel, nil
+	if len(stable) == 0 {
+		return "", fmt.Errorf("no stable version matching %s found on https://go.dev/dl/ "+
+			"(use --include-prerelease to include release candidates and betas)", prefix)
+	}
+
+	latest := stable[0]
+	for _, v := range stable[1:] {
+		if version.Compare("go"+v, "go"+latest) > 0 {
+			latest = v
+		}
+	}
+	return latest, nil
 }
 
 func listVersions(page, prefix string) ([]string, error) {
