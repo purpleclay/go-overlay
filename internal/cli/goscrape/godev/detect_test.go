@@ -80,6 +80,20 @@ func TestListVersions(t *testing.T) {
 	assert.NotEmpty(t, versions)
 }
 
+func TestListVersionsDistinguishesBetaFromStable(t *testing.T) {
+	fd, err := os.ReadFile("testdata/index-20260806.html")
+	require.NoError(t, err)
+
+	// go1.19beta1 predates the current stable go1.19 release line. Both must
+	// be listed as their own distinct versions rather than merging into a
+	// single "1.19" entry.
+	versions, err := listVersions(string(fd), "1.19")
+	require.NoError(t, err)
+
+	assert.Contains(t, versions, "1.19beta1")
+	assert.Contains(t, versions, "1.19")
+}
+
 func TestListVersionsWithPrefix1_25(t *testing.T) {
 	fd, err := os.ReadFile("testdata/index-20260215.html")
 	require.NoError(t, err)

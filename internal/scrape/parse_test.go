@@ -30,6 +30,24 @@ func TestGoVersionCombinator(t *testing.T) {
 			input:    "go1.25rc1",
 			expected: "1.25rc1",
 		},
+		{
+			name:     "Beta",
+			input:    "go1.19beta1",
+			expected: "1.19beta1",
+		},
+		{
+			name:     "BetaWithDownloadFilename",
+			input:    "go1.19beta1.linux-amd64.tar.gz",
+			expected: "1.19beta1",
+		},
+		{
+			// Regression guard: AIX is a real, currently-supported target
+			// whose name starts with 'a'. Any fix for beta parsing must not
+			// widen the character class in a way that eats into it.
+			name:     "PatchVersionWithAIXTarget",
+			input:    "go1.21.4.aix-ppc64.tar.gz",
+			expected: "1.21.4",
+		},
 	}
 
 	for _, tt := range tests {
@@ -68,6 +86,51 @@ Download
 	_, result, err := Href("1.21.4")(html)
 	require.NoError(t, err)
 	require.Equal(t, "/dl/go1.21.4.linux-amd64.tar.gz", result)
+}
+
+func TestHrefCombinatorMatchesBetaExactly(t *testing.T) {
+	html := `<div>
+<a class="download" href="/dl/go1.19beta1.linux-amd64.tar.gz">
+Download
+</a>
+</div>`
+
+	_, result, err := Href("1.19beta1")(html)
+	require.NoError(t, err)
+	require.Equal(t, "/dl/go1.19beta1.linux-amd64.tar.gz", result)
+}
+
+func TestHrefCombinatorDoesNotMatchBetaTenWhenRequestingBetaOne(t *testing.T) {
+	// beta1 is a string-prefix of beta10, so a naive prefix match on
+	// "go1.19beta1" would incorrectly match the beta10 entry if it appears
+	// first on the page.
+	html := `<div>
+<a class="download" href="/dl/go1.19beta10.linux-amd64.tar.gz">
+Download
+</a>
+<a class="download" href="/dl/go1.19beta1.linux-amd64.tar.gz">
+Download
+</a>
+</div>`
+
+	_, result, err := Href("1.19beta1")(html)
+	require.NoError(t, err)
+	require.Equal(t, "/dl/go1.19beta1.linux-amd64.tar.gz", result)
+}
+
+func TestHrefCombinatorDoesNotMatchRcTenWhenRequestingRcOne(t *testing.T) {
+	html := `<div>
+<a class="download" href="/dl/go1.25rc10.linux-amd64.tar.gz">
+Download
+</a>
+<a class="download" href="/dl/go1.25rc1.linux-amd64.tar.gz">
+Download
+</a>
+</div>`
+
+	_, result, err := Href("1.25rc1")(html)
+	require.NoError(t, err)
+	require.Equal(t, "/dl/go1.25rc1.linux-amd64.tar.gz", result)
 }
 
 func TestHrefCombinatorVersionMissing(t *testing.T) {

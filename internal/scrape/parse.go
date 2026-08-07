@@ -7,14 +7,25 @@ import (
 	"github.com/purpleclay/chomp"
 )
 
+// prereleaseTag matches an optional "rc" or "beta" pre-release suffix
+// followed by its number (e.g. "rc1", "beta2"). Matched as a literal token
+// rather than folding its letters into a character class, since a class
+// containing 'a' would also match the start of "aix" - a real target OS
+// name that immediately follows the version in scraped download links
+// (e.g. "go1.21.4.aix-ppc64.tar.gz").
+var prereleaseTag = chomp.Opt(chomp.Recognize(chomp.Pair(
+	chomp.First(chomp.Tag("rc"), chomp.Tag("beta")),
+	chomp.Any("1234567890"),
+)))
+
 func GoVersion() chomp.Combinator[string] {
 	return func(s string) (string, string, error) {
-		rem, rel, err := chomp.All(chomp.Tag("go"), chomp.Any(".1234567890rc"))(s)
+		rem, rel, err := chomp.All(chomp.Tag("go"), chomp.Any(".1234567890"), prereleaseTag)(s)
 		if err != nil {
 			return rem, "", err
 		}
 
-		return rem, strings.TrimSuffix(rel[1], "."), nil
+		return rem, strings.TrimSuffix(rel[1]+rel[2], "."), nil
 	}
 }
 
@@ -41,9 +52,15 @@ func Href(version string) chomp.Combinator[string] {
 			normalizedVersion = "go" + normalizedVersion
 		}
 
+		// An exact rc/beta version (e.g. "go1.19beta1") or a full patch
+		// version (e.g. "go1.21.4") needs a trailing "." to avoid matching a
+		// longer version that shares the same prefix (go1.19beta1 would
+		// otherwise also match go1.19beta10, and go1.21.4 would match
+		// go1.21.40). A bare minor prefix (e.g. "go1.19") must not get one,
+		// since listVersions relies on matching every version under it.
+		isExactPrerelease := strings.Contains(normalizedVersion, "rc") || strings.Contains(normalizedVersion, "beta")
 		hrefVersion := normalizedVersion
-		if !strings.Contains(normalizedVersion, "rc") && !strings.Contains(normalizedVersion, "beta") &&
-			strings.Count(normalizedVersion, ".") >= 2 {
+		if isExactPrerelease || strings.Count(normalizedVersion, ".") >= 2 {
 			hrefVersion = normalizedVersion + "."
 		}
 
