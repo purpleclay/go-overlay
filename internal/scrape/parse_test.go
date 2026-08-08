@@ -133,6 +133,35 @@ Download
 	require.Equal(t, "/dl/go1.25rc1.linux-amd64.tar.gz", result)
 }
 
+func TestHrefCombinatorMatchesBareBetaPrefix(t *testing.T) {
+	// "1.19beta" (no trailing digit) is a legitimate partial prefix used by
+	// listVersions to enumerate every beta of 1.19 - it must not be treated
+	// as an exact version and get a disambiguating trailing dot appended,
+	// since that would match nothing ("go1.19beta." vs the real
+	// "go1.19beta1...").
+	html := `<div>
+<a class="download" href="/dl/go1.19beta1.linux-amd64.tar.gz">
+Download
+</a>
+</div>`
+
+	_, result, err := Href("1.19beta")(html)
+	require.NoError(t, err)
+	require.Equal(t, "/dl/go1.19beta1.linux-amd64.tar.gz", result)
+}
+
+func TestHrefCombinatorMatchesBareRcPrefix(t *testing.T) {
+	html := `<div>
+<a class="download" href="/dl/go1.25rc1.linux-amd64.tar.gz">
+Download
+</a>
+</div>`
+
+	_, result, err := Href("1.25rc")(html)
+	require.NoError(t, err)
+	require.Equal(t, "/dl/go1.25rc1.linux-amd64.tar.gz", result)
+}
+
 func TestHrefCombinatorVersionMissing(t *testing.T) {
 	html := `<div>
 <a class="download" href="/dl/go1.21.4.linux-amd64.tar.gz">
