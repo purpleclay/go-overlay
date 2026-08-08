@@ -4,6 +4,9 @@
   # Direct access to tool-manifests internals for ordering assertions
   toolManifests = import ../lib/tool-manifests.nix {lib = pkgs.lib;};
 
+  # Direct access to version parsing/comparison internals
+  versionLib = import ../lib/version.nix {lib = pkgs.lib;};
+
   # Direct access to the testPackages shell-expression builder
   inherit (import ../builder/test-packages.nix {inherit (pkgs) lib;}) mkTestPackages;
 
@@ -43,6 +46,19 @@
         echo "Test '${name}' failed"
         echo "Expected: ${builtins.toJSON expected}"
         echo "Actual: ${builtins.toJSON actual}"
+        exit 1
+      '';
+
+  # Asserts that evaluating expr throws, rather than silently producing a
+  # value (e.g. a malformed version string that should be rejected).
+  assertThrows = name: expr: let
+    result = builtins.tryEval expr;
+  in
+    if !result.success
+    then pkgs.runCommand "test-${name}-pass" {} "touch $out"
+    else
+      pkgs.runCommand "test-${name}-fail" {} ''
+        echo "Test '${name}' failed: expected an error but evaluation succeeded"
         exit 1
       '';
 
@@ -135,11 +151,73 @@ in {
   hasVersion-partial-fails = assertEq "hasVersion-partial-fails" false (go-bin.hasVersion "1.21");
   hasVersion-nonexistent = assertEq "hasVersion-nonexistent" false (go-bin.hasVersion "1.99.0");
   hasVersion-rc = assertEq "hasVersion-rc" true (go-bin.hasVersion "1.25rc1");
+  hasVersion-beta = assertEq "hasVersion-beta" true (go-bin.hasVersion "1.19beta1");
 
   # isDeprecated
   isDeprecated-old = assertEq "isDeprecated-old" true (go-bin.isDeprecated "1.17.0");
   isDeprecated-rc-not-deprecated = assertEq "isDeprecated-rc-not-deprecated" false (go-bin.isDeprecated "1.25rc1");
   isDeprecated-latest-stable = assertEq "isDeprecated-latest-stable" false (go-bin.isDeprecated go-bin.latestStable.version);
+  # A beta of an EOL minor line is deprecated just like its stable sibling -
+  # unlike rc, which is exempt only because it's always for the current line.
+  isDeprecated-beta-of-eol-minor = assertEq "isDeprecated-beta-of-eol-minor" true (go-bin.isDeprecated "1.19beta1");
+
+  # latestStable must never resolve to a beta, mirroring latestStable-not-rc
+  latestStable-not-beta = assertEq "latestStable-not-beta" null (builtins.match ".*beta[0-9]+" go-bin.latestStable.version);
+
+  # version parsing/comparison - beta ordering (go-overlay#576)
+  version-parses-beta = assertEq "version-parses-beta" {
+    major = 1;
+    minor = 19;
+    patch = 0;
+    stage = 0;
+    counter = 1;
+  } (versionLib.parseVersion "1.19beta1");
+
+  version-beta-sorts-below-rc =
+    assertEq "version-beta-sorts-below-rc" true
+    (versionLib.compareVersions "1.19beta1" "1.19rc1" < 0);
+
+  version-beta-sorts-below-stable =
+    assertEq "version-beta-sorts-below-stable" true
+    (versionLib.compareVersions "1.19beta1" "1.19" < 0);
+
+  version-beta-counter-ordering =
+    assertEq "version-beta-counter-ordering" true
+    (versionLib.compareVersions "1.19beta1" "1.19beta2" < 0);
+
+  # A beta of a newer minor still outranks a stable release of an older minor,
+  # mirroring the existing rc behaviour (major/minor/patch are compared before
+  # the rc/beta tiebreak).
+  version-beta-outranks-older-stable-minor =
+    assertEq "version-beta-outranks-older-stable-minor" true
+    (versionLib.compareVersions "1.20beta1" "1.19.5" > 0);
+
+  # Boundary regression (coderabbitai, go-overlay#577): a fixed numeric band
+  # per stage overlaps once a counter is large enough (previously
+  # "1.19beta1001" and "1.19rc1" both collapsed to rc = -999, comparing
+  # equal). Stage and counter must be compared as separate tiers so no
+  # counter magnitude can cross into the next stage's range.
+  version-beta-large-counter-still-below-rc =
+    assertEq "version-beta-large-counter-still-below-rc" true
+    (versionLib.compareVersions "1.19beta1001" "1.19rc1" < 0);
+
+  version-rc-large-counter-still-below-stable =
+    assertEq "version-rc-large-counter-still-below-stable" true
+    (versionLib.compareVersions "1.19rc1000" "1.19" < 0);
+
+  # Rejection (coderabbitai, go-overlay#577): "1.19beta1.4" and "1.19rc1.4"
+  # pass the length check and match hasBeta/hasRc against minorPart alone,
+  # so the trailing ".4" was silently dropped and the version compared equal
+  # to "1.19beta1"/"1.19rc1" - patch-level prereleases aren't a real Go
+  # version shape (rc/beta only ever apply to a new minor line), so they
+  # must be rejected outright rather than silently truncated.
+  version-rejects-beta-with-patch =
+    assertThrows "version-rejects-beta-with-patch"
+    (versionLib.parseVersion "1.19beta1.4");
+
+  version-rejects-rc-with-patch =
+    assertThrows "version-rejects-rc-with-patch"
+    (versionLib.parseVersion "1.19rc1.4");
 
   # fromGoMod
   fromGoMod-with-toolchain = assertEq "fromGoMod-with-toolchain" "1.21.6" (go-bin.fromGoMod ./fixtures/go-with-toolchain.mod).version;

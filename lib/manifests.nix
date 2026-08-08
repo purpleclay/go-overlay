@@ -28,8 +28,8 @@
   sortedVersions = lib.sort (a: b: compareVersions a b > 0) (builtins.attrNames manifests);
   latest = builtins.head sortedVersions;
 
-  # Filter out release candidates to get the latest stable version
-  stableVersions = builtins.filter (v: builtins.match ".*rc[0-9]+" v == null) sortedVersions;
+  # Filter out release candidates and betas to get the latest stable version
+  stableVersions = builtins.filter (v: builtins.match ".*(rc|beta)[0-9]+" v == null) sortedVersions;
   latestStable = builtins.head stableVersions;
 
   # Get the latest patch version for a given minor version (e.g., "1.21" -> "1.21.13")

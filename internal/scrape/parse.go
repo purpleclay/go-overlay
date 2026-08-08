@@ -2,10 +2,16 @@ package scrape
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/purpleclay/chomp"
 )
+
+// exactPrereleaseSuffix matches a version string ending in a complete
+// "rcN" or "betaN" suffix (e.g. "go1.19beta1"), as opposed to a bare
+// prefix like "go1.19beta" used to list every beta of that minor.
+var exactPrereleaseSuffix = regexp.MustCompile(`(rc|beta)[0-9]+$`)
 
 // prereleaseTag matches an optional "rc" or "beta" pre-release suffix
 // followed by its number (e.g. "rc1", "beta2"). Matched as a literal token
@@ -56,9 +62,10 @@ func Href(version string) chomp.Combinator[string] {
 		// version (e.g. "go1.21.4") needs a trailing "." to avoid matching a
 		// longer version that shares the same prefix (go1.19beta1 would
 		// otherwise also match go1.19beta10, and go1.21.4 would match
-		// go1.21.40). A bare minor prefix (e.g. "go1.19") must not get one,
-		// since listVersions relies on matching every version under it.
-		isExactPrerelease := strings.Contains(normalizedVersion, "rc") || strings.Contains(normalizedVersion, "beta")
+		// go1.21.40). A bare prefix (e.g. "go1.19" or "go1.19beta", with no
+		// trailing digit after "beta") must not get one, since listVersions
+		// relies on matching every version under it.
+		isExactPrerelease := exactPrereleaseSuffix.MatchString(normalizedVersion)
 		hrefVersion := normalizedVersion
 		if isExactPrerelease || strings.Count(normalizedVersion, ".") >= 2 {
 			hrefVersion = normalizedVersion + "."
