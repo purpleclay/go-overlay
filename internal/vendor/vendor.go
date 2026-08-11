@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/purpleclay/conker/pool"
 	"github.com/purpleclay/go-overlay/internal/mod"
@@ -291,11 +292,17 @@ func (v *Vendor) findModFiles() (modFiles []string, missing []Result, err error)
 	}
 
 	if v.opts.recursive {
-		p := pool.NewWithResults[[]string]()
+		type scanResult struct {
+			path  string
+			files []string
+		}
+
+		p := pool.NewWithResults[scanResult]()
 		for _, path := range paths {
-			p.Go(func(_ context.Context) ([]string, error) {
+			p.Go(func(_ context.Context) (scanResult, error) {
 				scanner := NewFileTreeScanner(WithMaxDepth(v.opts.maxDepth))
-				return scanner.ScanFrom(path)
+				files, err := scanner.ScanFrom(path)
+				return scanResult{path: path, files: files}, err
 			})
 		}
 
@@ -304,13 +311,15 @@ func (v *Vendor) findModFiles() (modFiles []string, missing []Result, err error)
 			return nil, nil, err
 		}
 
-		for _, found := range results {
-			modFiles = append(modFiles, found...)
-		}
-
-		if len(modFiles) == 0 {
-			for _, path := range paths {
-				missing = append(missing, resultNotFound(filepath.Join(path, mod.GoModFilename)))
+		for _, scanned := range results {
+			if len(scanned.files) == 0 {
+				notFound := filepath.Join(scanned.path, mod.GoModFilename)
+				if strings.HasPrefix(scanned.path, "./") {
+					notFound = "./" + notFound
+				}
+				missing = append(missing, resultNotFound(notFound))
+			} else {
+				modFiles = append(modFiles, scanned.files...)
 			}
 		}
 
