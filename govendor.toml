@@ -83,10 +83,6 @@ schema = 3
     hash = "sha256-GO3az7WiGcwU0OvmocwdfR5ohGRL8NbjscIaMyhAdxE="
     go = "1.18"
     packages = ["github.com/clipperhouse/uax29/v2/graphemes"]
-  [mod."github.com/davecgh/go-spew"]
-    version = "v1.1.1"
-    hash = "sha256-nhzSUrE1fCkN0+RL04N4h8jWmRFPPPWbCuDc7Ss0akI="
-    packages = ["github.com/davecgh/go-spew/spew"]
   [mod."github.com/google/go-cmp"]
     version = "v0.7.0"
     hash = "sha256-JbxZFBFGCh/Rj5XZ1vG94V2x7c18L8XKB0N9ZD5F2rM="
@@ -157,10 +153,6 @@ schema = 3
     hash = "sha256-8mewNCfdfhZtkckVxxJA3aNS7mGZEwg6xXymEq8g1wY="
     go = "1.20"
     packages = ["github.com/nix-community/go-nix/pkg/nar", "github.com/nix-community/go-nix/pkg/wire"]
-  [mod."github.com/pmezard/go-difflib"]
-    version = "v1.0.0"
-    hash = "sha256-/FtmHnaGjdvEIKAJtrUfEhV7EVo5A/eYrtdnUkuxLDA="
-    packages = ["github.com/pmezard/go-difflib/difflib"]
   [mod."github.com/purpleclay/chomp"]
     version = "v0.7.0"
     hash = "sha256-1J+cpb/XEhXY0eizgbzD0SFByUmbGpYEWv4TW1WmitA="
@@ -197,10 +189,10 @@ schema = 3
     go = "1.12"
     packages = ["github.com/spf13/pflag"]
   [mod."github.com/stretchr/testify"]
-    version = "v1.11.1"
-    hash = "sha256-sWfjkuKJyDllDEtnM8sb/pdLzPQmUYWYtmeWz/5suUc="
+    version = "v1.12.0"
+    hash = "sha256-4TTdUoXSGvvFIesZrd8naFcWn5nIwUIRsrt4McTSXl0="
     go = "1.17"
-    packages = ["github.com/stretchr/testify/assert", "github.com/stretchr/testify/assert/yaml", "github.com/stretchr/testify/require"]
+    packages = ["github.com/stretchr/testify/assert", "github.com/stretchr/testify/assert/yaml", "github.com/stretchr/testify/internal/difflib", "github.com/stretchr/testify/internal/spew", "github.com/stretchr/testify/require"]
   [mod."github.com/xo/terminfo"]
     version = "v0.0.0-20220910002029-abceb7e1c41e"
     hash = "sha256-GyCDxxMQhXA3Pi/TsWXpA8cX5akEoZV7CFx4RO3rARU="
