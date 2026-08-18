@@ -2,27 +2,12 @@
 
 schema = 3
 
-[workspace]
-  go = "1.26.3"
-  modules = ["./api", "./shared"]
-
 [mod]
-  [mod."example/shared"]
-    version = "v0.0.0"
-    go = "1.26.3"
-    local = "./shared"
-  [mod."github.com/stretchr/objx"]
-    version = "v0.5.3"
-    hash = "sha256-4s8d7MdRKq4r7QjkIFCdwjKehc6Hi5mS4xuZ2v2QYR8="
-    go = "1.20"
   [mod."github.com/stretchr/testify"]
     version = "v1.12.0"
     hash = "sha256-4TTdUoXSGvvFIesZrd8naFcWn5nIwUIRsrt4McTSXl0="
     go = "1.17"
     packages = ["github.com/stretchr/testify/assert", "github.com/stretchr/testify/assert/yaml", "github.com/stretchr/testify/internal/difflib", "github.com/stretchr/testify/internal/spew"]
-  [mod."gopkg.in/check.v1"]
-    version = "v0.0.0-20161208181325-20d25e280405"
-    hash = "sha256-1w5mgYaZUC52uzDnpXXVqle/9AVkH4WePSrQFOVANUw="
   [mod."gopkg.in/yaml.v3"]
     version = "v3.0.1"
     hash = "sha256-FqL9TKYJ0XkNwJFnq9j0VvJ5ZUU1RvH/52h/f5bkYAU="
