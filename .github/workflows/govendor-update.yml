@@ -39,7 +39,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: GPG Import
-        uses: purpleclay/gpg-import-action@a39506c3eff9b02459e033e3551e556934f266fc # v0
+        uses: purpleclay/gpg-import-action@b3678ccc1d6c597a08e9e6e32c17e974eb7bf9c8 # v0
         with:
           key: ${{ secrets.gpg-private-key }}
           passphrase: ${{ secrets.gpg-passphrase }}
