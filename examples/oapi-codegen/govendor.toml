@@ -4,7 +4,7 @@ schema = 3
 
 [tool]
   [tool."github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen"]
-    version = "v2.6.0"
+    version = "v2.8.0"
 
 [mod]
   [mod."github.com/apapsch/go-jsonmerge/v2"]
@@ -18,42 +18,28 @@ schema = 3
     go = "1.13"
     packages = ["github.com/dprotaso/go-yit"]
   [mod."github.com/getkin/kin-openapi"]
-    version = "v0.133.0"
-    hash = "sha256-0evs4iWdHhn+nIy+Lyy25DV75dKXrdh4OnibNF9lDqg="
-    go = "1.22.5"
+    version = "v0.147.0"
+    hash = "sha256-wZHKFtUlr55O7V5F+DiN1Q18Zsknpfu+AEMNt12NKTw="
+    go = "1.25"
     packages = ["github.com/getkin/kin-openapi/openapi3"]
   [mod."github.com/go-openapi/jsonpointer"]
-    version = "v0.21.0"
-    hash = "sha256-bB8XTzo4hzXemi8Ey3tIXia3mfn38bvwIzKYLJYC650="
-    go = "1.20"
+    version = "v0.23.1"
+    hash = "sha256-1vusGH4zPsJU1nPOJK73gh/qF8bvgM7K9ufMoV/Oa50="
+    go = "1.25.0"
     packages = ["github.com/go-openapi/jsonpointer"]
-  [mod."github.com/go-openapi/swag"]
-    version = "v0.23.0"
-    hash = "sha256-D5CzsSQ3SYJLwXT6BDahnG66LI8du59Dy1mY4KutA7A="
-    go = "1.20"
-    packages = ["github.com/go-openapi/swag"]
+  [mod."github.com/go-openapi/swag/jsonname"]
+    version = "v0.26.0"
+    hash = "sha256-vhWO27K+YiKrK/PStjAhqwrVXTF/d4xqxF3TzMtHg3Q="
+    go = "1.25.0"
+    packages = ["github.com/go-openapi/swag/jsonname"]
   [mod."github.com/google/uuid"]
     version = "v1.6.0"
     hash = "sha256-VWl9sqUzdOuhW0KzQlv0gwwUQClYkmZwSydHG2sALYw="
     packages = ["github.com/google/uuid"]
-  [mod."github.com/josharian/intern"]
-    version = "v1.0.0"
-    hash = "sha256-LJR0QE2vOQ2/2shBbO5Yl8cVPq+NFrE3ers0vu9FRP0="
-    go = "1.5"
-    packages = ["github.com/josharian/intern"]
-  [mod."github.com/mailru/easyjson"]
-    version = "v0.7.7"
-    hash = "sha256-NVCz8MURpxgOjHXqxOZExqV4bnpHggpeAOyZDArjcy4="
-    go = "1.12"
-    packages = ["github.com/mailru/easyjson/buffer", "github.com/mailru/easyjson/jlexer", "github.com/mailru/easyjson/jwriter"]
-  [mod."github.com/mohae/deepcopy"]
-    version = "v0.0.0-20170929034955-c48cc78d4826"
-    hash = "sha256-TQMmKqIYwVhmMVh4RYQkAui97Eyj7poLmcAuDcHXsEk="
-    packages = ["github.com/mohae/deepcopy"]
   [mod."github.com/oapi-codegen/oapi-codegen/v2"]
-    version = "v2.6.0"
-    hash = "sha256-LYWYUNwRd2OyeGkXQr1n56gwt/PuLK0onPH3IiXbVpo="
-    go = "1.22.5"
+    version = "v2.8.0"
+    hash = "sha256-5wUFk0eN8S+gWGNLuJKnJDyCa4YDRvh77cQTiSlJE8I="
+    go = "1.25.0"
     packages = ["github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen", "github.com/oapi-codegen/oapi-codegen/v2/pkg/codegen", "github.com/oapi-codegen/oapi-codegen/v2/pkg/util"]
   [mod."github.com/oapi-codegen/runtime"]
     version = "v1.4.0"
@@ -61,65 +47,60 @@ schema = 3
     go = "1.24.0"
     packages = ["github.com/oapi-codegen/runtime", "github.com/oapi-codegen/runtime/strictmiddleware/nethttp", "github.com/oapi-codegen/runtime/types"]
   [mod."github.com/oasdiff/yaml"]
-    version = "v0.0.0-20250309154309-f31be36b4037"
-    hash = "sha256-8K/OpDx7hwlloOaDkeOO6VmuoZs7MY7pYoJDWLNdvkw="
-    go = "1.22.5"
+    version = "v0.1.1"
+    hash = "sha256-eoBKYAFC324/B0Igu/ULHasP7g7kgANtdBy6xO09s/0="
+    go = "1.25"
     packages = ["github.com/oasdiff/yaml"]
   [mod."github.com/oasdiff/yaml3"]
-    version = "v0.0.0-20250309153720-d2182401db90"
-    hash = "sha256-egJOh0zRxlaDhQNdDao0qV7Tpsqe1sU/868PRIrl2Ag="
-    go = "1.22.5"
+    version = "v0.0.14"
+    hash = "sha256-5kaz809D80Dp64Qeg5PwONZ9vxiz6I9BVvo5l5lBhww="
+    go = "1.25"
     packages = ["github.com/oasdiff/yaml3"]
-  [mod."github.com/perimeterx/marshmallow"]
-    version = "v1.1.5"
-    hash = "sha256-fFWjg0FNohDSV0/wUjQ8fBq1g8h6yIqTrHkxqL2Tt0s="
-    go = "1.17"
-    packages = ["github.com/perimeterx/marshmallow"]
+  [mod."github.com/santhosh-tekuri/jsonschema/v6"]
+    version = "v6.0.2"
+    hash = "sha256-rPRYeV00NRyt6rb+gFJRK1K4TlVxy92cocRK/X9Wef4="
+    go = "1.21"
+    packages = ["github.com/santhosh-tekuri/jsonschema/v6", "github.com/santhosh-tekuri/jsonschema/v6/kind"]
   [mod."github.com/speakeasy-api/jsonpath"]
-    version = "v0.6.0"
-    hash = "sha256-VIfIDYnpBwUBM630zKrB+XuPQpU1ClopWmcZ3i30Odw="
-    go = "1.22"
+    version = "v0.6.3"
+    hash = "sha256-p9s0Ya/+C+wqTOhM9ulf4moroRtF4+MLdYJvn21Ad88="
+    go = "1.24.3"
     packages = ["github.com/speakeasy-api/jsonpath/pkg/jsonpath", "github.com/speakeasy-api/jsonpath/pkg/jsonpath/config", "github.com/speakeasy-api/jsonpath/pkg/jsonpath/token"]
-  [mod."github.com/speakeasy-api/openapi-overlay"]
-    version = "v0.10.2"
-    hash = "sha256-7EzV8q7kEM2uQQ2iLIaKXBG5GDNyT/mlgAMg+uDLi7I="
-    go = "1.22"
-    packages = ["github.com/speakeasy-api/openapi-overlay/pkg/loader", "github.com/speakeasy-api/openapi-overlay/pkg/overlay"]
+  [mod."github.com/speakeasy-api/openapi"]
+    version = "v1.24.0"
+    hash = "sha256-42zfrGD18BhGsn50HBgIzqM8Q3VrICSlnb1tCg09HLY="
+    go = "1.25.0"
+    packages = ["github.com/speakeasy-api/openapi/internal/sliceutil", "github.com/speakeasy-api/openapi/internal/version", "github.com/speakeasy-api/openapi/overlay", "github.com/speakeasy-api/openapi/overlay/loader"]
   [mod."github.com/vmware-labs/yaml-jsonpath"]
     version = "v0.3.2"
     hash = "sha256-BZiEtlTVjwtLFaqYu1005t0yFc1/D1iNeabnsAtSXRY="
     go = "1.13"
     packages = ["github.com/vmware-labs/yaml-jsonpath/pkg/yamlpath"]
-  [mod."github.com/woodsbury/decimal128"]
-    version = "v1.3.0"
-    hash = "sha256-F0Ooz4nyMBlpQ/E0fRYrKwHNmvkIDdcCihTBdIvHeoU="
-    go = "1.21"
-    packages = ["github.com/woodsbury/decimal128"]
+  [mod."go.yaml.in/yaml/v3"]
+    version = "v3.0.4"
+    hash = "sha256-NkGFiDPoCxbr3LFsI6OCygjjkY0rdmg5ggvVVwpyDQ4="
+    go = "1.16"
+    packages = ["go.yaml.in/yaml/v3"]
   [mod."golang.org/x/mod"]
-    version = "v0.30.0"
-    hash = "sha256-tZJikWbjGgN5rCgB/dqj3dpn9BfAZUVyXmd3KavAgLE="
-    go = "1.24.0"
+    version = "v0.38.0"
+    hash = "sha256-BpKfvsmb7ecEDvTBKx9ZHauxoWRkOAZCqg4BrHM2/S0="
+    go = "1.25.0"
     packages = ["golang.org/x/mod/internal/lazyregexp", "golang.org/x/mod/modfile", "golang.org/x/mod/module", "golang.org/x/mod/semver"]
   [mod."golang.org/x/sync"]
-    version = "v0.19.0"
-    hash = "sha256-RbRZ+sKZUurOczGhhzOoY/sojTlta3H9XjL4PXX/cno="
-    go = "1.24.0"
+    version = "v0.22.0"
+    hash = "sha256-VZjl0fAM0p/nI81zh+pdBjzxFupx0UcKYXBBpL2ZS7k="
+    go = "1.25.0"
     packages = ["golang.org/x/sync/errgroup"]
   [mod."golang.org/x/text"]
-    version = "v0.32.0"
-    hash = "sha256-9PXtWBKKY9rG4AgjSP4N+I1DhepXhy8SF/vWSIDIoWs="
-    go = "1.24.0"
-    packages = ["golang.org/x/text/cases", "golang.org/x/text/internal", "golang.org/x/text/internal/language", "golang.org/x/text/internal/language/compact", "golang.org/x/text/internal/tag", "golang.org/x/text/language", "golang.org/x/text/transform", "golang.org/x/text/unicode/norm"]
+    version = "v0.40.0"
+    hash = "sha256-LJfnki46XEreGbSgjl+DeqgcTsINTOu2owyXNvijMcA="
+    go = "1.25.0"
+    packages = ["golang.org/x/text/cases", "golang.org/x/text/feature/plural", "golang.org/x/text/internal", "golang.org/x/text/internal/catmsg", "golang.org/x/text/internal/format", "golang.org/x/text/internal/language", "golang.org/x/text/internal/language/compact", "golang.org/x/text/internal/number", "golang.org/x/text/internal/stringset", "golang.org/x/text/internal/tag", "golang.org/x/text/language", "golang.org/x/text/message", "golang.org/x/text/message/catalog", "golang.org/x/text/transform", "golang.org/x/text/unicode/norm"]
   [mod."golang.org/x/tools"]
-    version = "v0.39.0"
-    hash = "sha256-cCJLi3A7mhx7N7+fn0MbyDStf1dG2OPqu68bRMHpmw4="
-    go = "1.24.0"
+    version = "v0.48.0"
+    hash = "sha256-9cRNUaup6fexA5S1zc+Ic3aaoxAgKWntyMJ2xaOdiP8="
+    go = "1.25.0"
     packages = ["golang.org/x/tools/go/ast/astutil", "golang.org/x/tools/imports", "golang.org/x/tools/internal/event", "golang.org/x/tools/internal/event/core", "golang.org/x/tools/internal/event/keys", "golang.org/x/tools/internal/event/label", "golang.org/x/tools/internal/gocommand", "golang.org/x/tools/internal/gopathwalk", "golang.org/x/tools/internal/imports", "golang.org/x/tools/internal/modindex", "golang.org/x/tools/internal/stdlib"]
-  [mod."gopkg.in/yaml.v2"]
-    version = "v2.4.0"
-    hash = "sha256-uVEGglIedjOIGZzHW4YwN1VoRSTK8o0eGZqzd+TNdd0="
-    go = "1.15"
-    packages = ["gopkg.in/yaml.v2"]
   [mod."gopkg.in/yaml.v3"]
     version = "v3.0.1"
     hash = "sha256-FqL9TKYJ0XkNwJFnq9j0VvJ5ZUU1RvH/52h/f5bkYAU="
