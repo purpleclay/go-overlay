@@ -207,7 +207,7 @@ Build applications from a Go workspace using a `vendor/` directory committed via
 
 > [!NOTE]
 > Unlike `buildGoWorkspace`, this builder does not provide drift detection, per-dependency hash verification, or Go module tool directive injection. Reproducibility is guaranteed by the Nix store hash of `src` rather than per-dependency hashing.
- 
+
 | Option             | Default             | Description                                                                                    |
 | :----------------- | :------------------ | :--------------------------------------------------------------------------------------------- |
 | `pname`            | required            | Package name                                                                                   |
@@ -267,19 +267,7 @@ See [Go Module Tool Directives](./go-module-tools.md) for a full explanation of 
 
 Build binaries for different platforms by overriding `GOOS` and `GOARCH`. Works with both `buildGoApplication` and `buildGoWorkspace`.
 
-By default, `govendor` resolves dependencies for these platforms:
-
-- `linux/amd64`, `linux/arm64`
-- `darwin/amd64`, `darwin/arm64`
-- `windows/amd64`, `windows/arm64`
-
-To build for platforms outside the defaults, use `--include-platform` when generating the manifest:
-
-```bash
-govendor --include-platform=freebsd/amd64
-```
-
-The additional platforms are persisted in `govendor.toml` and automatically used on subsequent runs. See the [cross-compile example](../examples/cross-compile/).
+Dependency resolution is platform-independent: the manifest attributes packages for every `GOOS`/`GOARCH` pair and build tag Go recognises, so targeting a new platform requires no flags and no regeneration — override `GOOS`/`GOARCH` on the builder and build. Packages guarded by constraints like `//go:build windows` or `//go:build js && wasm` are already in the manifest. See [How go-overlay Works](how-it-works.md#how-resolution-works) for the mechanism, and the [cross-compile example](../examples/cross-compile/) for a complete multi-target setup.
 
 ## Using with devenv
 
@@ -306,6 +294,7 @@ When pulling go-overlay into a [devenv](https://devenv.sh) project, two things k
   ```
 
   A mismatch produces different toolchain derivations for devenv (`languages.go.version`) and go-overlay (`goToolchain.tools.*`), so tools won't be cache hits even with identical content.
+
 - **Pin the flake input to a commit, not `main`:**
 
   ```nix

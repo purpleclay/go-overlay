@@ -81,10 +81,16 @@ in
   }
 ```
 
-## The govendor bit
+## Updating dependencies
 
-`main.go` is gated on `//go:build js && wasm`, so the entire dependency graph only exists under that constraint. `govendor` resolves dependencies by running `go mod vendor` with `imports.AnyTags()`, which satisfies all build constraints simultaneously — wasm included — so the right packages are captured without any extra flags:
+Even though `main.go` is guarded by the `//go:build js && wasm` constraint, no special handling is needed — dependency resolution treats every build constraint as satisfied, so constraint-gated packages are attributed automatically:
 
 ```shell
 govendor
 ```
+
+> [!NOTE]
+> Before schema v4, this example required `govendor --include-platform js/wasm` to resolve
+> packages behind the WebAssembly constraint. That flag no longer exists — resolution now covers
+> every `GOOS`/`GOARCH` and build tag in a single pass. See
+> [How go-overlay Works](../../docs/how-it-works.md#how-resolution-works).
