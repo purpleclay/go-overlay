@@ -189,8 +189,8 @@ schema = 3
     go = "1.12"
     packages = ["github.com/spf13/pflag"]
   [mod."github.com/stretchr/testify"]
-    version = "v1.12.0"
-    hash = "sha256-4TTdUoXSGvvFIesZrd8naFcWn5nIwUIRsrt4McTSXl0="
+    version = "v1.12.1"
+    hash = "sha256-9MTDdVjZMh1MJ5EH3HmAFrm24YqZayeMBgKwtaURZCc="
     go = "1.17"
     packages = ["github.com/stretchr/testify/assert", "github.com/stretchr/testify/assert/yaml", "github.com/stretchr/testify/internal/difflib", "github.com/stretchr/testify/internal/spew", "github.com/stretchr/testify/require"]
   [mod."github.com/xo/terminfo"]
@@ -198,6 +198,11 @@ schema = 3
     hash = "sha256-GyCDxxMQhXA3Pi/TsWXpA8cX5akEoZV7CFx4RO3rARU="
     go = "1.19"
     packages = ["github.com/xo/terminfo"]
+  [mod."go.yaml.in/yaml/v3"]
+    version = "v3.0.5"
+    hash = "sha256-ygho+GU5kE7vPMx+dZYyNfCaeMjNxj66XmrcVf3afFE="
+    go = "1.16"
+    packages = ["go.yaml.in/yaml/v3"]
   [mod."golang.org/x/mod"]
     version = "v0.40.0"
     hash = "sha256-gmuKtxidzYWVlQYNB/8BREmajyfockaQ5/6Xk4IR32A="
