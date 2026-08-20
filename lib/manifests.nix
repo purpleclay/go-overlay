@@ -42,7 +42,9 @@
 
   # Check if a version is deprecated according to Go's support policy.
   # Go supports the current and previous minor versions (e.g., 1.23.x and 1.22.x).
-  # RCs are not considered deprecated (they are pre-release, not post-support).
+  # Applied uniformly by minor version regardless of pre-release stage — a
+  # beta or rc is just as EOL as its stable sibling once its minor version
+  # falls outside the supported window.
   isDeprecated = version: let
     parsed = parseVersion version;
     latestStableParsed = parseVersion latestStable;

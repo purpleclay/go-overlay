@@ -155,11 +155,11 @@ in {
 
   # isDeprecated
   isDeprecated-old = assertEq "isDeprecated-old" true (go-bin.isDeprecated "1.17.0");
-  isDeprecated-rc-not-deprecated = assertEq "isDeprecated-rc-not-deprecated" false (go-bin.isDeprecated "1.25rc1");
   isDeprecated-latest-stable = assertEq "isDeprecated-latest-stable" false (go-bin.isDeprecated go-bin.latestStable.version);
-  # A beta of an EOL minor line is deprecated just like its stable sibling -
-  # unlike rc, which is exempt only because it's always for the current line.
+  # A beta or rc of an EOL minor line is deprecated just like its stable
+  # sibling - pre-release stage grants no exemption from the minor-version window.
   isDeprecated-beta-of-eol-minor = assertEq "isDeprecated-beta-of-eol-minor" true (go-bin.isDeprecated "1.19beta1");
+  isDeprecated-rc-of-eol-minor = assertEq "isDeprecated-rc-of-eol-minor" true (go-bin.isDeprecated "1.19rc1");
 
   # latestStable must never resolve to a beta, mirroring latestStable-not-rc
   latestStable-not-beta = assertEq "latestStable-not-beta" null (builtins.match ".*beta[0-9]+" go-bin.latestStable.version);
