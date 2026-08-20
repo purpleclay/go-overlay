@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - main
-      - govendor-resolution-performance
     paths:
       - "flake.nix"
       - "flake.lock"
@@ -16,7 +15,6 @@ on:
   pull_request:
     branches:
       - main
-      - govendor-resolution-performance
     paths:
       - "flake.nix"
       - "flake.lock"

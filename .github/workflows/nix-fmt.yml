@@ -3,13 +3,11 @@ on:
   push:
     branches:
       - main
-      - govendor-resolution-performance
     paths:
       - "**/*.nix"
   pull_request:
     branches:
       - main
-      - govendor-resolution-performance
     paths:
       - "**/*.nix"
 
