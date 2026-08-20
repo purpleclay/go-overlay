@@ -2,7 +2,8 @@
 
 > [!WARNING]
 > Schema v3 is not supported from go-overlay v1.4.0 onwards. Run `govendor` to regenerate
-> your manifest at schema v4 — existing NAR hashes are carried forward, so regeneration is fast.
+> your manifest at schema v4 — existing NAR hashes for unchanged remote modules are carried
+> forward, so regeneration is fast. Local replacements are always re-hashed.
 > The `--include-platform` flag has been removed alongside this schema; drop it from any scripts
 > or hooks before regenerating. See the [v4 reference](govendor-toml-v4.md) for the current
 > specification and the [migration guide](migrating.md#from-schema-v3-to-v4) for details.

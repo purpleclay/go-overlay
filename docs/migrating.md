@@ -162,7 +162,7 @@ Schema v4 accompanies a rework of how `govendor` resolves dependencies: package 
 
 1. Upgrade go-overlay to v1.4.0 or later
 2. Remove `--include-platform` from any scripts, git hooks, or CI invocations
-3. Run `govendor` to regenerate — NAR hashes for unchanged module versions are carried forward, so this is fast
+3. Run `govendor` to regenerate — NAR hashes for unchanged remote module versions are carried forward, so this is fast (local replacements are always re-hashed)
 4. Commit the regenerated `govendor.toml`
 
 ### What CI shows before you migrate

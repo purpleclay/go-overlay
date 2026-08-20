@@ -182,4 +182,4 @@ govendor
 govendor --check
 ```
 
-Regeneration reuses NAR hashes from the existing manifest for any module whose version is unchanged — module content is immutable per version, so only new or upgraded modules are hashed. A typical single-dependency bump re-hashes exactly one module. Local replacements are always re-hashed, as their content can change between runs.
+Regeneration reuses NAR hashes from the existing manifest for any remote module whose path, version, and replacement path all match the existing entry — module content is immutable per version, so only new or upgraded modules are hashed. A typical single-dependency bump re-hashes exactly one module. Local replacements are always re-hashed, since their content can change between runs even though their path doesn't.
