@@ -368,12 +368,14 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 			downloads:     []ModuleDownload{fooDownload},
 			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": {Path: "example.com/foo", Version: "v1.0.0", Hash: "sha256-old"}},
 			wantHashCalls: 1,
+			wantHash:      "sha256-fresh",
 		},
 		{
 			name:          "HashesNewModuleNotInExisting",
 			downloads:     []ModuleDownload{barDownload},
 			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": fooExisting},
 			wantHashCalls: 1,
+			wantHash:      "sha256-fresh",
 		},
 		{
 			name:          "HashesAllWhenExistingModsIsNil",
@@ -396,6 +398,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 				Path: "example.com/foo", Version: "v1.2.3", Hash: "",
 			}},
 			wantHashCalls: 1,
+			wantHash:      "sha256-fresh",
 		},
 		{
 			name:      "NeverReusesLocalEntryEvenIfVersionMatches",
@@ -404,6 +407,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 				Path: "example.com/foo", Version: "v1.2.3", Hash: "sha256-local", Local: "./local/foo",
 			}},
 			wantHashCalls: 1,
+			wantHash:      "sha256-fresh",
 		},
 		{
 			// modules.txt shows gopkg.in/ini.v1 => example.com/foo-fork.
@@ -469,6 +473,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 				Hash: "sha256-replace-cached", ReplacedPath: "example.com/foo-fork",
 			}},
 			wantHashCalls: 1,
+			wantHash:      "sha256-fresh",
 		},
 	}
 
