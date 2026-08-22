@@ -49,7 +49,7 @@ func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, exis
 		}
 	}
 
-	modules, err := r.resolveRemoteModules(ctx, remoteModules, downloads, existingMods)
+	modules, err := r.resolveRemoteModules(ctx, remoteModules, downloads, existingMods, goMod.Replacements)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,20 @@ func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile,
 		memberGoMods[modDir] = goMod
 	}
 
-	remoteDeps, err := r.resolveRemoteModules(ctx, remoteModules, downloads, existingMods)
+	// Merge member replace directives, then apply go.work's on top — go.work
+	// replacements take precedence over member go.mod replacements (see
+	// GoWorkFile.RemoteReplacements).
+	replacements := make(map[string]mod.Replacement)
+	for _, modDir := range goWork.Modules {
+		for path, repl := range memberGoMods[modDir].Replacements {
+			replacements[path] = repl
+		}
+	}
+	for path, repl := range goWork.Replacements {
+		replacements[path] = repl
+	}
+
+	remoteDeps, err := r.resolveRemoteModules(ctx, remoteModules, downloads, existingMods, replacements)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +250,12 @@ func (r *Resolver) downloadWorkspaceModules(ctx context.Context, goWork *mod.GoW
 	return ParseDownloadOutput(out)
 }
 
-func (r *Resolver) resolveRemoteModules(ctx context.Context, modules []modulestxt.Module, downloads []ModuleDownload, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
+// replacements is keyed by the original (left-hand) module path, sourced
+// directly from go.mod's/go.work's replace directives — the only reliable
+// way to know whether a directive was versioned (see mod.ModuleConfig.Versioned):
+// modules.txt's header is byte-identical either way, so inferring this from
+// modules.txt output alone is not possible.
+func (r *Resolver) resolveRemoteModules(ctx context.Context, modules []modulestxt.Module, downloads []ModuleDownload, existingMods map[string]mod.ModuleConfig, replacements map[string]mod.Replacement) ([]mod.ModuleConfig, error) {
 	if len(modules) == 0 {
 		return nil, nil
 	}
@@ -252,6 +270,33 @@ func (r *Resolver) resolveRemoteModules(ctx context.Context, modules []modulestx
 	for _, m := range modules {
 		p.Go(func(_ context.Context) (mod.ModuleConfig, error) {
 			path := m.Path
+
+			// Unused replace: go.mod declares it, but nothing in the build
+			// requires the original path, so go mod vendor recorded only a
+			// trailer-only summary for it — no packages, no annotation,
+			// whether or not modules.txt happens to show a version on the
+			// left (that depends on whether the directive was versioned; see
+			// mod.ModuleConfig.Versioned, sourced from go.mod directly below).
+			// This can't be detected by whether the replacement path was
+			// downloaded: it may have been anyway, coincidentally, because
+			// something else independently requires it too — pkgsByMod's
+			// entry for it stays populated by that unrelated module either way.
+			if m.Replace != nil && m.Replace.Path != "" && len(m.Packages) == 0 && !m.Explicit && m.GoVersion == "" {
+				repl := replacements[path]
+				var requiredVersion string
+				if repl.OldVersion != "" && repl.OldVersion != m.Replace.Version {
+					requiredVersion = repl.OldVersion
+				}
+				return mod.ModuleConfig{
+					Path:            path,
+					Version:         m.Replace.Version,
+					RequiredVersion: requiredVersion,
+					Versioned:       repl.OldVersion != "",
+					ReplacedPath:    m.Replace.Path,
+					Unused:          true,
+				}, nil
+			}
+
 			var replacedPath string
 			var meta ModuleDownload
 			var ok bool
@@ -268,6 +313,22 @@ func (r *Resolver) resolveRemoteModules(ctx context.Context, modules []modulestx
 				return mod.ModuleConfig{}, fmt.Errorf("module %s not found in download output", path)
 			}
 
+			// The version modules.txt reported as required, before the replace
+			// was applied. Only meaningful — and only kept — when it diverges
+			// from the replacement's resolved version.
+			var requiredVersion string
+			if replacedPath != "" && m.Version != meta.Version {
+				requiredVersion = m.Version
+			}
+
+			// Whether go.mod's replace directive named a version on the left of
+			// "=>" — see mod.ModuleConfig.Versioned. Read directly from the
+			// parsed replace directive rather than inferred from modules.txt.
+			var versioned bool
+			if replacedPath != "" {
+				versioned = replacements[path].OldVersion != ""
+			}
+
 			// Warm path: remote (path, version) pairs are immutable under the
 			// checksum DB — reuse hash and go version from the existing manifest
 			// when the (path, version, replacedPath) triple matches.
@@ -282,13 +343,15 @@ func (r *Resolver) resolveRemoteModules(ctx context.Context, modules []modulestx
 						goVersion = m.GoVersion
 					}
 					return mod.ModuleConfig{
-						Path:         path,
-						Version:      meta.Version,
-						Packages:     m.Packages,
-						Hash:         entry.Hash,
-						GoVersion:    goVersion,
-						ReplacedPath: replacedPath,
-						Implicit:     !m.Explicit,
+						Path:            path,
+						Version:         meta.Version,
+						RequiredVersion: requiredVersion,
+						Versioned:       versioned,
+						Packages:        m.Packages,
+						Hash:            entry.Hash,
+						GoVersion:       goVersion,
+						ReplacedPath:    replacedPath,
+						Implicit:        !m.Explicit,
 					}, nil
 				}
 			}
@@ -300,13 +363,15 @@ func (r *Resolver) resolveRemoteModules(ctx context.Context, modules []modulestx
 			}
 
 			return mod.ModuleConfig{
-				Path:         path,
-				Version:      meta.Version,
-				Packages:     m.Packages,
-				Hash:         hash,
-				GoVersion:    m.GoVersion,
-				ReplacedPath: replacedPath,
-				Implicit:     !m.Explicit,
+				Path:            path,
+				Version:         meta.Version,
+				RequiredVersion: requiredVersion,
+				Versioned:       versioned,
+				Packages:        m.Packages,
+				Hash:            hash,
+				GoVersion:       m.GoVersion,
+				ReplacedPath:    replacedPath,
+				Implicit:        !m.Explicit,
 			}, nil
 		})
 	}

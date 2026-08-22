@@ -24,6 +24,11 @@ func TestVendor(t *testing.T) {
 		{name: "simple", dir: "testdata/simple"},
 		{name: "local-replace", dir: "testdata/local-replace"},
 		{name: "remote-replace", dir: "testdata/remote-replace"},
+		{name: "remote-replace-same-path", dir: "testdata/remote-replace-same-path"},
+		{name: "remote-replace-versioned", dir: "testdata/remote-replace-versioned"},
+		{name: "remote-replace-unused", dir: "testdata/remote-replace-unused"},
+		{name: "remote-replace-unused-standalone", dir: "testdata/remote-replace-unused-standalone"},
+		{name: "remote-replace-unused-versioned", dir: "testdata/remote-replace-unused-versioned"},
 		{name: "tools-only", dir: "testdata/tools-only"},
 		{name: "with-excludes", dir: "testdata/with-excludes"},
 	}

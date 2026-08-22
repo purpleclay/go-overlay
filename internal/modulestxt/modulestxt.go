@@ -59,8 +59,12 @@ func Parse(r io.Reader) ([]Module, error) {
 			// go mod vendor appends version-less "# path => replacement" trailer
 			// lines after all module entries to summarise replace directives. Skip
 			// them — the real versioned header for the same path was already parsed.
-			// Version-less entries with a NEW path (wildcard local replace headers)
-			// are kept, as are entries at a different version (MVS conflict rows).
+			// Version-less entries with a NEW path are either a wildcard local
+			// replace header, or a remote replace that go.mod declares but that
+			// nothing in the build actually requires — see resolve.go, which
+			// reads go.mod's replace directives directly to tell these apart from
+			// an ordinary module and from each other, rather than inferring it
+			// from modules.txt's shape here.
 			if seen[m.Path] && m.Version == "" {
 				current = nil
 				continue

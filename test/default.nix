@@ -376,6 +376,95 @@ in {
   in
     assertHostToolSrcIsMinimal "hostTool-workspace-src-is-minimal" drv ["app/go.mod" "app/go.sum"];
 
+  # A remote replace directive (replace A => B [version]) must build
+  # end-to-end for both builders — regression coverage for go-overlay#603,
+  # where the required and replacement versions being conflated into a
+  # single manifest field (same-path case) and workspace.nix reconstructing
+  # vendor/modules.txt without the replace trailer or fetch-path redirection
+  # (differing-path case) both produced a manifest Go's own vendor
+  # consistency check rejected at build time.
+  remoteReplace-samePath-application-builds = let
+    drv = pkgs.buildGoApplication {
+      pname = "remote-replace-same-path";
+      version = "0.1.0";
+      src = ./fixtures/remote-replace-same-path;
+      go = go-bin.fromGoMod ./fixtures/remote-replace-same-path/go.mod;
+    };
+  in
+    testBinaryExists "remoteReplace-samePath-application-builds" drv "bin/remote-replace-same-path";
+
+  remoteReplace-differingPath-workspace-builds = let
+    drv = pkgs.buildGoWorkspace {
+      pname = "app";
+      version = "0.1.0";
+      src = ./fixtures/workspace-remote-replace;
+      subPackages = ["app"];
+      go = go-bin.fromGoMod ./fixtures/workspace-remote-replace/app/go.mod;
+    };
+  in
+    testBinaryExists "remoteReplace-differingPath-workspace-builds" drv "bin/app";
+
+  # A used, versioned replace directive (replace A vOld => B vNew, version
+  # named on the left) must also build. go mod vendor omits the replace
+  # trailer for this form — unlike the wildcard cases above — and always
+  # emitting it anyway broke the vendor consistency check the same way
+  # omitting it did for the wildcard case (go-overlay#603 follow-up).
+  remoteReplace-versioned-application-builds = let
+    drv = pkgs.buildGoApplication {
+      pname = "remote-replace-versioned";
+      version = "0.1.0";
+      src = ./fixtures/remote-replace-versioned;
+      go = go-bin.fromGoMod ./fixtures/remote-replace-versioned/go.mod;
+    };
+  in
+    testBinaryExists "remoteReplace-versioned-application-builds" drv "bin/remote-replace-versioned";
+
+  # An unused wildcard replace (go.mod declares it, but nothing requires the
+  # original path) must build too. go mod vendor records only a trailer for
+  # it — no header, hash, or packages — and the replacement target here is
+  # independently required by something else, which is what previously made
+  # resolution fabricate a bogus header entry for the unused path instead of
+  # recognising it as trailer-only (go-overlay#603 follow-up).
+  remoteReplace-unused-application-builds = let
+    drv = pkgs.buildGoApplication {
+      pname = "remote-replace-unused";
+      version = "0.1.0";
+      src = ./fixtures/remote-replace-unused;
+      go = go-bin.fromGoMod ./fixtures/remote-replace-unused/go.mod;
+    };
+  in
+    testBinaryExists "remoteReplace-unused-application-builds" drv "bin/remote-replace-unused";
+
+  # The other unused-replace variant: the replacement target isn't required
+  # by anything, used or otherwise, so it's never downloaded at all — the
+  # scenario most likely to show up in the wild (a fork replacement whose
+  # dependency was later dropped, leaving the replace directive behind).
+  remoteReplace-unusedStandalone-application-builds = let
+    drv = pkgs.buildGoApplication {
+      pname = "remote-replace-unused-standalone";
+      version = "0.1.0";
+      src = ./fixtures/remote-replace-unused-standalone;
+      go = go-bin.fromGoMod ./fixtures/remote-replace-unused-standalone/go.mod;
+    };
+  in
+    testBinaryExists "remoteReplace-unusedStandalone-application-builds" drv "bin/remote-replace-unused-standalone";
+
+  # An unused *versioned* replace (replace A vOld => B vNew, nothing requires
+  # A). modules.txt's trailer-only line for this still carries the old
+  # version, making it byte-identical in shape to a used, versioned header —
+  # this is the case that was silently broken (either a misleading "not
+  # found in download output" error, or a fabricated header) before both the
+  # detection and the trailer rendering were fixed.
+  remoteReplace-unusedVersioned-application-builds = let
+    drv = pkgs.buildGoApplication {
+      pname = "remote-replace-unused-versioned";
+      version = "0.1.0";
+      src = ./fixtures/remote-replace-unused-versioned;
+      go = go-bin.fromGoMod ./fixtures/remote-replace-unused-versioned/go.mod;
+    };
+  in
+    testBinaryExists "remoteReplace-unusedVersioned-application-builds" drv "bin/remote-replace-unused-versioned";
+
   # A caller may pass an already-filtered src (e.g. their own
   # lib.fileset.toSource call) rather than a raw path. The minimal-src
   # extraction happens at build time precisely so it isn't limited to
@@ -436,7 +525,14 @@ in {
     assertHostToolDrvPathStable "hostTool-workspace-drvpath-stable-across-unrelated-changes" mkDrv baseSrc touchedSrc;
 
   mkModuleCopyCommands-works-with-tildes-symlink = let
-    inherit (import ../builder/vendor-env.nix {inherit (pkgs) lib runCommand fetchGoModule;}) mkModuleCopyCommands;
+    inherit (import ../builder/modules-txt.nix {inherit (pkgs) lib;}) mkAnnotation mkRemoteModuleEntry mkRemoteReplaceTrailers isUnusedReplace;
+    inherit
+      (import ../builder/vendor-env.nix {
+        inherit (pkgs) lib runCommand fetchGoModule;
+        inherit mkAnnotation mkRemoteModuleEntry mkRemoteReplaceTrailers isUnusedReplace;
+      })
+      mkModuleCopyCommands
+      ;
 
     sources = {
       "git.sr.ht/~sbinet/gg" = ./fixtures/mkModuleCopyCommands-module;
@@ -460,7 +556,14 @@ in {
     );
 
   mkModuleCopyCommands-works-with-tildes-copy = let
-    inherit (import ../builder/vendor-env.nix {inherit (pkgs) lib runCommand fetchGoModule;}) mkModuleCopyCommands;
+    inherit (import ../builder/modules-txt.nix {inherit (pkgs) lib;}) mkAnnotation mkRemoteModuleEntry mkRemoteReplaceTrailers isUnusedReplace;
+    inherit
+      (import ../builder/vendor-env.nix {
+        inherit (pkgs) lib runCommand fetchGoModule;
+        inherit mkAnnotation mkRemoteModuleEntry mkRemoteReplaceTrailers isUnusedReplace;
+      })
+      mkModuleCopyCommands
+      ;
 
     sources = {
       "git.sr.ht/~sbinet/gg" = ./fixtures/mkModuleCopyCommands-module;

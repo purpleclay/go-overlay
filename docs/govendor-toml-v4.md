@@ -90,11 +90,52 @@ schema = 4
 
   # --- Remote path replacement (replace A => B version) ---
   # `replaced` holds the replacement module path — `local` is not present.
+  # `required` is only present when the version go.mod originally required (A's
+  # version) differs from the replacement's resolved version (B's version, in
+  # `version` above) — omitted when a replace only changes the path. This form
+  # has no version on the left of `=>` in go.mod, so `versioned` is absent.
   [mod."github.com/go-ini/ini"]
-    version = "v1.67.0"
+    version = "v1.67.3"
     hash = "sha256-V10ahGNGT+..."
+    required = "v1.66.6"                   # Version go.mod required, before the replace
     packages = ["github.com/go-ini/ini"]
     replaced = "gopkg.in/ini.v1"           # Replacement module path (B) for replace A => B
+
+  # --- Versioned remote replacement (replace A vOld => B version), used ---
+  # go.mod named A's version explicitly on the left of `=>`. `versioned = true`
+  # tells the builder to omit the modules.txt trailer that the more common
+  # unversioned form (above) requires — go mod vendor never writes one for a
+  # *used* versioned replace like this; the inline header alone is unambiguous.
+  [mod."github.com/pkg/errors"]
+    version = "v0.9.1"
+    hash = "sha256-mNfQtcrQmu..."
+    required = "v0.8.0"
+    versioned = true
+    packages = ["github.com/pkg/errors"]
+    replaced = "github.com/pkg/errors"
+
+  # --- Unused wildcard remote replacement ---
+  # go.mod declares this replace, but nothing in the build requires the
+  # original path, so go mod vendor records only a trailer summarising it —
+  # no header, hash, or packages. `version` holds the replacement's version
+  # (needed for the trailer); there is nothing to fetch.
+  [mod."github.com/some/unused"]
+    version = "v1.0.0"
+    replaced = "github.com/some/fork"
+    unused = true
+
+  # --- Unused versioned remote replacement ---
+  # Unlike the used case above, an *unused* versioned replace still gets a
+  # modules.txt trailer — it's the only place this module is mentioned at
+  # all — and that trailer carries the old version on its left, exactly as a
+  # real header would. `required` and `versioned` are both present here even
+  # though nothing was ever fetched.
+  [mod."github.com/some/other-unused"]
+    version = "v2.0.0"
+    required = "v1.0.0"
+    versioned = true
+    replaced = "github.com/some/other-fork"
+    unused = true
 
   # --- Workspace member module ---
   # Workspace members that are dependencies of other members are resolved
@@ -153,11 +194,14 @@ Each entry under `[mod]` is keyed by the full Go module path.
 | Field      | Type             | Required | Description                                                                                                                                                                                                |
 | ---------- | ---------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `version`  | string           | `yes`    | Module version. Follows Go module versioning (e.g. `v1.2.3`, `v0.0.0-20240101...`).                                                                                                                        |
-| `hash`     | string           | `yes`\*  | NAR hash in SRI format (`sha256-...`). Present for all modules, including workspace members (stored for drift detection; not used to fetch workspace member source).                                       |
+| `hash`     | string           | `yes`\*  | NAR hash in SRI format (`sha256-...`). Present for all modules, including workspace members (stored for drift detection; not used to fetch workspace member source). Absent for an unused remote replace (see `unused`) — there is nothing to fetch. |
 | `go`       | string           | `no`     | Minimum Go version declared by the module. Omitted for modules predating `go.mod` version declarations.                                                                                                    |
 | `packages` | array of strings | `no`     | Packages vendored from the module, covering every platform and build tag. Omitted when the module is structurally required but no packages are imported.                                                   |
 | `implicit` | boolean          | `no`     | Whether Go omits `## explicit` from the module's annotation in `modules.txt`. Omitted when `false` (the common case). `implicit = true` records modules vendored without an explicit `go.mod` requirement. |
-| `replaced` | string           | `no`     | Replacement module path (B) for remote path replacements (`replace A => B version`). The table key stores the original path (A). Mutually exclusive with `local`.                                          |
+| `replaced` | string           | `no`     | Replacement module path (B) for remote replacements (`replace A => B [version]`), present regardless of whether the path or only the version changed. The table key stores the original path (A). Mutually exclusive with `local`. |
+| `required` | string           | `no`     | Version go.mod originally required (A's version), for a remote replace. Only present when it differs from `version` (B's version) — omitted when a replace doesn't also change the version.               |
+| `versioned` | boolean         | `no`     | Whether go.mod's replace directive named a version on the left of `=>` (`replace A vOld => B vNew`), rather than the more common form that omits it (`replace A => B vNew`) and so applies to every required version. Omitted when `false` (the common case). Controls whether the builder writes the modules.txt replace-summary trailer: never, for a *used* versioned replace (the inline header alone is unambiguous); with the old version on the left, for an *unused* one (see `unused`) — go mod vendor's trailer is its only representation there. |
+| `unused`   | boolean          | `no`     | Whether this is a remote replace go.mod declares but nothing in the build actually requires. Omitted when `false` (the common case). `unused = true` means `hash`, `go`, `packages`, and `implicit` are all absent — `version` holds only the replacement's version, and `required`/`versioned` may still be set, all needed to reconstruct the modules.txt trailer go mod vendor still records for it. |
 | `local`    | string           | `no`     | Relative path to local source. Present for local directory replacements (`replace A => ./path`). Mutually exclusive with `replaced`.                                                                       |
 
 ## How it is used

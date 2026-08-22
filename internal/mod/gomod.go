@@ -77,10 +77,18 @@ func (f *GoModFile) HasTools() bool {
 }
 
 type Replacement struct {
-	OldPath   string
-	NewPath   string
-	IsLocal   bool
-	LocalPath string
+	OldPath string
+	NewPath string
+	// OldVersion is the version named on the left of "=>", if any. Empty
+	// means the replace directive is unversioned ("replace A => B vNew"),
+	// applying to every required version of A, rather than pinned to one
+	// ("replace A vOld => B vNew").
+	OldVersion string
+	// NewVersion is the version named on the right of "=>" (remote replace
+	// only; empty for a local replace, which has no version).
+	NewVersion string
+	IsLocal    bool
+	LocalPath  string
 }
 
 // LocalReplacements returns only local replace directives (those pointing to
@@ -116,10 +124,12 @@ func parseReplacements(repls []*modfile.Replace) map[string]Replacement {
 	for _, repl := range repls {
 		isLocal := strings.HasPrefix(repl.New.Path, ".") || filepath.IsAbs(repl.New.Path)
 		replacements[repl.Old.Path] = Replacement{
-			OldPath:   repl.Old.Path,
-			NewPath:   repl.New.Path,
-			IsLocal:   isLocal,
-			LocalPath: repl.New.Path,
+			OldPath:    repl.Old.Path,
+			NewPath:    repl.New.Path,
+			OldVersion: repl.Old.Version,
+			NewVersion: repl.New.Version,
+			IsLocal:    isLocal,
+			LocalPath:  repl.New.Path,
 		}
 	}
 	return replacements

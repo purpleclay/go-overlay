@@ -2,6 +2,10 @@
 
 schema = 4
 
+[workspace]
+  go = "1.25.4"
+  modules = ["./app"]
+
 [mod]
   [mod."github.com/go-ini/ini"]
     version = "v1.67.3"
@@ -10,3 +14,7 @@ schema = 4
     go = "1.13"
     packages = ["github.com/go-ini/ini"]
     replaced = "gopkg.in/ini.v1"
+  [mod."github.com/stretchr/testify"]
+    version = "v1.11.1"
+    hash = "sha256-sWfjkuKJyDllDEtnM8sb/pdLzPQmUYWYtmeWz/5suUc="
+    go = "1.17"
