@@ -6,17 +6,35 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/modulestxt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// countingHasher counts Hash calls and returns a fixed or per-dir hash.
+// Safe for concurrent use by the goroutine pool in resolveRemoteModules.
+type countingHasher struct {
+	count atomic.Int64
+	// returned for every call; defaults to "sha256-"+dir
+	hash string
+}
+
+func (h *countingHasher) Hash(dir string) (string, error) {
+	h.count.Add(1)
+	if h.hash != "" {
+		return h.hash, nil
+	}
+	return "sha256-" + dir, nil
+}
+
 // fakeExecutor returns canned responses keyed by either the full command
-// string or the first two args (e.g. "go list", "go mod", "git ls-files").
-// The responses map is read-only after construction, making fakeExecutor
-// safe for concurrent use by the resolver's goroutine pool.
+// string or the first two args (e.g. "go mod", "git ls-files").
+// Special handling for "go mod vendor": writes the response string as
+// modules.txt to the directory given by the -o flag.
 type fakeExecutor struct {
 	responses map[string]string
 }
@@ -25,6 +43,22 @@ func (f *fakeExecutor) Run(_ context.Context, args []string, _ string, _ []strin
 	full := strings.Join(args, " ")
 	if out, ok := f.responses[full]; ok {
 		return out, nil
+	}
+
+	// "go mod vendor -o <dir>" / "go work vendor -o <dir>": write the
+	// response as modules.txt to the directory given by the -o flag.
+	if len(args) >= 3 && args[0] == "go" && args[2] == "vendor" {
+		key := args[0] + " " + args[1] + " " + args[2]
+		content, ok := f.responses[key]
+		if !ok {
+			return "", fmt.Errorf("unexpected command: %s", full)
+		}
+		for i, arg := range args {
+			if arg == "-o" && i+1 < len(args) {
+				err := os.WriteFile(filepath.Join(args[i+1], "modules.txt"), []byte(content), 0o644)
+				return "", err
+			}
+		}
 	}
 
 	if len(args) >= 2 {
@@ -43,30 +77,6 @@ func writeTestFile(t *testing.T, dir, name, content string) string {
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 	return path
-}
-
-func TestValidatePlatforms(t *testing.T) {
-	exec := &fakeExecutor{
-		responses: map[string]string{
-			"go tool dist list": "linux/amd64\nlinux/arm64\ndarwin/amd64\ndarwin/arm64\n",
-		},
-	}
-	r := New(exec)
-
-	require.NoError(t, r.ValidatePlatforms(context.Background(), []string{"linux/amd64", "darwin/arm64"}))
-}
-
-func TestValidatePlatformsRejectsUnsupportedPlatform(t *testing.T) {
-	exec := &fakeExecutor{
-		responses: map[string]string{
-			"go tool dist list": "linux/amd64\nlinux/arm64\ndarwin/amd64\ndarwin/arm64\n",
-		},
-	}
-	r := New(exec)
-
-	err := r.ValidatePlatforms(context.Background(), []string{"plan9/386"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "plan9/386")
 }
 
 func TestResolveModule(t *testing.T) {
@@ -91,9 +101,15 @@ require (
 	// NARHash can compute a real hash without needing a real module cache.
 	exec := &fakeExecutor{
 		responses: map[string]string{
-			"go list": `github.com/fatih/color	github.com/fatih/color
-github.com/mattn/go-colorable	github.com/mattn/go-colorable
-github.com/mattn/go-isatty	github.com/mattn/go-isatty`,
+			"go mod vendor": `# github.com/fatih/color v1.18.0
+## explicit; go 1.25.0
+github.com/fatih/color
+# github.com/mattn/go-colorable v0.1.13
+## explicit; go 1.25.0
+github.com/mattn/go-colorable
+# github.com/mattn/go-isatty v0.0.20
+## explicit; go 1.25.0
+github.com/mattn/go-isatty`,
 			"go mod": `{"Path":"github.com/fatih/color","Version":"v1.18.0","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}
 {"Path":"github.com/mattn/go-colorable","Version":"v0.1.13","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}
 {"Path":"github.com/mattn/go-isatty","Version":"v0.0.20","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}`,
@@ -108,7 +124,7 @@ github.com/mattn/go-isatty	github.com/mattn/go-isatty`,
 	// Results must be sorted by module path
 	assert.Equal(t, "github.com/fatih/color", deps[0].Path)
 	assert.Equal(t, "v1.18.0", deps[0].Version)
-	assert.Equal(t, "1.26.0", deps[0].GoVersion) // from testdata/module/go.mod
+	assert.Equal(t, "1.25.0", deps[0].GoVersion) // from modules.txt annotation
 	assert.NotEmpty(t, deps[0].Hash)
 	assert.Equal(t, []string{"github.com/fatih/color"}, deps[0].Packages)
 
@@ -140,7 +156,9 @@ replace example.com/localmod => ./localmod
 
 	exec := &fakeExecutor{
 		responses: map[string]string{
-			"go list":      `example.com/localmod	example.com/localmod`,
+			"go mod vendor": `# example.com/localmod => ./localmod
+## explicit; go 1.25.4
+example.com/localmod`,
 			"go mod":       "", // no remote downloads
 			"git ls-files": "go.mod\nlib.go",
 		},
@@ -176,11 +194,14 @@ replace gopkg.in/ini.v1 => github.com/go-ini/ini v1.67.0
 	require.NoError(t, err)
 
 	// go mod download returns the replacement target path (github.com/go-ini/ini).
-	// The resolver must map it back to the original (gopkg.in/ini.v1).
+	// The resolver must map it back to the original (gopkg.in/ini.v1) via
+	// the Replace field in modules.txt.
 	exec := &fakeExecutor{
 		responses: map[string]string{
-			"go list": `gopkg.in/ini.v1	gopkg.in/ini.v1`,
-			"go mod":  `{"Path":"github.com/go-ini/ini","Version":"v1.67.0","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}`,
+			"go mod vendor": `# gopkg.in/ini.v1 v1.67.0 => github.com/go-ini/ini v1.67.0
+## explicit; go 1.14
+gopkg.in/ini.v1`,
+			"go mod": `{"Path":"github.com/go-ini/ini","Version":"v1.67.0","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}`,
 		},
 	}
 
@@ -234,9 +255,16 @@ require (
 	// deduplicate it, merging packages from both modules into a single entry.
 	exec := &fakeExecutor{
 		responses: map[string]string{
-			"go list": `github.com/fatih/color	github.com/fatih/color
-github.com/mattn/go-colorable	github.com/mattn/go-colorable
-github.com/mattn/go-isatty	github.com/mattn/go-isatty`,
+			"go work vendor": `## workspace
+# github.com/fatih/color v1.18.0
+## explicit; go 1.25.0
+github.com/fatih/color
+# github.com/mattn/go-colorable v0.1.13
+## explicit; go 1.25.0
+github.com/mattn/go-colorable
+# github.com/mattn/go-isatty v0.0.20
+## explicit; go 1.25.0
+github.com/mattn/go-isatty`,
 			"go mod": `{"Path":"github.com/fatih/color","Version":"v1.18.0","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}
 {"Path":"github.com/mattn/go-colorable","Version":"v0.1.13","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}
 {"Path":"github.com/mattn/go-isatty","Version":"v0.0.20","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}`,
@@ -279,12 +307,14 @@ go 1.25.4
 	goWork, err := mod.ParseGoWorkFile(filepath.Join(dir, "go.work"))
 	require.NoError(t, err)
 
-	// cli depends on core, which is also a workspace member. The resolver must
-	// clear core's hash and packages since it is resolved from source, not fetched.
+	// cli depends on core, which is also a workspace member. core does not
+	// appear in modules.txt (workspace members are never vendored), but it
+	// does appear in go mod download output. The resolver must emit it as a
+	// local source entry with empty hash and packages.
 	exec := &fakeExecutor{
 		responses: map[string]string{
-			"go list": `github.com/purpleclay/example/core	github.com/purpleclay/example/core`,
-			"go mod":  `{"Path":"github.com/purpleclay/example/core","Version":"v1.0.0","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}`,
+			"go work vendor": `## workspace`,
+			"go mod":         `{"Path":"github.com/purpleclay/example/core","Version":"v1.0.0","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}`,
 		},
 	}
 
@@ -296,4 +326,320 @@ go 1.25.4
 	assert.Equal(t, "github.com/purpleclay/example/core", deps[0].Path)
 	assert.Empty(t, deps[0].Hash)
 	assert.Empty(t, deps[0].Packages)
+}
+
+func TestResolveRemoteModulesHashReuse(t *testing.T) {
+	fooDownload := ModuleDownload{Path: "example.com/foo", Version: "v1.2.3", Dir: "/cache/foo"}
+	barDownload := ModuleDownload{Path: "example.com/bar", Version: "v2.0.0", Dir: "/cache/bar"}
+
+	fooExisting := mod.ModuleConfig{
+		Path:      "example.com/foo",
+		Version:   "v1.2.3",
+		Hash:      "sha256-cached-foo",
+		GoVersion: "1.22",
+	}
+	barExisting := mod.ModuleConfig{
+		Path:      "example.com/bar",
+		Version:   "v2.0.0",
+		Hash:      "sha256-cached-bar",
+		GoVersion: "1.23",
+	}
+
+	tests := []struct {
+		name                string
+		modules             []modulestxt.Module // nil → derived from downloads with no replacements
+		downloads           []ModuleDownload
+		existingMods        map[string]mod.ModuleConfig
+		replacements        map[string]mod.Replacement
+		wantHashCalls       int64
+		wantHash            string
+		wantVersion         string
+		wantRequiredVersion string
+		wantGoVersion       string
+		wantGoVersionEmpty  bool
+		wantVersioned       bool
+		wantUnused          bool
+	}{
+		{
+			name:          "ReusesHashWhenVersionMatches",
+			downloads:     []ModuleDownload{fooDownload},
+			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": fooExisting},
+			wantHashCalls: 0,
+			wantHash:      "sha256-cached-foo",
+			wantVersion:   "v1.2.3",
+			wantGoVersion: "1.22",
+		},
+		{
+			name:          "HashesWhenVersionDiffers",
+			downloads:     []ModuleDownload{fooDownload},
+			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": {Path: "example.com/foo", Version: "v1.0.0", Hash: "sha256-old"}},
+			wantHashCalls: 1,
+			wantHash:      "sha256-fresh",
+			wantVersion:   "v1.2.3",
+		},
+		{
+			name:          "HashesNewModuleNotInExisting",
+			downloads:     []ModuleDownload{barDownload},
+			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": fooExisting},
+			wantHashCalls: 1,
+			wantHash:      "sha256-fresh",
+			wantVersion:   "v2.0.0",
+		},
+		{
+			name:          "HashesAllWhenExistingModsIsNil",
+			downloads:     []ModuleDownload{fooDownload, barDownload},
+			existingMods:  nil,
+			wantHashCalls: 2,
+			wantVersion:   "v1.2.3",
+		},
+		{
+			name:          "ReusesBothWhenAllMatch",
+			downloads:     []ModuleDownload{fooDownload, barDownload},
+			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": fooExisting, "example.com/bar": barExisting},
+			wantHashCalls: 0,
+			wantHash:      "sha256-cached-foo",
+			wantVersion:   "v1.2.3",
+			wantGoVersion: "1.22",
+		},
+		{
+			name:      "HashesWhenCachedHashIsEmpty",
+			downloads: []ModuleDownload{fooDownload},
+			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
+				Path: "example.com/foo", Version: "v1.2.3", Hash: "",
+			}},
+			wantHashCalls: 1,
+			wantHash:      "sha256-fresh",
+			wantVersion:   "v1.2.3",
+		},
+		{
+			name:      "NeverReusesLocalEntryEvenIfVersionMatches",
+			downloads: []ModuleDownload{fooDownload},
+			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
+				Path: "example.com/foo", Version: "v1.2.3", Hash: "sha256-local", Local: "./local/foo",
+			}},
+			wantHashCalls: 1,
+			wantHash:      "sha256-fresh",
+			wantVersion:   "v1.2.3",
+		},
+		{
+			// go.mod named a version on the left of "=>" (replace foo vOld => fork
+			// vNew): read directly from the replacements map, not inferred from
+			// modules.txt — the header is identical whether versioned or not.
+			name: "MarksVersionedWhenReplaceDirectiveNamesAVersion",
+			modules: []modulestxt.Module{{
+				Path:     "example.com/foo",
+				Version:  "v1.2.3",
+				Explicit: true,
+				Replace:  &modulestxt.Replace{Path: "example.com/foo-fork", Version: "v1.2.3"},
+			}},
+			downloads: []ModuleDownload{{Path: "example.com/foo-fork", Version: "v1.2.3", Dir: "/cache/fork"}},
+			replacements: map[string]mod.Replacement{
+				"example.com/foo": {OldPath: "example.com/foo", OldVersion: "v1.2.3", NewPath: "example.com/foo-fork"},
+			},
+			wantHashCalls: 1,
+			wantVersion:   "v1.2.3",
+			wantVersioned: true,
+		},
+		{
+			// Same replacement, but go.mod's directive omits the version (replace
+			// foo => fork vNew) — the common, unversioned form.
+			name: "NotVersionedWhenReplaceDirectiveOmitsVersion",
+			modules: []modulestxt.Module{{
+				Path:     "example.com/foo",
+				Version:  "v1.2.3",
+				Explicit: true,
+				Replace:  &modulestxt.Replace{Path: "example.com/foo-fork", Version: "v1.2.3"},
+			}},
+			downloads: []ModuleDownload{{Path: "example.com/foo-fork", Version: "v1.2.3", Dir: "/cache/fork"}},
+			replacements: map[string]mod.Replacement{
+				"example.com/foo": {OldPath: "example.com/foo", NewPath: "example.com/foo-fork"},
+			},
+			wantHashCalls: 1,
+			wantVersion:   "v1.2.3",
+			wantVersioned: false,
+		},
+		{
+			// An unused wildcard replace: go.mod declares "replace foo => fork
+			// vNew", but nothing requires foo, so go mod vendor recorded only the
+			// trailer form — modules.txt carries no version for foo. Nothing should
+			// be looked up in the download output or hashed; fork's version comes
+			// straight from the replace directive.
+			name: "UnusedWildcardReplaceSkipsDownloadAndHash",
+			modules: []modulestxt.Module{{
+				Path:    "example.com/foo",
+				Replace: &modulestxt.Replace{Path: "example.com/foo-fork", Version: "v9.9.9"},
+			}},
+			wantHashCalls: 0,
+			wantUnused:    true,
+			wantVersion:   "v9.9.9",
+		},
+		{
+			// An unused *versioned* replace: go.mod declares "replace foo vOld =>
+			// fork vNew", but nothing requires foo. Unlike the wildcard case, go
+			// mod vendor's trailer-only line still carries foo's old version, so
+			// this is only distinguishable from a used, versioned replace by
+			// having no packages or annotation — not by an empty Version.
+			name: "UnusedVersionedReplaceSkipsDownloadAndHash",
+			modules: []modulestxt.Module{{
+				Path:    "example.com/foo",
+				Version: "v0.8.0",
+				Replace: &modulestxt.Replace{Path: "example.com/foo-fork", Version: "v0.9.1"},
+			}},
+			replacements: map[string]mod.Replacement{
+				"example.com/foo": {OldPath: "example.com/foo", OldVersion: "v0.8.0", NewPath: "example.com/foo-fork"},
+			},
+			wantHashCalls:       0,
+			wantUnused:          true,
+			wantVersioned:       true,
+			wantVersion:         "v0.9.1",
+			wantRequiredVersion: "v0.8.0",
+		},
+		{
+			// An unused wildcard replace whose replacement target *is* found in
+			// the download output — not because foo's replace was exercised, but
+			// because something else independently requires fork too. A naive
+			// "was the replacement path downloaded" check would misclassify this
+			// as used; the entry must still be recognised as unused from its own
+			// shape (no packages, no annotation), regardless of fork's status.
+			name: "UnusedWildcardReplaceIgnoresUnrelatedDownloadOfReplacementTarget",
+			modules: []modulestxt.Module{
+				{
+					Path:    "example.com/foo",
+					Replace: &modulestxt.Replace{Path: "example.com/foo-fork", Version: "v9.9.9"},
+				},
+				{
+					Path:      "example.com/foo-fork",
+					Version:   "v9.9.9",
+					Explicit:  true,
+					GoVersion: "1.22",
+					Packages:  []string{"example.com/foo-fork"},
+				},
+			},
+			downloads:     []ModuleDownload{{Path: "example.com/foo-fork", Version: "v9.9.9", Dir: "/cache/fork"}},
+			wantHashCalls: 1, // only for the second, genuinely-used module entry
+			wantUnused:    true,
+			wantVersion:   "v9.9.9",
+		},
+		{
+			// modules.txt shows gopkg.in/ini.v1 => example.com/foo-fork.
+			// The existing manifest entry matches — hash is reused.
+			name: "ReusesRemoteReplaceEntryWhenReplacedPathMatches",
+			modules: []modulestxt.Module{{
+				Path:     "example.com/foo",
+				Version:  "v1.2.3",
+				Explicit: true,
+				Replace:  &modulestxt.Replace{Path: "example.com/foo-fork", Version: "v1.2.3"},
+			}},
+			downloads: []ModuleDownload{{Path: "example.com/foo-fork", Version: "v1.2.3", Dir: "/cache/fork"}},
+			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
+				Path: "example.com/foo", Version: "v1.2.3",
+				Hash: "sha256-replace-cached", GoVersion: "1.22",
+				ReplacedPath: "example.com/foo-fork",
+			}},
+			wantHashCalls: 0,
+			wantHash:      "sha256-replace-cached",
+			wantVersion:   "v1.2.3",
+			wantGoVersion: "1.22",
+		},
+		{
+			// Cached entry has no GoVersion (e.g. schema 3 manifest). Hash is still
+			// reused; GoVersion stays empty when the modules.txt annotation has none.
+			name:      "GoVersionStaysEmptyWhenCachedEntryAndModulesTxtBothLackIt",
+			downloads: []ModuleDownload{fooDownload},
+			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
+				Path: "example.com/foo", Version: "v1.2.3", Hash: "sha256-cached-foo",
+			}},
+			wantHashCalls:      0,
+			wantHash:           "sha256-cached-foo",
+			wantVersion:        "v1.2.3",
+			wantGoVersionEmpty: true,
+		},
+		{
+			// Cached entry has no GoVersion but modules.txt carries the annotation.
+			// Hash is reused and GoVersion is populated from the modules.txt value.
+			name: "PopulatesGoVersionFromModulesTxtWhenCachedEntryHasNone",
+			modules: []modulestxt.Module{
+				{Path: "example.com/foo", Version: "v1.2.3", Explicit: true, GoVersion: "1.26.0"},
+			},
+			downloads: []ModuleDownload{fooDownload},
+			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
+				Path: "example.com/foo", Version: "v1.2.3", Hash: "sha256-cached-foo",
+			}},
+			wantHashCalls: 0,
+			wantHash:      "sha256-cached-foo",
+			wantVersion:   "v1.2.3",
+			wantGoVersion: "1.26.0",
+		},
+		{
+			// The go.mod replace target changed (fork → fork2) since the manifest was
+			// cached. The cached ReplacedPath (foo-fork) no longer matches the new
+			// target (foo-fork2), so the hash must be recomputed.
+			name: "HashesRemoteReplaceWhenReplacedPathChanged",
+			modules: []modulestxt.Module{{
+				Path:     "example.com/foo",
+				Version:  "v1.2.3",
+				Explicit: true,
+				Replace:  &modulestxt.Replace{Path: "example.com/foo-fork2", Version: "v1.2.3"},
+			}},
+			downloads: []ModuleDownload{{Path: "example.com/foo-fork2", Version: "v1.2.3", Dir: "/cache/fork2"}},
+			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
+				Path: "example.com/foo", Version: "v1.2.3",
+				Hash: "sha256-replace-cached", ReplacedPath: "example.com/foo-fork",
+			}},
+			wantHashCalls: 1,
+			wantHash:      "sha256-fresh",
+			wantVersion:   "v1.2.3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hasher := &countingHasher{hash: "sha256-fresh"}
+			r := &Resolver{exec: &fakeExecutor{}, hasher: hasher}
+
+			// Derive plain module entries from downloads when no explicit modules
+			// are provided (covers all non-replacement test cases cleanly).
+			modules := tt.modules
+			if modules == nil {
+				modules = make([]modulestxt.Module, 0, len(tt.downloads))
+				for _, dl := range tt.downloads {
+					modules = append(modules, modulestxt.Module{
+						Path:     dl.Path,
+						Version:  dl.Version,
+						Explicit: true,
+					})
+				}
+			}
+
+			deps, err := r.resolveRemoteModules(context.Background(), modules, tt.downloads, tt.existingMods, tt.replacements)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantHashCalls, hasher.count.Load(), "hasher call count")
+
+			if len(deps) > 0 {
+				if tt.wantHash != "" {
+					assert.Equal(t, tt.wantHash, deps[0].Hash, "deps[0].Hash")
+				}
+				if tt.wantGoVersion != "" {
+					assert.Equal(t, tt.wantGoVersion, deps[0].GoVersion, "deps[0].GoVersion")
+				}
+				if tt.wantGoVersionEmpty {
+					assert.Empty(t, deps[0].GoVersion, "deps[0].GoVersion")
+				}
+				assert.Equal(t, tt.wantVersioned, deps[0].Versioned, "deps[0].Versioned")
+				assert.Equal(t, tt.wantUnused, deps[0].Unused, "deps[0].Unused")
+				assert.Equal(t, tt.wantVersion, deps[0].Version, "deps[0].Version")
+				assert.Equal(t, tt.wantRequiredVersion, deps[0].RequiredVersion, "deps[0].RequiredVersion")
+			}
+			// For multi-module cases, verify the second dep's cached values too.
+			if len(deps) > 1 && tt.existingMods != nil {
+				entry := tt.existingMods[deps[1].Path]
+				if entry.Hash != "" {
+					assert.Equal(t, entry.Hash, deps[1].Hash, "deps[1].Hash")
+				}
+				if entry.GoVersion != "" {
+					assert.Equal(t, entry.GoVersion, deps[1].GoVersion, "deps[1].GoVersion")
+				}
+			}
+		})
+	}
 }

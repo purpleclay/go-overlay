@@ -1,0 +1,6 @@
+## workspace
+# github.com/purpleclay/go-overlay/examples/go-workspace/mood v0.0.0 => ./mood
+## explicit; go 1.25.4
+# golang.org/x/text v0.21.0
+## explicit; go 1.23.0
+golang.org/x/text/language

@@ -3,15 +3,13 @@ package resolve
 import (
 	"context"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
-	"strings"
 
 	"github.com/purpleclay/conker/pool"
 	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/modulestxt"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/semver"
 )
@@ -20,54 +18,19 @@ import (
 // commands go through the Executor interface, making the resolver testable
 // with injected output.
 type Resolver struct {
-	exec Executor
+	exec   Executor
+	hasher Hasher
 }
 
 // New creates a Resolver with the given executor.
 func New(exec Executor) *Resolver {
-	return &Resolver{exec: exec}
-}
-
-// ValidatePlatforms checks that all given platform strings are supported by
-// the current Go toolchain.
-func (r *Resolver) ValidatePlatforms(ctx context.Context, platforms []string) error {
-	if len(platforms) == 0 {
-		return nil
-	}
-
-	out, err := r.exec.Run(ctx, []string{"go", "tool", "dist", "list"}, ".", nil)
-	if err != nil {
-		return fmt.Errorf("failed to get supported platforms: %w", err)
-	}
-
-	supported := make(map[string]bool)
-	for line := range strings.SplitSeq(out, "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			supported[line] = true
-		}
-	}
-
-	var invalid []string
-	for _, p := range platforms {
-		if !supported[p] {
-			invalid = append(invalid, p)
-		}
-	}
-
-	if len(invalid) > 0 {
-		return fmt.Errorf("unsupported platform(s): %s", strings.Join(invalid, ", "))
-	}
-
-	return nil
+	return &Resolver{exec: exec, hasher: NARHasher{}}
 }
 
 // ResolveModule resolves all dependencies for a single Go module.
-func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, platforms []string) ([]mod.ModuleConfig, error) {
-	if platforms == nil {
-		platforms = mod.DefaultPlatforms()
-	}
-
-	pkgsByMod, err := r.packagesByModule(ctx, goMod, platforms)
+// existingMods is the parsed existing manifest's module map; pass nil for a cold run.
+func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
+	vendored, err := r.vendorModules(ctx, goMod.Dir, []string{"GOWORK=off"}, "mod")
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +40,16 @@ func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, plat
 		return nil, err
 	}
 
-	modules, err := r.resolveRemoteModules(ctx, goMod.RemoteReplacements(), downloads, pkgsByMod)
+	pkgsByMod := make(map[string][]string, len(vendored))
+	var remoteModules []modulestxt.Module
+	for _, m := range vendored {
+		pkgsByMod[m.Path] = m.Packages
+		if m.Replace == nil || m.Replace.Local == "" {
+			remoteModules = append(remoteModules, m)
+		}
+	}
+
+	modules, err := r.resolveRemoteModules(ctx, remoteModules, downloads, existingMods, goMod.Replacements)
 	if err != nil {
 		return nil, err
 	}
@@ -96,13 +68,10 @@ func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, plat
 }
 
 // ResolveWorkspace resolves dependencies across all modules in a Go workspace.
-// It runs a single go mod download from the workspace root so Go's MVS applies
-// across all members, then gathers per-member package attribution with GOWORK=off.
-func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, platforms []string) ([]mod.ModuleConfig, error) {
-	if platforms == nil {
-		platforms = mod.DefaultPlatforms()
-	}
-
+// A single go mod vendor pass from the workspace root replaces the per-platform
+// go list fan-out. existingMods is the parsed existing manifest's module map;
+// pass nil for a cold run.
+func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
 	members, err := goWork.ParseMembers()
 	if err != nil {
 		return nil, err
@@ -113,6 +82,12 @@ func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile,
 		workspaceMembers[m.ModulePath] = m.Dir
 	}
 
+	// Single vendor pass from the workspace root with GOWORK active.
+	vendored, err := r.vendorModules(ctx, goWork.Dir, nil, "work")
+	if err != nil {
+		return nil, err
+	}
+
 	// Download from the workspace root with GOWORK active so the Go toolchain
 	// applies workspace-level MVS, producing one authoritative set of resolved
 	// module versions rather than per-member independent resolutions.
@@ -121,8 +96,17 @@ func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile,
 		return nil, err
 	}
 
-	// Parse each member go.mod once up front so both the packages and local
-	// replacement passes can reuse the result without duplicate file I/O.
+	pkgsByMod := make(map[string][]string, len(vendored))
+	var remoteModules []modulestxt.Module
+	for _, m := range vendored {
+		pkgsByMod[m.Path] = m.Packages
+		if m.Replace == nil || m.Replace.Local == "" {
+			remoteModules = append(remoteModules, m)
+		}
+	}
+
+	// Parse each member go.mod once up front so both local replacement
+	// passes can reuse the result without duplicate file I/O.
 	memberGoMods := make(map[string]*mod.GoModFile, len(goWork.Modules))
 	for _, modDir := range goWork.Modules {
 		goModPath := filepath.Join(goWork.Dir, modDir, mod.GoModFilename)
@@ -133,22 +117,20 @@ func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile,
 		memberGoMods[modDir] = goMod
 	}
 
-	// List packages for all workspace members in a single go list invocation per
-	// platform from the workspace root, keeping GOWORK active so workspace-level
-	// replace directives (including local replaces) are respected.
-	pkgsByMod, err := r.packagesByWorkspace(ctx, goWork, memberGoMods, platforms)
-	if err != nil {
-		return nil, err
-	}
-
-	// Gather remote replacements from all members, workspace-level taking precedence.
-	remoteRepls := make(map[string]mod.Replacement)
+	// Merge member replace directives, then apply go.work's on top — go.work
+	// replacements take precedence over member go.mod replacements (see
+	// GoWorkFile.RemoteReplacements).
+	replacements := make(map[string]mod.Replacement)
 	for _, modDir := range goWork.Modules {
-		maps.Copy(remoteRepls, memberGoMods[modDir].RemoteReplacements())
+		for path, repl := range memberGoMods[modDir].Replacements {
+			replacements[path] = repl
+		}
 	}
-	maps.Copy(remoteRepls, goWork.RemoteReplacements())
+	for path, repl := range goWork.Replacements {
+		replacements[path] = repl
+	}
 
-	remoteDeps, err := r.resolveRemoteModules(ctx, remoteRepls, downloads, pkgsByMod)
+	remoteDeps, err := r.resolveRemoteModules(ctx, remoteModules, downloads, existingMods, replacements)
 	if err != nil {
 		return nil, err
 	}
@@ -182,13 +164,31 @@ func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile,
 		allDeps[dep.Path] = dep
 	}
 
+	// Workspace members that are also required by other members appear in
+	// downloads but not in modules.txt. Emit them as local source entries.
+	downloadVersions := make(map[string]string, len(downloads))
+	for _, dl := range downloads {
+		downloadVersions[dl.Path] = dl.Version
+	}
+	for modulePath, localDir := range workspaceMembers {
+		if existing, found := allDeps[modulePath]; found {
+			// resolveLocalModules stores the path relative to the member's
+			// directory (e.g. "../mood" from server/). Correct it to the
+			// workspace-root-relative path so the builder can resolve it from
+			// the govendor.toml location.
+			existing.Local = localDir
+			allDeps[modulePath] = existing
+		} else if version, isDep := downloadVersions[modulePath]; isDep {
+			allDeps[modulePath] = mod.ModuleConfig{
+				Path:    modulePath,
+				Version: version,
+				Local:   localDir,
+			}
+		}
+	}
+
 	modules := make([]mod.ModuleConfig, 0, len(allDeps))
 	for _, m := range allDeps {
-		if localPath, isWorkspace := workspaceMembers[m.Path]; isWorkspace {
-			m.Hash = ""
-			m.Packages = nil
-			m.Local = localPath
-		}
 		modules = append(modules, m)
 	}
 
@@ -199,179 +199,30 @@ func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile,
 	return modules, nil
 }
 
-func (r *Resolver) packagesByModule(ctx context.Context, goMod *mod.GoModFile, platforms []string) (map[string][]string, error) {
-	p := pool.NewWithResults[map[string][]string]().WithContext(ctx)
-
-	seen := make(map[string]struct{}, len(platforms))
-	for _, plat := range platforms {
-		goos, goarch, ok := strings.Cut(plat, "/")
-		if !ok || goos == "" || goarch == "" {
-			return nil, fmt.Errorf("invalid platform %q: expected GOOS/GOARCH", plat)
-		}
-		if _, dup := seen[plat]; dup {
-			continue
-		}
-		seen[plat] = struct{}{}
-		p.Go(func(ctx context.Context) (map[string][]string, error) {
-			return r.packagesByModuleForPlatform(ctx, goMod, goos, goarch)
-		})
-	}
-
-	results, err := p.Wait()
+// vendorModules runs go <verb> vendor -o <tmpdir> (verb is "mod" or "work"),
+// parses the resulting modules.txt, and returns the ordered module list.
+// The temp dir is always removed before this function returns.
+func (r *Resolver) vendorModules(ctx context.Context, dir string, env []string, verb string) ([]modulestxt.Module, error) {
+	tmpdir, err := os.MkdirTemp("", "govendor-*")
 	if err != nil {
+		return nil, fmt.Errorf("failed to create temp vendor dir: %w", err)
+	}
+	defer os.RemoveAll(tmpdir)
+
+	if _, err := r.exec.Run(ctx, []string{"go", verb, "vendor", "-o", tmpdir}, dir, env); err != nil {
 		return nil, err
 	}
 
-	merged := make(map[string][]string)
-	for _, result := range results {
-		for m, pkgs := range result {
-			merged[m] = append(merged[m], pkgs...)
-		}
+	f, err := os.Open(filepath.Join(tmpdir, "modules.txt"))
+	if os.IsNotExist(err) {
+		return nil, nil
 	}
-
-	for modPath := range merged {
-		sort.Strings(merged[modPath])
-		merged[modPath] = slices.Compact(merged[modPath])
-	}
-
-	return merged, nil
-}
-
-func (r *Resolver) packagesByModuleForPlatform(ctx context.Context, goMod *mod.GoModFile, goos, goarch string) (map[string][]string, error) {
-	listFmt := fmt.Sprintf(`{{if not .Standard}}{{if .Module}}{{if ne .Module.Path "%s"}}{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}{{end}}`, goMod.ModulePath)
-
-	args := []string{
-		"go", "list", "-deps", "-test", "-f", listFmt, "./...",
-	}
-
-	// GOWORK=off ensures this module is processed independently, which is
-	// essential for workspaces where each module's dependencies must be
-	// resolved in isolation before being merged at the workspace level.
-	env := []string{
-		"GOWORK=off",
-		"GOOS=" + goos,
-		"GOARCH=" + goarch,
-	}
-
-	out, err := r.exec.Run(ctx, args, goMod.Dir, env)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open vendor modules.txt: %w", err)
 	}
+	defer f.Close()
 
-	pkgsByMod := ParsePackagesByModule(out)
-
-	// Include tool dependencies (Go 1.24+) so their packages appear in the
-	// module-to-package mapping and are listed in modules.txt. A separate
-	// invocation without -test avoids pulling in each tool's test-only
-	// dependencies.
-	if goMod.HasTools() {
-		toolArgs := []string{
-			"go", "list", "-deps", "-f", listFmt, "tool",
-		}
-
-		toolOut, err := r.exec.Run(ctx, toolArgs, goMod.Dir, env)
-		if err != nil {
-			return nil, err
-		}
-
-		for m, pkgs := range ParsePackagesByModule(toolOut) {
-			pkgsByMod[m] = append(pkgsByMod[m], pkgs...)
-		}
-	}
-
-	return pkgsByMod, nil
-}
-
-// packagesByWorkspace resolves package-to-module attribution for all workspace
-// members in a single go list invocation per platform, run from the workspace
-// root with GOWORK active. This ensures workspace-level replace directives
-// (including local replaces) are respected, unlike per-member GOWORK=off listing.
-func (r *Resolver) packagesByWorkspace(ctx context.Context, goWork *mod.GoWorkFile, memberGoMods map[string]*mod.GoModFile, platforms []string) (map[string][]string, error) {
-	p := pool.NewWithResults[map[string][]string]().WithContext(ctx)
-
-	seen := make(map[string]struct{}, len(platforms))
-	for _, plat := range platforms {
-		goos, goarch, ok := strings.Cut(plat, "/")
-		if !ok || goos == "" || goarch == "" {
-			return nil, fmt.Errorf("invalid platform %q: expected GOOS/GOARCH", plat)
-		}
-		if _, dup := seen[plat]; dup {
-			continue
-		}
-		seen[plat] = struct{}{}
-		p.Go(func(ctx context.Context) (map[string][]string, error) {
-			return r.packagesByWorkspaceForPlatform(ctx, goWork, memberGoMods, goos, goarch)
-		})
-	}
-
-	results, err := p.Wait()
-	if err != nil {
-		return nil, err
-	}
-
-	merged := make(map[string][]string)
-	for _, result := range results {
-		for m, pkgs := range result {
-			merged[m] = append(merged[m], pkgs...)
-		}
-	}
-
-	for modPath := range merged {
-		sort.Strings(merged[modPath])
-		merged[modPath] = slices.Compact(merged[modPath])
-	}
-
-	return merged, nil
-}
-
-func (r *Resolver) packagesByWorkspaceForPlatform(ctx context.Context, goWork *mod.GoWorkFile, memberGoMods map[string]*mod.GoModFile, goos, goarch string) (map[string][]string, error) {
-	// Build import path patterns for every workspace member so a single go list
-	// spans the full workspace, keeping GOWORK active so workspace-level replace
-	// directives are respected.
-	patterns := make([]string, 0, len(memberGoMods))
-	for _, goMod := range memberGoMods {
-		patterns = append(patterns, goMod.ModulePath+"/...")
-	}
-	sort.Strings(patterns)
-
-	listFmt := `{{if not .Standard}}{{if .Module}}{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}`
-	args := append([]string{"go", "list", "-deps", "-test", "-f", listFmt}, patterns...)
-
-	env := []string{
-		"GOOS=" + goos,
-		"GOARCH=" + goarch,
-	}
-
-	out, err := r.exec.Run(ctx, args, goWork.Dir, env)
-	if err != nil {
-		return nil, err
-	}
-
-	pkgsByMod := ParsePackagesByModule(out)
-
-	// Tool packages are module-scoped and cannot be batched from the workspace
-	// root, so they are listed per-member with GOWORK=off.
-	toolEnv := []string{
-		"GOWORK=off",
-		"GOOS=" + goos,
-		"GOARCH=" + goarch,
-	}
-
-	for _, goMod := range memberGoMods {
-		if !goMod.HasTools() {
-			continue
-		}
-		toolFmt := fmt.Sprintf(`{{if not .Standard}}{{if .Module}}{{if ne .Module.Path "%s"}}{{.Module.Path}}{{"\t"}}{{.ImportPath}}{{end}}{{end}}{{end}}`, goMod.ModulePath)
-		toolOut, err := r.exec.Run(ctx, []string{"go", "list", "-deps", "-f", toolFmt, "tool"}, goMod.Dir, toolEnv)
-		if err != nil {
-			return nil, err
-		}
-		for m, pkgs := range ParsePackagesByModule(toolOut) {
-			pkgsByMod[m] = append(pkgsByMod[m], pkgs...)
-		}
-	}
-
-	return pkgsByMod, nil
+	return modulestxt.Parse(f)
 }
 
 func (r *Resolver) downloadModules(ctx context.Context, goMod *mod.GoModFile) ([]ModuleDownload, error) {
@@ -399,39 +250,128 @@ func (r *Resolver) downloadWorkspaceModules(ctx context.Context, goWork *mod.GoW
 	return ParseDownloadOutput(out)
 }
 
-func (r *Resolver) resolveRemoteModules(ctx context.Context, remoteReplacements map[string]mod.Replacement, downloads []ModuleDownload, pkgsByMod map[string][]string) ([]mod.ModuleConfig, error) {
+// replacements is keyed by the original (left-hand) module path, sourced
+// directly from go.mod's/go.work's replace directives — the only reliable
+// way to know whether a directive was versioned (see mod.ModuleConfig.Versioned):
+// modules.txt's header is byte-identical either way, so inferring this from
+// modules.txt output alone is not possible.
+func (r *Resolver) resolveRemoteModules(ctx context.Context, modules []modulestxt.Module, downloads []ModuleDownload, existingMods map[string]mod.ModuleConfig, replacements map[string]mod.Replacement) ([]mod.ModuleConfig, error) {
+	if len(modules) == 0 {
+		return nil, nil
+	}
+
+	dlByPath := make(map[string]ModuleDownload, len(downloads))
+	for _, dl := range downloads {
+		dlByPath[dl.Path] = dl
+	}
+
 	p := pool.NewWithResults[mod.ModuleConfig]().WithMaxGoroutines(8).WithContext(ctx)
 
-	for _, meta := range downloads {
+	for _, m := range modules {
 		p.Go(func(_ context.Context) (mod.ModuleConfig, error) {
-			hash, err := NARHash(meta.Dir)
+			path := m.Path
+
+			// Unused replace: go.mod declares it, but nothing in the build
+			// requires the original path, so go mod vendor recorded only a
+			// trailer-only summary for it — no packages, no annotation,
+			// whether or not modules.txt happens to show a version on the
+			// left (that depends on whether the directive was versioned; see
+			// mod.ModuleConfig.Versioned, sourced from go.mod directly below).
+			// This can't be detected by whether the replacement path was
+			// downloaded: it may have been anyway, coincidentally, because
+			// something else independently requires it too — pkgsByMod's
+			// entry for it stays populated by that unrelated module either way.
+			if m.Replace != nil && m.Replace.Path != "" && len(m.Packages) == 0 && !m.Explicit && m.GoVersion == "" {
+				repl := replacements[path]
+				var requiredVersion string
+				if repl.OldVersion != "" && repl.OldVersion != m.Replace.Version {
+					requiredVersion = repl.OldVersion
+				}
+				return mod.ModuleConfig{
+					Path:            path,
+					Version:         m.Replace.Version,
+					RequiredVersion: requiredVersion,
+					Versioned:       repl.OldVersion != "",
+					ReplacedPath:    m.Replace.Path,
+					Unused:          true,
+				}, nil
+			}
+
+			var replacedPath string
+			var meta ModuleDownload
+			var ok bool
+
+			if m.Replace != nil && m.Replace.Path != "" {
+				// Remote replacement: the download is keyed by the replacement path.
+				replacedPath = m.Replace.Path
+				meta, ok = dlByPath[m.Replace.Path]
+			} else {
+				meta, ok = dlByPath[path]
+			}
+
+			if !ok {
+				return mod.ModuleConfig{}, fmt.Errorf("module %s not found in download output", path)
+			}
+
+			// The version modules.txt reported as required, before the replace
+			// was applied. Only meaningful — and only kept — when it diverges
+			// from the replacement's resolved version.
+			var requiredVersion string
+			if replacedPath != "" && m.Version != meta.Version {
+				requiredVersion = m.Version
+			}
+
+			// Whether go.mod's replace directive named a version on the left of
+			// "=>" — see mod.ModuleConfig.Versioned. Read directly from the
+			// parsed replace directive rather than inferred from modules.txt.
+			var versioned bool
+			if replacedPath != "" {
+				versioned = replacements[path].OldVersion != ""
+			}
+
+			// Warm path: remote (path, version) pairs are immutable under the
+			// checksum DB — reuse hash and go version from the existing manifest
+			// when the (path, version, replacedPath) triple matches.
+			if existingMods != nil {
+				if entry, ok := existingMods[path]; ok &&
+					entry.Version == meta.Version &&
+					entry.Local == "" &&
+					entry.Hash != "" &&
+					entry.ReplacedPath == replacedPath {
+					goVersion := entry.GoVersion
+					if goVersion == "" {
+						goVersion = m.GoVersion
+					}
+					return mod.ModuleConfig{
+						Path:            path,
+						Version:         meta.Version,
+						RequiredVersion: requiredVersion,
+						Versioned:       versioned,
+						Packages:        m.Packages,
+						Hash:            entry.Hash,
+						GoVersion:       goVersion,
+						ReplacedPath:    replacedPath,
+						Implicit:        !m.Explicit,
+					}, nil
+				}
+			}
+
+			// Cold path: hash the module.
+			hash, err := r.hasher.Hash(meta.Dir)
 			if err != nil {
 				return mod.ModuleConfig{}, fmt.Errorf("failed to hash downloaded module %s@%s: %w", meta.Path, meta.Version, err)
 			}
 
-			var goVersion string
-			if meta.GoMod != "" {
-				if modData, err := os.ReadFile(meta.GoMod); err == nil {
-					if mf, err := modfile.Parse(meta.GoMod, modData, nil); err == nil && mf.Go != nil {
-						goVersion = mf.Go.Version
-					}
-				}
-			}
-
-			path := meta.Path
-			var replacedPath string
-			if repl, ok := remoteReplacements[path]; ok {
-				path = repl.OldPath
-				replacedPath = meta.Path
-			}
-
 			return mod.ModuleConfig{
-				Path:         path,
-				Version:      meta.Version,
-				Packages:     pkgsByMod[path],
-				Hash:         hash,
-				GoVersion:    goVersion,
-				ReplacedPath: replacedPath,
+				Path:            path,
+				Version:         meta.Version,
+				RequiredVersion: requiredVersion,
+				Versioned:       versioned,
+				Packages:        m.Packages,
+				Hash:            hash,
+				GoVersion:       m.GoVersion,
+				ReplacedPath:    replacedPath,
+				Implicit:        !m.Explicit,
 			}, nil
 		})
 	}

@@ -2,6 +2,8 @@
 #
 # Sub-modules (each a focused file):
 #   fetch-module.nix  — fetchGoModule (downloads a single Go module)
+#   modules-txt.nix   — mkAnnotation, mkRemoteModuleEntry, mkRemoteReplaceTrailers
+#                        (shared modules.txt generation for remote modules)
 #   vendor-env.nix    — mkVendorEnv (constructs the vendor/ directory from a manifest)
 #   host-tool.nix     — mkHostTool, parseGoWorkModules
 #   common.nix        — commonRemovedAttrs, mkCommonAttrs (shared builder infrastructure)
@@ -19,7 +21,12 @@
 }: let
   fetchGoModule = import ./fetch-module.nix {inherit lib stdenvNoCC cacert git jq;};
 
-  vendorEnvModule = import ./vendor-env.nix {inherit lib runCommand fetchGoModule;};
+  modulesTxtModule = import ./modules-txt.nix {inherit lib;};
+  inherit (modulesTxtModule) mkAnnotation mkRemoteModuleEntry mkRemoteReplaceTrailers isUnusedReplace;
+
+  vendorEnvModule = import ./vendor-env.nix {
+    inherit lib runCommand fetchGoModule mkAnnotation mkRemoteModuleEntry mkRemoteReplaceTrailers isUnusedReplace;
+  };
   inherit (vendorEnvModule) mkVendorEnv mkModuleCopyCommands;
 
   hostToolModule = import ./host-tool.nix {inherit lib stdenv runCommand;};
@@ -46,6 +53,9 @@
       commonRemovedAttrs
       mkCommonAttrs
       mkTestPackages
+      mkRemoteModuleEntry
+      mkRemoteReplaceTrailers
+      isUnusedReplace
       ;
   };
 in {

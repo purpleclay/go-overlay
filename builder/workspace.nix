@@ -12,14 +12,36 @@
   commonRemovedAttrs,
   mkCommonAttrs,
   mkTestPackages,
+  mkRemoteModuleEntry,
+  mkRemoteReplaceTrailers,
+  isUnusedReplace,
 }: let
   inherit (builtins) fromTOML readFile;
   inherit (lib) concatMapStringsSep escapeShellArg optionalString pathExists;
 
+  # Normalize a local path to the canonical workspace-root-relative ./X form.
+  # go.work use directives are always ./X; member go.mod replace directives
+  # may use ../X (one level up from the member directory). Both refer to the
+  # same path when the member sits immediately under the workspace root.
+  normalizeLocalPath = p:
+    if lib.hasPrefix "./" p
+    then p
+    else if lib.hasPrefix "../" p
+    then "./" + lib.removePrefix "../" p
+    else "./" + p;
+
   # Generate modules.txt entry for a workspace module.
-  # Workspace deps have no hash — they are resolved from the source tree.
+  # Workspace members appear as `# path version => ./member` in modules.txt,
+  # matching what `go work vendor` produces.
   mkWorkspaceDepEntry = modPath: meta: let
-    header = "# ${modPath} ${meta.version}";
+    localPath =
+      if meta ? local
+      then normalizeLocalPath meta.local
+      else null;
+    header =
+      if localPath != null
+      then "# ${modPath} ${meta.version} => ${localPath}"
+      else "# ${modPath} ${meta.version}";
     explicit =
       if meta.go or "" != ""
       then "## explicit; go ${meta.go}"
@@ -30,21 +52,6 @@
   # Generate modules.txt entry for a local-replace module (=> ./path format).
   mkLocalEntry = modPath: meta: let
     header = "# ${modPath} ${meta.version} => ${meta.local}";
-    explicit =
-      if meta.go or "" != ""
-      then "## explicit; go ${meta.go}"
-      else "## explicit";
-    packages = concatMapStringsSep "\n" (p: p) (meta.packages or []);
-  in
-    header + "\n" + explicit + optionalString (packages != "") ("\n" + packages);
-
-  # Generate modules.txt entry for a remote module (standard format).
-  mkRemoteEntry = modPath: meta: let
-    isRemoteReplace = (meta ? replaced) && meta.replaced != modPath;
-    header =
-      if isRemoteReplace
-      then "# ${modPath} ${meta.version} => ${meta.replaced} ${meta.version}"
-      else "# ${modPath} ${meta.version}";
     explicit =
       if meta.go or "" != ""
       then "## explicit; go ${meta.go}"
@@ -121,17 +128,30 @@ in {
     # from external local replaces in the manifest.
     workspaceMemberPaths = workspaceConfig.modules or [];
 
-    # Modules with hash are fetched; workspace deps have no hash;
-    # local replaces have a local field that is NOT a workspace member path.
-    remoteModules = lib.filterAttrs (_: meta: meta ? hash && meta.hash != "" && !(meta ? local)) allModules;
-    workspaceDepModules = lib.filterAttrs (_: meta: (!(meta ? hash) || meta.hash == "") && (!(meta ? local) || builtins.elem meta.local workspaceMemberPaths)) allModules;
-    localWorkspaceModules = lib.filterAttrs (_: meta: (meta ? local) && !(builtins.elem meta.local workspaceMemberPaths)) allModules;
+    # Workspace members — their local path appears in workspaceMemberPaths.
+    # Resolved from the source tree; their hash is used only for drift detection.
+    # Local replaces — local path is NOT a workspace member path; copied from src.
+    # Remote modules — no local field; fetched from the module proxy.
+    remoteModules = lib.filterAttrs (_: meta: !(meta ? local) && !(isUnusedReplace meta)) allModules;
+    # Unused entries (mod.ModuleConfig.Unused) are excluded from remoteModules
+    # — correct for fetching/header generation, but the trailer
+    # they contribute still needs to be included, so trailer generation reads
+    # from this broader set instead.
+    remoteReplaceCandidates = lib.filterAttrs (_: meta: !(meta ? local)) allModules;
+    workspaceDepModules = lib.filterAttrs (_: meta: (meta ? local) && builtins.elem (normalizeLocalPath meta.local) workspaceMemberPaths) allModules;
+    localWorkspaceModules = lib.filterAttrs (_: meta: (meta ? local) && !(builtins.elem (normalizeLocalPath meta.local) workspaceMemberPaths)) allModules;
 
+    # For remote replacements (replace A => B [version]), govendor hashes the
+    # replacement module B, so we must fetch B — not A — to match the stored hash.
     externalSources =
       builtins.mapAttrs (
         goPackagePath: meta:
           fetchGoModule {
-            inherit goPackagePath go netrcFile GOPRIVATE GONOSUMDB GONOPROXY;
+            goPackagePath =
+              if meta ? replaced
+              then meta.replaced
+              else goPackagePath;
+            inherit go netrcFile GOPRIVATE GONOSUMDB GONOPROXY;
             inherit (meta) version hash;
           }
       )
@@ -164,14 +184,18 @@ in {
       )
       + optionalString (remoteModules != {}) (
         "\n"
-        + concatMapStringsSep "\n" (p: mkRemoteEntry p remoteModules.${p}) (builtins.attrNames remoteModules)
+        + concatMapStringsSep "\n" (p: mkRemoteModuleEntry p remoteModules.${p}) (builtins.attrNames remoteModules)
       )
       + optionalString (localWorkspaceModules != {}) (
         "\n"
         + concatMapStringsSep "\n" (
           p: "# ${p} => ${localWorkspaceModules.${p}.local}"
         ) (builtins.attrNames localWorkspaceModules)
-      );
+      )
+      + (let
+        remoteTrailers = mkRemoteReplaceTrailers remoteReplaceCandidates;
+      in
+        optionalString (remoteTrailers != "") ("\n" + remoteTrailers));
 
     useSymlinks = lib.versionAtLeast go.version "1.25";
 

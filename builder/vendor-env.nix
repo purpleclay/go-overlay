@@ -6,25 +6,27 @@
   lib,
   runCommand,
   fetchGoModule,
+  mkAnnotation,
+  mkRemoteModuleEntry,
+  mkRemoteReplaceTrailers,
+  isUnusedReplace,
 }: let
   inherit (lib) concatMapStringsSep escapeShellArg optionalString;
 
-  # Generate modules.txt entry for a single module
-  mkModuleEntry = goPackagePath: meta: let
-    isRemoteReplace = (meta ? replaced) && meta.replaced != goPackagePath;
-    header =
-      if meta ? local
-      then "# ${goPackagePath} ${meta.version} => ${meta.local}"
-      else if isRemoteReplace
-      then "# ${goPackagePath} ${meta.version} => ${meta.replaced} ${meta.version}"
-      else "# ${goPackagePath} ${meta.version}";
-    explicit =
-      if meta.go or "" != ""
-      then "## explicit; go ${meta.go}"
-      else "## explicit";
-    packages = concatMapStringsSep "\n" (p: p) (meta.packages or []);
-  in
-    header + "\n" + explicit + optionalString (packages != "") ("\n" + packages);
+  # Generate modules.txt entry for a single module. Local replacements have
+  # no counterpart in workspace.nix's remote/local split, so they stay here;
+  # remote entries defer to the shared helper both builders use.
+  mkModuleEntry = goPackagePath: meta:
+    if meta ? local
+    then let
+      header = "# ${goPackagePath} ${meta.version} => ${meta.local}";
+      annotation = mkAnnotation meta;
+      packages = concatMapStringsSep "\n" (p: p) (meta.packages or []);
+    in
+      header
+      + optionalString (annotation != "") ("\n" + annotation)
+      + optionalString (packages != "") ("\n" + packages)
+    else mkRemoteModuleEntry goPackagePath meta;
 
   # Generate shell commands to copy fetched modules into $out directory.
   # Handles overlapping module paths by processing deepest paths first and
@@ -90,17 +92,21 @@ in {
     useSymlinks = lib.versionAtLeast go.version "1.25";
     modules = manifest.mod or {};
 
-    remoteModules = lib.filterAttrs (_: meta: !(meta ? local)) modules;
+    # Unused entries (mod.ModuleConfig.Unused) have no version, hash, or
+    # packages of their own — nothing to fetch, and no header to render, only
+    # a trailer (handled by mkRemoteReplaceTrailers against the full `modules`
+    # set below, unfiltered).
+    remoteModules = lib.filterAttrs (_: meta: !(meta ? local) && !(isUnusedReplace meta)) modules;
     localModules = lib.filterAttrs (_: meta: meta ? local) modules;
 
-    # For remote path replacements (replace A => B version), govendor hashes the
+    # For remote replacements (replace A => B [version]), govendor hashes the
     # replacement module B, so we must fetch B — not A — to match the stored hash.
     sources =
       builtins.mapAttrs (
         goPackagePath: meta:
           fetchGoModule {
             goPackagePath =
-              if (meta ? replaced) && meta.replaced != goPackagePath
+              if meta ? replaced
               then meta.replaced
               else goPackagePath;
             inherit go netrcFile GOPRIVATE GONOSUMDB GONOPROXY;
@@ -110,9 +116,10 @@ in {
       remoteModules;
 
     modulesTxt = let
+      renderedModules = lib.filterAttrs (_: meta: !(isUnusedReplace meta)) modules;
       moduleEntries = concatMapStringsSep "\n" (
-        goPackagePath: mkModuleEntry goPackagePath modules.${goPackagePath}
-      ) (builtins.attrNames modules);
+        goPackagePath: mkModuleEntry goPackagePath renderedModules.${goPackagePath}
+      ) (builtins.attrNames renderedModules);
 
       localTrailers = concatMapStringsSep "\n" (
         goPackagePath: let
@@ -120,12 +127,7 @@ in {
         in "# ${goPackagePath} => ${meta.local}"
       ) (builtins.attrNames localModules);
 
-      remoteReplaceModules = lib.filterAttrs (goPackagePath: meta: (meta ? replaced) && meta.replaced != goPackagePath) modules;
-      remoteTrailers = concatMapStringsSep "\n" (
-        goPackagePath: let
-          meta = remoteReplaceModules.${goPackagePath};
-        in "# ${goPackagePath} => ${meta.replaced} ${meta.version}"
-      ) (builtins.attrNames remoteReplaceModules);
+      remoteTrailers = mkRemoteReplaceTrailers modules;
     in
       moduleEntries
       + optionalString (localTrailers != "") ("\n" + localTrailers)
