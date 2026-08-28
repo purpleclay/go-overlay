@@ -4,11 +4,12 @@ schema = 3
 
 [mod]
   [mod."github.com/stretchr/testify"]
-    version = "v1.12.0"
-    hash = "sha256-4TTdUoXSGvvFIesZrd8naFcWn5nIwUIRsrt4McTSXl0="
+    version = "v1.12.1"
+    hash = "sha256-9MTDdVjZMh1MJ5EH3HmAFrm24YqZayeMBgKwtaURZCc="
     go = "1.17"
     packages = ["github.com/stretchr/testify/assert", "github.com/stretchr/testify/assert/yaml", "github.com/stretchr/testify/internal/difflib", "github.com/stretchr/testify/internal/spew"]
-  [mod."gopkg.in/yaml.v3"]
-    version = "v3.0.1"
-    hash = "sha256-FqL9TKYJ0XkNwJFnq9j0VvJ5ZUU1RvH/52h/f5bkYAU="
-    packages = ["gopkg.in/yaml.v3"]
+  [mod."go.yaml.in/yaml/v3"]
+    version = "v3.0.5"
+    hash = "sha256-ygho+GU5kE7vPMx+dZYyNfCaeMjNxj66XmrcVf3afFE="
+    go = "1.16"
+    packages = ["go.yaml.in/yaml/v3"]
