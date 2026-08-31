@@ -64,8 +64,8 @@ github.com/muesli/termenv v0.16.0 h1:S5AlUN9dENB57rsbnkPyfdGuWIlkmzJjbFf0Tf5FWUc
 github.com/muesli/termenv v0.16.0/go.mod h1:ZRfOIKPFDYQoDFF4Olj7/QJbW60Ol/kL1pU3VfY/Cnk=
 github.com/nix-community/go-nix v0.0.0-20250101154619-4bdde671e0a1 h1:kpt9ZfKcm+EDG4s40hMwE//d5SBgDjUOrITReV2u4aA=
 github.com/nix-community/go-nix v0.0.0-20250101154619-4bdde671e0a1/go.mod h1:qgCw4bBKZX8qMgGeEZzGFVT3notl42dBjNqO2jut0M0=
-github.com/purpleclay/chomp v0.7.0 h1:0uvN0kORhGsoH+SRuqytPBId2++A3PGEJaIlEpiPYAM=
-github.com/purpleclay/chomp v0.7.0/go.mod h1:LFdzw8cqsEPc1W9KtjhcmlKBWI4t3XTve4iSw5IH22c=
+github.com/purpleclay/chomp v0.7.1 h1:ggatMgp0wLbFXHyZzDXPsZutibdq2OrQcTauQ8ZEOK4=
+github.com/purpleclay/chomp v0.7.1/go.mod h1:LFdzw8cqsEPc1W9KtjhcmlKBWI4t3XTve4iSw5IH22c=
 github.com/purpleclay/conker v0.5.0 h1:HCouBW6ytNEnjC1boH0g47XStjwwnCE9vvObqeUcbCg=
 github.com/purpleclay/conker v0.5.0/go.mod h1:Z0pACltbbiDeziaVba13aJrErcChLPkVxFIzOHOd3q8=
 github.com/purpleclay/x/cli v0.8.0 h1:CPN8HwplhMx6F00WgcuHKen0KZtEHukf/+MSxyZyUU0=
