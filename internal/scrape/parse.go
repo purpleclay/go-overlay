@@ -89,7 +89,7 @@ func Href(version string) chomp.Combinator[string] {
 
 func eol() chomp.Combinator[string] {
 	return func(s string) (string, string, error) {
-		rem, _, err := chomp.Pair(chomp.Until("\n"), chomp.Crlf())(s)
+		rem, _, err := chomp.Pair(chomp.Until("\n"), chomp.LineEnding())(s)
 		if err != nil {
 			return rem, "", err
 		}
