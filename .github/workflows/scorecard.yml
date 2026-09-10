@@ -1,0 +1,60 @@
+name: scorecard
+on:
+  schedule:
+    - cron: "30 4 * * 1" # weekly, Monday 04:30 UTC
+  push:
+    branches:
+      - main
+  branch_protection_rule:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analysis:
+    name: analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # let scorecard's checks read repo content (e.g. workflow files)
+      security-events: write # upload the SARIF results to code scanning
+      id-token: write # required by scorecard-action for publish_results
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.deps.dev:443
+            api.github.com:443
+            api.osv.dev:443
+            api.scorecard.dev:443
+            fulcio.sigstore.dev:443
+            github.com:443
+            oss-fuzz-build-logs.storage.googleapis.com:443
+            rekor.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
+            www.bestpractices.dev:443
+
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: scorecard_analysis
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      # Required: publish_results only pushes to the public OSSF badge API.
+      # Getting results into this repo's own Security tab needs a separate
+      # SARIF upload to code scanning.
+      - name: publish_results
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: results.sarif
