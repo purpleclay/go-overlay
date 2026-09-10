@@ -6,6 +6,7 @@
   <img alt="Go" src="https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white" />
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/MIT-gray?logo=github&logoColor=white" /></a>
   <a href="https://github.com/purpleclay/go-overlay/actions/workflows/go-update.yml"><img alt="Go Update" src="https://github.com/purpleclay/go-overlay/actions/workflows/go-update.yml/badge.svg" /></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/purpleclay/go-overlay"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/purpleclay/go-overlay/badge" /></a>
 </div>
 <br>
 

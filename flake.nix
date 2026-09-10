@@ -66,6 +66,7 @@
           shellcheck
           shfmt
           typos
+          zizmor
         ];
 
         pre-commit-check = git-hooks.lib.${system}.run {
