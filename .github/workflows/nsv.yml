@@ -2,30 +2,43 @@ name: nsv
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
 
 jobs:
   nsv:
+    name: nsv
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read # nsv pushes via secrets.GH_NSV, not GITHUB_TOKEN; this only covers setup_nix's API calls
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_NSV }}
+          # relied on by nsv to push the signed tag it creates
+          persist-credentials: true
 
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
+      - name: setup_nix
+        uses: $/.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cachix-token: ${{ secrets.GH_CACHIX }}
 
-      - name: GPG Import
-        uses: purpleclay/gpg-import-action@b3678ccc1d6c597a08e9e6e32c17e974eb7bf9c8 # v0
+      - name: import_gpg
+        uses: purpleclay/gpg-import-action@b3678ccc1d6c597a08e9e6e32c17e974eb7bf9c8 # v0.2.0
         with:
           key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
-      - name: Tag
+      - name: signed_tag
         run: nix run github:purpleclay/nsv -- tag --show

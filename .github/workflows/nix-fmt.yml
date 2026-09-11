@@ -15,22 +15,30 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   alejandra:
     runs-on: ubuntu-24.04
     if: github.actor != 'renovate[bot]'
-    name: check formatting
+    name: check_formatting
+    permissions:
+      contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
 
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: setup_nix
+        uses: $/.github/actions/setup-nix
         with:
           cachix-token: ${{ secrets.GH_CACHIX }}
 
-      - name: Run Alejandra
+      - name: run
         run: nix develop -c alejandra --check . --exclude ./manifests

@@ -16,14 +16,14 @@ concurrency:
 jobs:
   analysis:
     name: analysis
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read # let scorecard's checks read repo content (e.g. workflow files)
       security-events: write # upload the SARIF results to code scanning
       id-token: write # required by scorecard-action for publish_results
     steps:
-      - name: Harden Runner
+      - name: harden_runner
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: block

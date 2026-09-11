@@ -17,9 +17,11 @@ on:
           - govulncheck
           - staticcheck
 
-permissions:
-  contents: write
-  pull-requests: write
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.tool || 'all' }}
+  cancel-in-progress: false
+
+permissions: {}
 
 jobs:
   setup:
@@ -28,8 +30,15 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.tools }}
     steps:
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
       - name: Build tool matrix
         id: matrix
+        env:
+          TOOL_INPUT: ${{ inputs.tool }}
         run: |
           tools='[
             { "name": "delve", "module": "github.com/go-delve/delve", "sub-packages": "cmd/dlv" },
@@ -40,8 +49,8 @@ jobs:
             { "name": "staticcheck", "module": "honnef.co/go/tools", "sub-packages": "cmd/staticcheck" }
           ]'
 
-          if [ -n "${{ inputs.tool }}" ]; then
-            tools=$(echo "$tools" | jq -c --arg name "${{ inputs.tool }}" '[.[] | select(.name == $name)]')
+          if [ -n "${TOOL_INPUT}" ]; then
+            tools=$(echo "$tools" | jq -c --arg name "${TOOL_INPUT}" '[.[] | select(.name == $name)]')
           fi
 
           echo "tools=$(echo "$tools" | jq -c)" >> "$GITHUB_OUTPUT"
@@ -50,35 +59,50 @@ jobs:
     needs: setup
     runs-on: ubuntu-24.04
     name: update / ${{ matrix.tool.name }}
+    permissions:
+      contents: read # writes go through secrets.GH_NSV, not GITHUB_TOKEN; this only covers setup_nix's API calls
     strategy:
       matrix:
         tool: ${{ fromJSON(needs.setup.outputs.matrix) }}
       fail-fast: false
     steps:
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ secrets.GH_NSV }}
+          # relied on by the later git push/gh pr create steps
+          persist-credentials: true
 
       - name: Setup Nix
-        uses: ./.github/actions/setup-nix
+        uses: $/.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cachix-token: ${{ secrets.GH_CACHIX }}
 
       - name: Detect Latest Version
         id: detect
+        env:
+          TOOL_MODULE: ${{ matrix.tool.module }}
         run: |
-          version=$(nix run .#goscrape -- mod-proxy detect ${{ matrix.tool.module }} --include-prerelease)
+          version=$(nix run .#goscrape -- mod-proxy detect "${TOOL_MODULE}" --include-prerelease)
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Check and Generate Manifest
         id: generate
         env:
           GITHUB_TOKEN: ${{ secrets.GH_NSV }}
+          DETECTED_VERSION: ${{ steps.detect.outputs.version }}
+          TOOL_NAME: ${{ matrix.tool.name }}
+          TOOL_MODULE: ${{ matrix.tool.module }}
+          TOOL_SUB_PACKAGES: ${{ matrix.tool.sub-packages }}
         run: |
-          version="${{ steps.detect.outputs.version }}"
-          name="${{ matrix.tool.name }}"
+          version="${DETECTED_VERSION}"
+          name="${TOOL_NAME}"
           manifest="manifests/${name}/${version#v}.nix"
           branch="nix-tool-${name}-${version#v}"
 
@@ -92,8 +116,8 @@ jobs:
             exit 0
           fi
 
-          nix run .#goscrape -- mod-proxy generate ${{ matrix.tool.module }} \
-            --sub-packages ${{ matrix.tool.sub-packages }} \
+          nix run .#goscrape -- mod-proxy generate "${TOOL_MODULE}" \
+            --sub-packages "${TOOL_SUB_PACKAGES}" \
             --versions "${version}" \
             --output "manifests/${name}"
 
@@ -104,7 +128,7 @@ jobs:
 
       - name: GPG Import
         if: steps.generate.outputs.generated == 'true'
-        uses: purpleclay/gpg-import-action@b3678ccc1d6c597a08e9e6e32c17e974eb7bf9c8 # v0
+        uses: purpleclay/gpg-import-action@b3678ccc1d6c597a08e9e6e32c17e974eb7bf9c8 # v0.2.0
         with:
           key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
@@ -113,11 +137,15 @@ jobs:
         if: steps.generate.outputs.generated == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GH_NSV }}
+          TOOL_NAME: ${{ matrix.tool.name }}
+          GENERATED_VERSION: ${{ steps.generate.outputs.version }}
+          GENERATED_MANIFEST: ${{ steps.generate.outputs.manifest }}
+          GENERATED_BRANCH: ${{ steps.generate.outputs.branch }}
         run: |
-          name="${{ matrix.tool.name }}"
-          version="${{ steps.generate.outputs.version }}"
-          manifest="${{ steps.generate.outputs.manifest }}"
-          branch="${{ steps.generate.outputs.branch }}"
+          name="${TOOL_NAME}"
+          version="${GENERATED_VERSION}"
+          manifest="${GENERATED_MANIFEST}"
+          branch="${GENERATED_BRANCH}"
 
           git checkout -b "$branch"
           git add "$manifest" "manifests/${name}/index.nix"

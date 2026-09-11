@@ -3,32 +3,110 @@ on:
   push:
     tags:
       - "v*.*.*"
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   release:
-    runs-on: ubuntu-24.04
     name: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: release
     permissions:
-      contents: write
+      contents: write # create the GitHub release
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            cafe.github.com:443
+            github.com:443
+            release-assets.githubusercontent.com:443
+            tmaproduction.blob.core.windows.net:443
+            tuf-repo-cdn.sigstore.dev:443
+            tuf-repo.github.com:443
+
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
           fetch-depth: 0
 
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate Release Note
-        id: release_notes
+      - name: validate_tag
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          echo "note<<EOF" >> $GITHUB_OUTPUT
-          nix run github:purpleclay/release-note >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          # The push.tags trigger above is a glob, not a SemVer check —
+          # "v*.*.*" also matches non-numeric tags like "vfoo.bar.baz". Fail
+          # closed here before generating notes or publishing a release.
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::tag '$TAG' is not a valid release tag; expected vX.Y.Z (see RELEASE.md#versioning)"
+            exit 1
+          fi
 
-      - name: Create Release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
-        with:
-          body: ${{ steps.release_notes.outputs.note }}
-          make_latest: true
+      - name: verify_tag_signature
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # gh release create --verify-tag (below) only checks the tag
+          # exists — it says nothing about who signed it. Only "purpleclay"
+          # is an authorized signer; fetch that key alone into an isolated
+          # keyring so any successful verification can only mean this tag
+          # was signed by them, not just signed by *someone*.
+          export GNUPGHOME
+          GNUPGHOME="$(mktemp -d)"
+          gh api users/purpleclay/gpg_keys --jq '.[].raw_key' | gpg --batch --import
+          if ! git verify-tag "$TAG"; then
+            echo "::error::tag '$TAG' is not signed by an authorized signer (purpleclay)"
+            exit 1
+          fi
+
+      - name: release_note
+        id: notes
+        uses: purpleclay/release-note-action@9fa4adcdc68af9a0630f8d64fae6e38e31c259f7 # v0.2.0
+
+      - name: publish_release
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          NOTES_FILE: ${{ steps.notes.outputs.release-note-path }}
+        run: |
+          set -euo pipefail
+          # gh release view's failure text ("release not found") is an
+          # internal error string with no documented stability guarantee —
+          # only gh's exit status is part of its contract, so a future gh
+          # release could reword it and silently steer a valid first-time
+          # publish into the fatal branch below. Query the REST API
+          # directly instead: GitHub's own error body always carries a
+          # "status" field mirroring the real HTTP status code, which is
+          # part of the documented API response shape, not gh's wording.
+          #
+          # Immutable releases mean an existing release for this tag can
+          # never be deleted or modified, complete or not — there is no
+          # recovery path here but a new tag (see "Fixing a bad release" in
+          # RELEASE.md). So existence is treated as done, not something to
+          # replace: no delete, ever, on this path.
+          if response=$(gh api "repos/$REPO/releases/tags/$TAG" 2>/dev/null); then
+            echo "release for '$TAG' already exists; nothing to publish"
+            url=$(jq -r '.html_url' <<< "$response")
+          elif [ "$(jq -r '.status // empty' <<< "$response" 2>/dev/null)" = "404" ]; then
+            url=$(gh release create "$TAG" \
+              --title "$TAG" \
+              --notes-file "$NOTES_FILE" \
+              --verify-tag)
+          else
+            echo "::error::could not confirm whether a release for '$TAG' already exists: $response"
+            exit 1
+          fi
+          echo "url=${url}" >> "$GITHUB_OUTPUT"

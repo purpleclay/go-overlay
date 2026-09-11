@@ -22,29 +22,41 @@ on:
         description: "Passphrase for the GPG private key"
         required: true
 
+permissions: {}
+
 jobs:
   govendor:
+    name: govendor
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read # writes go through secrets.token, not GITHUB_TOKEN; this only covers Setup Nix's API calls
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 2
           token: ${{ secrets.token }}
+          # relied on by the later git push --force-with-lease step
+          persist-credentials: true
 
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
+      - name: setup_nix
+        uses: $/.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: GPG Import
-        uses: purpleclay/gpg-import-action@b3678ccc1d6c597a08e9e6e32c17e974eb7bf9c8 # v0
+      - name: import_gpg
+        uses: purpleclay/gpg-import-action@b3678ccc1d6c597a08e9e6e32c17e974eb7bf9c8 # v0.2.0
         with:
           key: ${{ secrets.gpg-private-key }}
           passphrase: ${{ secrets.gpg-passphrase }}
 
-      - name: Update govendor.toml
+      - name: generate_govendor_toml
         env:
           CO_AUTHOR: ${{ inputs.co-author }}
           DIRS: ${{ inputs.working-directory }}

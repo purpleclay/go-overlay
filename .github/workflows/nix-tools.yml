@@ -31,22 +31,30 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
-  detect-changes:
+  detect_changes:
     runs-on: ubuntu-24.04
-    name: detect changes
+    name: detect_changes
+    permissions:
+      contents: read
     outputs:
       tools: ${{ steps.filter.outputs.tools }}
       has-tools: ${{ steps.filter.outputs.has-tools }}
       shared: ${{ steps.changes.outputs.shared }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
 
-      - name: Generate filters
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: generate_filters
         id: gen-filters
         run: |
           tools='["delve","gofumpt","golangci-lint","gopls","govulncheck","staticcheck"]'
@@ -69,17 +77,20 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "tools=$tools" >> "$GITHUB_OUTPUT"
 
-      - name: Detect changed paths
-        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+      - name: detect_changed_paths
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: changes
         with:
           filters: ${{ steps.gen-filters.outputs.filters }}
 
-      - name: Filter changed tools
+      - name: filter_changed_tools
         id: filter
+        env:
+          ALL_TOOLS: ${{ steps.gen-filters.outputs.tools }}
+          CHANGES: ${{ steps.changes.outputs.changes }}
         run: |
-          all_tools='${{ steps.gen-filters.outputs.tools }}'
-          changes='${{ steps.changes.outputs.changes }}'
+          all_tools="$ALL_TOOLS"
+          changes="$CHANGES"
           shared=$(echo "$changes" | jq 'any(. == "shared")')
 
           if [ "$shared" == "true" ]; then
@@ -93,44 +104,64 @@ jobs:
           echo "has-tools=$(echo "$tools" | jq 'length > 0')" >> "$GITHUB_OUTPUT"
 
   build:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.has-tools == 'true'
+    needs: detect_changes
+    if: needs.detect_changes.outputs.has-tools == 'true'
     runs-on: ${{ matrix.os }}
     name: build / ${{ matrix.tool }} / ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       matrix:
-        tool: ${{ fromJSON(needs.detect-changes.outputs.tools) }}
+        tool: ${{ fromJSON(needs.detect_changes.outputs.tools) }}
         os: [ubuntu-24.04, macos-15]
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
 
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: setup_nix
+        uses: $/.github/actions/setup-nix
         with:
           cachix-token: ${{ secrets.GH_CACHIX }}
           push-to-cachix: "true"
 
-      - name: Build ${{ matrix.tool }}
-        run: nix build '.#go.tools.${{ matrix.tool }}.latest'
+      - name: build (${{ matrix.tool }})
+        env:
+          TOOL: ${{ matrix.tool }}
+        run: nix build ".#go.tools.${TOOL}.latest"
 
-  build-with-default-tools:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.shared == 'true'
+  build_with_default_tools:
+    needs: detect_changes
+    if: needs.detect_changes.outputs.shared == 'true'
     runs-on: ${{ matrix.os }}
-    name: build / withDefaultTools / ${{ matrix.os }}
+    name: build_with_default_tools / ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-24.04, macos-15]
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
 
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: setup_nix
+        uses: $/.github/actions/setup-nix
         with:
           cachix-token: ${{ secrets.GH_CACHIX }}
           push-to-cachix: "true"
 
-      - name: Build withDefaultTools
+      - name: build (withDefaultTools)
         run: nix build '.#go.withDefaultTools'
