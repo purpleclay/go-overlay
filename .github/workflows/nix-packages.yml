@@ -29,23 +29,31 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
-  detect-changes:
+  detect_changes:
     runs-on: ubuntu-24.04
-    name: detect changes
+    name: detect_changes
+    permissions:
+      contents: read
     outputs:
       shared: ${{ steps.changes.outputs.shared }}
       goscrape: ${{ steps.changes.outputs.goscrape }}
       govendor: ${{ steps.changes.outputs.govendor }}
     steps:
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Detect changed packages
-        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: changes
         with:
           filters: |
@@ -62,20 +70,29 @@ jobs:
               - 'govendor.nix'
               - 'cmd/govendor/**'
 
-  build-goscrape:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.goscrape == 'true' || needs.detect-changes.outputs.shared == 'true'
+  build_goscrape:
+    needs: detect_changes
+    if: needs.detect_changes.outputs.goscrape == 'true' || needs.detect_changes.outputs.shared == 'true'
     runs-on: ${{ matrix.os }}
-    name: build-goscrape / ${{ matrix.os }}
+    name: build_goscrape / ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-24.04, macos-15]
     steps:
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Nix
-        uses: ./.github/actions/setup-nix
+        uses: $/.github/actions/setup-nix
         with:
           cachix-token: ${{ secrets.GH_CACHIX }}
           push-to-cachix: "true"
@@ -83,20 +100,29 @@ jobs:
       - name: Build goscrape
         run: nix build .#goscrape
 
-  build-govendor:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.govendor == 'true' || needs.detect-changes.outputs.shared == 'true'
+  build_govendor:
+    needs: detect_changes
+    if: needs.detect_changes.outputs.govendor == 'true' || needs.detect_changes.outputs.shared == 'true'
     runs-on: ${{ matrix.os }}
-    name: build-govendor / ${{ matrix.os }}
+    name: build_govendor / ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-24.04, macos-15]
     steps:
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Nix
-        uses: ./.github/actions/setup-nix
+        uses: $/.github/actions/setup-nix
         with:
           cachix-token: ${{ secrets.GH_CACHIX }}
           push-to-cachix: "true"

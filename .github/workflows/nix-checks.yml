@@ -29,24 +29,32 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   checks:
     runs-on: ${{ matrix.os }}
     name: checks / ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-24.04, macos-15]
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
 
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: setup_nix
+        uses: $/.github/actions/setup-nix
         with:
           cachix-token: ${{ secrets.GH_CACHIX }}
 
-      - name: Run all checks
+      - name: run
         run: nix flake check

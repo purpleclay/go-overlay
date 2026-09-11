@@ -21,78 +21,120 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
-  template-default:
+  template_default:
     runs-on: ${{ matrix.os }}
-    name: template / default / ${{ matrix.os }}
+    name: template_default / ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-24.04, macos-15]
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
 
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: setup_nix
+        uses: $/.github/actions/setup-nix
         with:
           cachix-token: ${{ secrets.GH_CACHIX }}
 
-      - name: Scaffold default template
+      - name: scaffold
         run: nix flake new -t .#default /tmp/go-overlay-template
 
-      - name: Build default template
-        run: nix build --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-template
+      - name: build_template
+        env:
+          GO_OVERLAY_PATH: ${{ github.workspace }}
+        run: nix build --override-input go-overlay "path:${GO_OVERLAY_PATH}" /tmp/go-overlay-template
 
-      - name: Verify default template dev shell
-        run: nix develop --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-template --command go version
+      # TODO: should this not just run the built binary?
+      - name: verify_template
+        env:
+          GO_OVERLAY_PATH: ${{ github.workspace }}
+        run: nix develop --override-input go-overlay "path:${GO_OVERLAY_PATH}" /tmp/go-overlay-template --command go version
 
-  template-workspace:
+  template_workspace:
     runs-on: ${{ matrix.os }}
-    name: template / workspace / ${{ matrix.os }}
+    name: template_workspace / ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-24.04, macos-15]
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
 
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: setup_nix
+        uses: $/.github/actions/setup-nix
         with:
           cachix-token: ${{ secrets.GH_CACHIX }}
 
-      - name: Scaffold workspace template
+      - name: scaffold
         run: nix flake new -t .#workspace /tmp/go-overlay-workspace-template
 
-      - name: Build workspace template
-        run: nix build --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-workspace-template
+      # TODO: should this not just run the built binary?
+      - name: build_template
+        env:
+          GO_OVERLAY_PATH: ${{ github.workspace }}
+        run: nix build --override-input go-overlay "path:${GO_OVERLAY_PATH}" /tmp/go-overlay-workspace-template
 
-      - name: Verify workspace template dev shell
-        run: nix develop --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-workspace-template --command go version
+      - name: verify_template
+        env:
+          GO_OVERLAY_PATH: ${{ github.workspace }}
+        run: nix develop --override-input go-overlay "path:${GO_OVERLAY_PATH}" /tmp/go-overlay-workspace-template --command go version
 
-  template-image:
+  template_image:
     runs-on: ubuntu-24.04
-    name: template / image / ubuntu-24.04
+    name: template_image
+    permissions:
+      contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
 
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: setup_nix
+        uses: $/.github/actions/setup-nix
         with:
           cachix-token: ${{ secrets.GH_CACHIX }}
 
-      - name: Scaffold image template
+      - name: scaffold
         run: nix flake new -t .#image /tmp/go-overlay-image-template
 
-      - name: Build image template binary
-        run: nix build --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-image-template
+      - name: build_template
+        env:
+          GO_OVERLAY_PATH: ${{ github.workspace }}
+        run: nix build --override-input go-overlay "path:${GO_OVERLAY_PATH}" /tmp/go-overlay-image-template
 
-      - name: Build image template container image
-        run: nix build --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-image-template#image
+      - name: build_template_image
+        env:
+          GO_OVERLAY_PATH: ${{ github.workspace }}
+        run: nix build --override-input go-overlay "path:${GO_OVERLAY_PATH}" /tmp/go-overlay-image-template#image
 
-      - name: Verify image template dev shell
-        run: nix develop --override-input go-overlay path:${{ github.workspace }} /tmp/go-overlay-image-template --command go version
+      - name: verify_template
+        env:
+          GO_OVERLAY_PATH: ${{ github.workspace }}
+        run: nix develop --override-input go-overlay "path:${GO_OVERLAY_PATH}" /tmp/go-overlay-image-template --command go version

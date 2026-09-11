@@ -4,22 +4,34 @@ on:
     branches: [main]
     paths: ["**/go.mod", "**/go.sum"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
 jobs:
   detect:
+    name: detect
     if: startsWith(github.head_ref, 'renovate/')
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: read # checkout the PR diff to detect changed go.mod/go.sum dirs
     outputs:
       dirs: ${{ steps.detect.outputs.dirs }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Detect changed module directories
+      - name: detect_changed_modules
         id: detect
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -39,8 +51,8 @@ jobs:
     needs: detect
     if: needs.detect.outputs.dirs != ''
     permissions:
-      contents: read
-    uses: ./.github/workflows/govendor-update.yml
+      contents: read # passed through to govendor-update.yml, which pushes via its own token secret
+    uses: $/.github/workflows/govendor-update.yml
     with:
       working-directory: ${{ needs.detect.outputs.dirs }}
     secrets:
