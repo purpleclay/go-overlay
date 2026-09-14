@@ -1,0 +1,80 @@
+name: osv-scanner
+on:
+  schedule:
+    - cron: "0 5 * * 1" # weekly, Monday 05:00 UTC
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write # upload SARIF results to code scanning
+    steps:
+      - name: harden_runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            api.osv.dev:443
+            ghcr.io:443
+            github.com:443
+
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: scan
+        id: scan
+        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+        env:
+          GOTOOLCHAIN: auto
+        with:
+          scan-args: |-
+            --output=results.json
+            --format=json
+            --experimental-plugins=github/actions
+            --experimental-exclude=test/fixtures
+            --experimental-exclude=g:**/testdata/**
+            -r
+            ./
+        continue-on-error: true
+
+      - name: check_scan_completed
+        if: ${{ steps.scan.outcome == 'failure' }}
+        run: |
+          set -euo pipefail
+          if [ ! -s results.json ]; then
+            echo "::error::osv-scanner failed without writing results.json, so there are no results to report on."
+            exit 1
+          fi
+
+      - name: report
+        uses: google/osv-scanner-action/osv-reporter-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+        with:
+          scan-args: |-
+            --output=results.sarif
+            --new=results.json
+            --gh-annotations=false
+            --fail-on-vuln=true
+
+      - name: upload_sarif
+        if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          sarif_file: results.sarif
