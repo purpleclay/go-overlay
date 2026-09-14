@@ -1,6 +1,6 @@
 module github.com/purpleclay/go-overlay/examples/build-tags
 
-go 1.26.3
+go 1.27.1
 
 require github.com/fatih/color v1.19.0
 

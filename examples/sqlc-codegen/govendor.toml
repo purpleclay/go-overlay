@@ -13,13 +13,13 @@ schema = 4
     hash = "sha256-VWl9sqUzdOuhW0KzQlv0gwwUQClYkmZwSydHG2sALYw="
     packages = ["github.com/google/uuid"]
   [mod."github.com/mattn/go-isatty"]
-    version = "v0.0.20"
-    hash = "sha256-qhw9hWtU5wnyFyuMbKx+7RB8ckQaFQ8D+8GKPkN3HHQ="
-    go = "1.15"
+    version = "v0.0.24"
+    hash = "sha256-pmq8KKIb2+qMF3E1cR2B7NAj5joF2tZduyXjIfIlkTk="
+    go = "1.20"
     packages = ["github.com/mattn/go-isatty"]
   [mod."github.com/ncruces/go-strftime"]
-    version = "v0.1.9"
-    hash = "sha256-T0iw+UEckzueWHT88PkTnZZixyKCEa+DTLzIiiohuWY="
+    version = "v1.0.0"
+    hash = "sha256-GYIwYDONuv/yTE0AEugCHQbtV3oiBaco93xUNYFcVBQ="
     go = "1.17"
     packages = ["github.com/ncruces/go-strftime"]
   [mod."github.com/remyoudompheng/bigfft"]
@@ -31,16 +31,15 @@ schema = 4
     version = "v0.0.0-20230315142452-642cacee5cc0"
     hash = "sha256-EIbPHNoqK3ObKd8eLBU6i1Pr1XNmkRy+rEHgPf1s814="
     go = "1.18"
-    packages = ["golang.org/x/exp/constraints"]
   [mod."golang.org/x/sys"]
-    version = "v0.30.0"
-    hash = "sha256-BuhWtwDkciVioc03rxty6G2vcZVnPX85lI7tgQOFVP8="
-    go = "1.18"
+    version = "v0.47.0"
+    hash = "sha256-TpbRyWWqHjddP6QzUgAbaLd2EE0S+GYNRUIDJd18r98="
+    go = "1.25.0"
     packages = ["golang.org/x/sys/unix", "golang.org/x/sys/windows"]
   [mod."modernc.org/libc"]
-    version = "v1.61.13"
-    hash = "sha256-hXpwqDrTCUDmicfa1CfS62e4K/M6uOlv06xY1kxEYEY="
-    go = "1.21"
+    version = "v1.75.6"
+    hash = "sha256-ezkLVTbqvmsAQYph/UiI+3cublDzPL38HUqk197WWXI="
+    go = "1.25.0"
     packages = ["modernc.org/libc", "modernc.org/libc/errno", "modernc.org/libc/fcntl", "modernc.org/libc/fts", "modernc.org/libc/grp", "modernc.org/libc/honnef.co/go/netdb", "modernc.org/libc/langinfo", "modernc.org/libc/limits", "modernc.org/libc/netdb", "modernc.org/libc/netinet/in", "modernc.org/libc/poll", "modernc.org/libc/pthread", "modernc.org/libc/pwd", "modernc.org/libc/signal", "modernc.org/libc/stdio", "modernc.org/libc/stdlib", "modernc.org/libc/sys/socket", "modernc.org/libc/sys/stat", "modernc.org/libc/sys/types", "modernc.org/libc/termios", "modernc.org/libc/time", "modernc.org/libc/unistd", "modernc.org/libc/utime", "modernc.org/libc/uuid", "modernc.org/libc/uuid/uuid", "modernc.org/libc/wctype"]
   [mod."modernc.org/mathutil"]
     version = "v1.7.1"
@@ -48,12 +47,12 @@ schema = 4
     go = "1.21"
     packages = ["modernc.org/mathutil"]
   [mod."modernc.org/memory"]
-    version = "v1.8.2"
-    hash = "sha256-ZBxK0KGXHBwUj1MfKunAI6BsTf0CbcnimPBY4B9Ewps="
-    go = "1.21"
+    version = "v1.12.1"
+    hash = "sha256-Y/kW9/A5uF+Y66kDbxrh4muFgE3CEee6YzSl2FMPcRg="
+    go = "1.23.0"
     packages = ["modernc.org/memory"]
   [mod."modernc.org/sqlite"]
-    version = "v1.36.1"
-    hash = "sha256-uFj06dcrOntxnzzc+cl86YayrzSuZ8Pnf79NNA4o4Mg="
-    go = "1.21"
-    packages = ["modernc.org/sqlite", "modernc.org/sqlite/lib"]
+    version = "v1.58.0"
+    hash = "sha256-cO1uE6/DGc1+jJ22bmqjQFqGPyFt3mTK1cmHRQXBTqk="
+    go = "1.25.0"
+    packages = ["modernc.org/sqlite", "modernc.org/sqlite/lib", "modernc.org/sqlite/vtab"]

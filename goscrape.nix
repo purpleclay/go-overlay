@@ -5,8 +5,8 @@
   commit ? "unknown",
 }: let
   pname = "goscrape";
-  version = "v0.4.3";
-  buildDate = "2026-08-07T00:00:00Z";
+  version = "v0.4.4";
+  buildDate = "2026-09-14T00:00:00Z";
 in
   buildGoApplication {
     inherit pname version go;
