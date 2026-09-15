@@ -1,6 +1,6 @@
 module github.com/purpleclay/go-overlay/examples/vendored
 
-go 1.26.3
+go 1.27.1
 
 require charm.land/lipgloss/v2 v2.0.3
 

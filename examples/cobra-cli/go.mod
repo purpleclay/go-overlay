@@ -1,6 +1,6 @@
 module github.com/purpleclay/go-overlay/examples/cobra-cli
 
-go 1.26.3
+go 1.27.1
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
@@ -31,5 +31,5 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/sys v0.44.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 )

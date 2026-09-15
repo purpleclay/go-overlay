@@ -3,12 +3,12 @@
 schema = 4
 
 [workspace]
-  go = "1.26.3"
+  go = "1.27.1"
   modules = ["./mood", "./server"]
 
 [mod]
   [mod."github.com/purpleclay/go-overlay/examples/go-workspace/mood"]
     version = "v0.0.0"
-    hash = "sha256-BBfppCUor65e7cVgVYlMgUUDzVeG1mrhWH6fzR4zqQg="
-    go = "1.26.3"
+    hash = "sha256-p0u+MLjouxziUvJrxH/NwEXuWeyA+F9T+OZE+mqCVHc="
+    go = "1.27.1"
     local = "./mood"

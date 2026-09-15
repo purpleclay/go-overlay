@@ -127,7 +127,7 @@ schema = 4
     go = "1.25.0"
     packages = ["golang.org/x/sys/unix", "golang.org/x/sys/windows"]
   [mod."golang.org/x/text"]
-    version = "v0.37.0"
-    hash = "sha256-8XDOnlPIybcDRy89fkjG5VqtIt5Ku+LmaqYhgKl7i1E="
-    go = "1.25.0"
+    version = "v0.42.0"
+    hash = "sha256-bviKbNmkN4Yf2dpgwmP6yNcZEakCcv1R+YyAxCdJGkY="
+    go = "1.26.0"
     packages = ["golang.org/x/text/transform"]
