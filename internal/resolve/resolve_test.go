@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/purpleclay/go-overlay/internal/mod"
 	"github.com/purpleclay/go-overlay/internal/modulestxt"
@@ -75,6 +76,42 @@ func (f *fakeExecutor) Run(_ context.Context, args []string, _ string, _ []strin
 	}
 
 	return "", fmt.Errorf("unexpected command: %s", full)
+}
+
+// blockingExecutor records the args it was called with, then blocks until
+// the context is cancelled and returns ctx.Err(), standing in for a real
+// `go` subprocess that OSExecutor.Run has sent SIGINT to and is waiting on.
+type blockingExecutor struct {
+	args chan []string
+}
+
+func (b blockingExecutor) Run(ctx context.Context, args []string, _ string, _ []string) (string, error) {
+	b.args <- args
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+func TestVendorModulesRemovesTempDirOnCancellation(t *testing.T) {
+	exec := blockingExecutor{args: make(chan []string, 1)}
+	r := &Resolver{exec: exec, hasher: &countingHasher{}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := r.vendorModules(ctx, t.TempDir(), nil, "mod")
+	require.ErrorIs(t, err, context.Canceled)
+
+	// The temp dir vendorModules created is the last arg of "go mod vendor
+	// -o <tmpdir>" — assert on that specific path rather than scanning the
+	// shared os.TempDir(), which could contain an unrelated govendor-* entry
+	// from another process and fail this test for reasons unconnected to it.
+	args := <-exec.args
+	tmpdir := args[len(args)-1]
+	_, statErr := os.Stat(tmpdir)
+	assert.True(t, os.IsNotExist(statErr), "expected temp dir %s to have been removed", tmpdir)
 }
 
 func writeTestFile(t *testing.T, dir, name, content string) string {

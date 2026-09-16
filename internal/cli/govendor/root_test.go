@@ -25,9 +25,6 @@ func induceDrift(t *testing.T, dir string) {
 	require.NoError(t, err)
 }
 
-// TestExecuteExitCodes exercises the real CLI command end to end (cobra flag
-// parsing, vendor resolution, and exit-code mapping together) against the
-// gofmt / terraform fmt -check convention: 0 success, 1 drift, 2 error.
 func TestExecuteExitCodes(t *testing.T) {
 	version := cli.VersionInfo{}
 
@@ -35,11 +32,11 @@ func TestExecuteExitCodes(t *testing.T) {
 		dir := t.TempDir()
 		writeGoMod(t, filepath.Join(dir, "go.mod"), "1.22")
 
-		code, err := govendor.Execute(version, []string{dir})
+		code, err := govendor.Execute(t.Context(), version, []string{dir})
 		require.NoError(t, err)
 		require.Equal(t, 0, code)
 
-		code, err = govendor.Execute(version, []string{"--check", dir})
+		code, err = govendor.Execute(t.Context(), version, []string{"--check", dir})
 		require.NoError(t, err)
 		require.Equal(t, 0, code)
 	})
@@ -48,12 +45,12 @@ func TestExecuteExitCodes(t *testing.T) {
 		dir := t.TempDir()
 		writeGoMod(t, filepath.Join(dir, "go.mod"), "1.22")
 
-		_, err := govendor.Execute(version, []string{dir})
+		_, err := govendor.Execute(t.Context(), version, []string{dir})
 		require.NoError(t, err)
 
 		induceDrift(t, dir)
 
-		code, err := govendor.Execute(version, []string{"--check", dir})
+		code, err := govendor.Execute(t.Context(), version, []string{"--check", dir})
 		require.Error(t, err)
 		require.Equal(t, 1, code)
 	})
@@ -62,19 +59,19 @@ func TestExecuteExitCodes(t *testing.T) {
 		dir := t.TempDir()
 		writeGoMod(t, filepath.Join(dir, "go.mod"), "1.22")
 
-		code, err := govendor.Execute(version, []string{"--check", dir})
+		code, err := govendor.Execute(t.Context(), version, []string{"--check", dir})
 		require.Error(t, err)
 		require.Equal(t, 1, code)
 	})
 
 	t.Run("2_BadFlagCombination", func(t *testing.T) {
-		code, err := govendor.Execute(version, []string{"--workspace"})
+		code, err := govendor.Execute(t.Context(), version, []string{"--workspace"})
 		require.Error(t, err)
 		require.Equal(t, 2, code)
 	})
 
 	t.Run("2_UnknownFlag", func(t *testing.T) {
-		code, err := govendor.Execute(version, []string{"--definitely-not-a-real-flag"})
+		code, err := govendor.Execute(t.Context(), version, []string{"--definitely-not-a-real-flag"})
 		require.Error(t, err)
 		require.Equal(t, 2, code)
 	})
@@ -83,7 +80,7 @@ func TestExecuteExitCodes(t *testing.T) {
 		dir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("this is not valid go.mod content\n"), 0o644))
 
-		code, err := govendor.Execute(version, []string{"--check", dir})
+		code, err := govendor.Execute(t.Context(), version, []string{"--check", dir})
 		require.Error(t, err)
 		require.Equal(t, 2, code)
 	})
@@ -91,14 +88,14 @@ func TestExecuteExitCodes(t *testing.T) {
 	t.Run("2_MixedSeverityReportsMostSevere", func(t *testing.T) {
 		driftDir := t.TempDir()
 		writeGoMod(t, filepath.Join(driftDir, "go.mod"), "1.22")
-		_, err := govendor.Execute(version, []string{driftDir})
+		_, err := govendor.Execute(t.Context(), version, []string{driftDir})
 		require.NoError(t, err)
 		induceDrift(t, driftDir)
 
 		errorDir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(errorDir, "go.mod"), []byte("this is not valid go.mod content\n"), 0o644))
 
-		code, err := govendor.Execute(version, []string{"--check", driftDir, errorDir})
+		code, err := govendor.Execute(t.Context(), version, []string{"--check", driftDir, errorDir})
 		require.Error(t, err)
 		require.Equal(t, 2, code)
 	})

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // Executor runs external commands and returns their stdout. The interface
@@ -44,6 +45,13 @@ func (OSExecutor) Run(ctx context.Context, args []string, dir string, env []stri
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), env...)
+
+	// exec.CommandContext defaults to SIGKILL on cancellation, giving go no
+	// chance to remove its .partial cache markers or let a spawned git exit
+	// cleanly. Send SIGINT first, falling back to the default kill only if
+	// the process hasn't exited within WaitDelay.
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.WaitDelay = 2 * time.Second
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
