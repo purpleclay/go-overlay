@@ -1,6 +1,7 @@
 package govendor
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -47,7 +48,7 @@ func resultsExitCode(results []vendor.Result) int {
 	return exitError
 }
 
-func Execute(version cli.VersionInfo, args []string) (int, error) {
+func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, error) {
 	var (
 		check            bool
 		recursive        bool
@@ -157,6 +158,7 @@ func Execute(version cli.VersionInfo, args []string) (int, error) {
 
 	err := cli.Execute(
 		cmd,
+		cli.WithContext(ctx),
 		cli.WithVersionFlag(version),
 		cli.WithTheme(theme.PurpleClayCLI()),
 		cli.WithErrorHandler(func(w io.Writer, t cli.Theme, err error) {

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 
 	"github.com/purpleclay/go-overlay/internal/cli/govendor"
 	"github.com/purpleclay/x/cli"
@@ -15,6 +18,9 @@ var (
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	version := cli.VersionInfo{
 		Version:   Version,
 		GitCommit: Commit,
@@ -25,7 +31,7 @@ func main() {
 
 	// cli.Execute already renders the error to stderr via the configured
 	// error handler before returning it here.
-	if code, err := govendor.Execute(version, os.Args[1:]); err != nil {
+	if code, err := govendor.Execute(ctx, version, os.Args[1:]); err != nil {
 		os.Exit(code)
 	}
 }
