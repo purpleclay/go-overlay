@@ -149,6 +149,9 @@ func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, 
 	cmd.MarkFlagsMutuallyExclusive("recursive", "workspace")
 	cmd.SetArgs(args)
 
+	// Should be removed in a future release, when the flag is deprecated
+	cmd.Flags().MarkHidden("include-platform")
+
 	cli.ExitCodes(
 		cmd,
 		cli.ExitCode{Code: exitOK, Desc: "manifests up to date/generated"},
