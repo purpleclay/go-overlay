@@ -101,7 +101,7 @@ jobs:
         run: nix develop --override-input go-overlay "path:${GO_OVERLAY_PATH}" /tmp/go-overlay-workspace-template --command go version
 
   template_image:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: template_image
     permissions:
       contents: read
