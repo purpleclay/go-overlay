@@ -25,7 +25,7 @@ permissions: {}
 
 jobs:
   setup:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: setup
     outputs:
       matrix: ${{ steps.matrix.outputs.tools }}
@@ -57,7 +57,7 @@ jobs:
 
   update:
     needs: setup
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: update / ${{ matrix.tool.name }}
     permissions:
       contents: read # writes go through secrets.GH_NSV, not GITHUB_TOKEN; this only covers setup_nix's API calls
