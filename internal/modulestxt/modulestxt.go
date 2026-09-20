@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"golang.org/x/mod/modfile"
 )
 
 // Module is one entry from a vendor/modules.txt file.
@@ -36,60 +38,20 @@ type Replace struct {
 // ignored. Parse is tolerant of modules that have no package lines.
 func Parse(r io.Reader) ([]Module, error) {
 	var modules []Module
-	var current *Module
-	seen := make(map[string]bool)
+	var stream Stream
+	stream.Emit = func(m Module) { modules = append(modules, m) }
 
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		line := scanner.Text()
-
-		switch {
-		case line == "## workspace":
-			// workspace header — accepted, produces no output
-
-		case strings.HasPrefix(line, "# "):
-			if current != nil {
-				modules = append(modules, *current)
-				seen[current.Path] = true
-			}
-			m, err := parseHeader(line[2:])
-			if err != nil {
-				return nil, err
-			}
-			// go mod vendor appends version-less "# path => replacement" trailer
-			// lines after all module entries to summarise replace directives. Skip
-			// them — the real versioned header for the same path was already parsed.
-			// Version-less entries with a NEW path are either a wildcard local
-			// replace header, or a remote replace that go.mod declares but that
-			// nothing in the build actually requires — see resolve.go, which
-			// reads go.mod's replace directives directly to tell these apart from
-			// an ordinary module and from each other, rather than inferring it
-			// from modules.txt's shape here.
-			if seen[m.Path] && m.Version == "" {
-				current = nil
-				continue
-			}
-			current = &m
-
-		case strings.HasPrefix(line, "## "):
-			if current == nil {
-				return nil, fmt.Errorf("modulestxt: annotation before module header: %q", line)
-			}
-			parseAnnotation(line[3:], current)
-
-		case line != "":
-			if current != nil {
-				current.Packages = append(current.Packages, line)
-			}
+		if err := stream.Line(scanner.Text()); err != nil {
+			return nil, err
 		}
 	}
-
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	if current != nil {
-		modules = append(modules, *current)
-	}
+	stream.Flush()
+
 	return modules, nil
 }
 
@@ -131,13 +93,23 @@ func parseHeader(s string) (Module, error) {
 	return m, nil
 }
 
+// parseReplace classifies the right-hand side of a "=>" as either a local
+// directory or a remote module.
+//
+// Directory detection uses modfile.IsDirectoryPath, the same predicate the
+// Go toolchain applies when parsing a replace directive. Testing for a
+// leading "." is not enough: `replace x => /opt/lib` and, on Windows,
+// `replace x => C:\src\lib` are both valid and both produce a modules.txt
+// header the "." test rejects outright, failing the whole resolve for a
+// vendor tree the toolchain itself wrote happily.
 func parseReplace(s, header string) (Replace, error) {
 	parts := strings.Fields(s)
 	switch {
-	case len(parts) == 1 && strings.HasPrefix(parts[0], "."):
-		return Replace{Local: parts[0]}, nil
-	case len(parts) == 2 && strings.HasPrefix(parts[0], "."):
-		// ./dir vX.Y — unusual but accepted; treat as local
+	case len(parts) == 0:
+		return Replace{}, fmt.Errorf("modulestxt: malformed replacement in header: %q", header)
+	case modfile.IsDirectoryPath(parts[0]):
+		// A directory replacement never carries a version, but tolerate one
+		// rather than fail the run over a field the resolver doesn't read.
 		return Replace{Local: parts[0]}, nil
 	case len(parts) == 2:
 		return Replace{Path: parts[0], Version: parts[1]}, nil

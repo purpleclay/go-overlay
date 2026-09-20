@@ -1,0 +1,7 @@
+go: downloading github.com/google/uuid v1.6.0
+## workspace
+# example.com/shared v0.0.0 => ./shared
+## explicit; go 1.25
+# github.com/google/uuid v1.6.0
+## explicit
+github.com/google/uuid

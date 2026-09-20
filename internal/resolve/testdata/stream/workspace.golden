@@ -1,0 +1,5 @@
+go.work: resolving dependency graph
+go.work: downloading modules (1 so far)
+go.work: vendoring
+go.work: vendored 1 module, 0 packages
+go.work: vendored 2 modules, 1 package

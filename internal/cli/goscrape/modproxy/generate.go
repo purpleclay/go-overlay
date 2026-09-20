@@ -118,8 +118,9 @@ type modEnvExecutor struct {
 	baseEnv []string
 }
 
-func (e modEnvExecutor) Run(ctx context.Context, args []string, dir string, env []string) (string, error) {
-	return resolve.OSExecutor{}.Run(ctx, args, dir, append(e.baseEnv, env...))
+func (e modEnvExecutor) Run(ctx context.Context, c resolve.Command) (string, error) {
+	c.Env = append(e.baseEnv, c.Env...)
+	return resolve.OSExecutor{}.Run(ctx, c)
 }
 
 func generateManifest(ctx context.Context, module, ver string, subPackages []string) (*toolManifest, error) {

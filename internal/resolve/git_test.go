@@ -110,7 +110,7 @@ type erroringExecutor struct {
 	err error
 }
 
-func (e erroringExecutor) Run(context.Context, []string, string, []string) (string, error) {
+func (e erroringExecutor) Run(context.Context, Command) (string, error) {
 	return "", e.err
 }
 

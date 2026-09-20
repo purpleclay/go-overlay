@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/purpleclay/go-overlay/internal/progress"
 	"github.com/purpleclay/go-overlay/internal/resolve"
 	"github.com/purpleclay/go-overlay/internal/ui"
 	"github.com/purpleclay/go-overlay/internal/vendor"
@@ -53,6 +54,7 @@ func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, 
 		check            bool
 		recursive        bool
 		workspace        bool
+		noProgress       bool
 		depth            int
 		includePlatforms []string
 		tableRendered    bool
@@ -64,7 +66,7 @@ func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, 
 		Short: "Generate a vendor manifest for building Go applications with Nix",
 		Long: `
 		Generate a govendor.toml manifest containing Go module metadata for use
-		with go-overlay's buildGoApplication Nix function.
+		with go-overlay's buildGoApplication or buildGoWorkspace Nix functions.
 
 		The manifest includes module versions, NAR hashes, Go version requirements,
 		and package lists. This metadata enables Nix to build Go applications using
@@ -127,7 +129,12 @@ func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, 
 				return fmt.Errorf("--include-platform is no longer supported: resolution is now platform-independent (AnyTags) and covers all platforms unconditionally; remove the flag and regenerate your manifest")
 			}
 
-			resolver := resolve.New(resolve.OSExecutor{})
+			var reporter progress.Reporter = progress.NewPlainReporter(cmd.ErrOrStderr())
+			if noProgress {
+				reporter = progress.NopReporter{}
+			}
+
+			resolver := resolve.New(resolve.OSExecutor{}, resolve.WithReporter(reporter))
 			v := vendor.NewVendor(resolver, opts...)
 			results, err := v.VendorFiles(cmd.Context())
 			if len(results) > 0 {
@@ -146,6 +153,7 @@ func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, 
 	cmd.Flags().BoolVarP(&workspace, "workspace", "w", false, "reverse scan from a submodule path for a govendor.toml containing a workspace manifest (requires --check)")
 	cmd.Flags().IntVarP(&depth, "depth", "d", 0, "limit directory traversal depth (0 = unlimited)")
 	cmd.Flags().StringArrayVar(&includePlatforms, "include-platform", nil, "removed: resolution is now platform-independent, this flag will error if set")
+	cmd.Flags().BoolVar(&noProgress, "no-progress", false, "disable progress output during resolution")
 	cmd.MarkFlagsMutuallyExclusive("recursive", "workspace")
 	cmd.SetArgs(args)
 

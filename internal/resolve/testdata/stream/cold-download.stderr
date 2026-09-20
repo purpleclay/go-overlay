@@ -1,0 +1,12 @@
+go: downloading github.com/davecgh/go-spew v1.1.1
+go: downloading github.com/google/uuid v1.6.0
+go: downloading github.com/pmezard/go-difflib v1.0.0
+# github.com/davecgh/go-spew v1.1.1
+## explicit
+github.com/davecgh/go-spew/spew
+# github.com/google/uuid v1.6.0
+## explicit
+github.com/google/uuid
+# github.com/pmezard/go-difflib v1.0.0
+## explicit
+github.com/pmezard/go-difflib/difflib
