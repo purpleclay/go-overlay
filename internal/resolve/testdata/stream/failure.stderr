@@ -1,0 +1,2 @@
+go: errors parsing go.mod:
+go.mod:5: require github.com/fatih/color: version "v99.99.99" invalid: should be v0 or v1, not v99

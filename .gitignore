@@ -6,6 +6,7 @@
 !*.go
 !*.golden
 !*.nix
+!*.stderr
 !.envrc
 !.github/**/*
 !.gitignore

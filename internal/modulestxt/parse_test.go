@@ -2,6 +2,7 @@ package modulestxt_test
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -205,4 +206,33 @@ func TestParseWorkspaceOnly(t *testing.T) {
 	got, err := modulestxt.Parse(strings.NewReader("## workspace\n"))
 	require.NoError(t, err)
 	assert.Empty(t, got)
+}
+
+func TestParseLocalReplaceDirectoryForms(t *testing.T) {
+	tests := []struct {
+		name      string
+		fixture   string
+		wantLocal string
+	}{
+		{name: "relative", fixture: "local-replace.txt"},
+		{name: "absolute", fixture: "local-replace-absolute.txt", wantLocal: "/opt/src/lib"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := mustOpen(t, filepath.Join("testdata", tt.fixture))
+			modules, err := modulestxt.Parse(f)
+			require.NoError(t, err)
+			require.NotEmpty(t, modules)
+
+			repl := modules[0].Replace
+			require.NotNil(t, repl, "a replace directive must be recorded")
+			assert.Empty(t, repl.Path, "a directory replacement is never a module path")
+			if tt.wantLocal != "" {
+				assert.Equal(t, tt.wantLocal, repl.Local)
+			} else {
+				assert.NotEmpty(t, repl.Local)
+			}
+		})
+	}
 }

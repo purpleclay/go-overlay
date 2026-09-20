@@ -13,6 +13,7 @@ import (
 
 	"github.com/purpleclay/go-overlay/internal/mod"
 	"github.com/purpleclay/go-overlay/internal/modulestxt"
+	"github.com/purpleclay/go-overlay/internal/progress"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,6 +26,13 @@ type countingHasher struct {
 	hash string
 	// when set, returned instead of a hash on every call
 	err error
+}
+
+// HashGitTracked ignores the tracked-file set: these tests assert on how
+// often hashing happens and what it returns, not on the NAR filter itself,
+// which NARHashGitTracked's own tests cover.
+func (h *countingHasher) HashGitTracked(dir string, _ map[string]struct{}) (string, error) {
+	return h.Hash(dir)
 }
 
 func (h *countingHasher) Hash(dir string) (string, error) {
@@ -44,10 +52,35 @@ func (h *countingHasher) Hash(dir string) (string, error) {
 // modules.txt to the directory given by the -o flag.
 type fakeExecutor struct {
 	responses map[string]string
+	// stderrNoise, keyed the same way as responses' vendor-command key
+	// ("go mod vendor" / "go work vendor"), holds extra lines to stream via
+	// onStderr before the modules.txt content — standing in for the
+	// "go: downloading ..."/"warning: ..." lines a real `go mod vendor -v`
+	// prints during the load phase, before any "# path version" header.
+	stderrNoise map[string][]string
 }
 
-func (f *fakeExecutor) Run(_ context.Context, args []string, _ string, _ []string) (string, error) {
+func (f *fakeExecutor) Run(_ context.Context, c Command) (string, error) {
+	args := c.Args
 	full := strings.Join(args, " ")
+
+	// A vendor command with a stderr sink replays the canned response line
+	// by line first — any configured stderrNoise, standing in for the
+	// load-phase lines a real `go mod vendor -v` prints before the first
+	// module header — then falls through to write modules.txt, exactly as a
+	// real vendor pass leaves the file on disk once the process exits.
+	if c.OnStderr != nil && len(args) >= 3 && args[0] == "go" && args[2] == "vendor" {
+		key := args[0] + " " + args[1] + " " + args[2]
+		if content, ok := f.responses[key]; ok {
+			for _, line := range f.stderrNoise[key] {
+				c.OnStderr(line)
+			}
+			for line := range strings.SplitSeq(strings.TrimRight(content, "\n"), "\n") {
+				c.OnStderr(line)
+			}
+		}
+	}
+
 	if out, ok := f.responses[full]; ok {
 		return out, nil
 	}
@@ -85,15 +118,15 @@ type blockingExecutor struct {
 	args chan []string
 }
 
-func (b blockingExecutor) Run(ctx context.Context, args []string, _ string, _ []string) (string, error) {
-	b.args <- args
+func (b blockingExecutor) Run(ctx context.Context, c Command) (string, error) {
+	b.args <- c.Args
 	<-ctx.Done()
 	return "", ctx.Err()
 }
 
 func TestVendorModulesRemovesTempDirOnCancellation(t *testing.T) {
 	exec := blockingExecutor{args: make(chan []string, 1)}
-	r := &Resolver{exec: exec, hasher: &countingHasher{}}
+	r := &Resolver{exec: exec, hasher: &countingHasher{}, reporter: progress.NopReporter{}}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -101,7 +134,7 @@ func TestVendorModulesRemovesTempDirOnCancellation(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := r.vendorModules(ctx, t.TempDir(), nil, "mod")
+	_, err := r.vendorModules(ctx, "test", t.TempDir(), nil, "mod")
 	require.ErrorIs(t, err, context.Canceled)
 
 	// The temp dir vendorModules created is the last arg of "go mod vendor
@@ -112,6 +145,111 @@ func TestVendorModulesRemovesTempDirOnCancellation(t *testing.T) {
 	tmpdir := args[len(args)-1]
 	_, statErr := os.Stat(tmpdir)
 	assert.True(t, os.IsNotExist(statErr), "expected temp dir %s to have been removed", tmpdir)
+}
+
+func TestVendorModulesReportsExpectedEventSequence(t *testing.T) {
+	exec := &fakeExecutor{
+		responses: map[string]string{
+			"go mod vendor": `# github.com/fatih/color v1.18.0
+## explicit; go 1.25.0
+github.com/fatih/color
+# github.com/mattn/go-colorable v0.1.13
+## explicit; go 1.25.0
+github.com/mattn/go-colorable`,
+		},
+		stderrNoise: map[string][]string{
+			"go mod vendor": {
+				"go: downloading github.com/fatih/color v1.18.0",
+				"go: downloading github.com/mattn/go-colorable v0.1.13",
+			},
+		},
+	}
+
+	reporter := &recordingReporter{}
+	r := New(exec, WithReporter(reporter))
+
+	modules, err := r.vendorModules(context.Background(), "test", t.TempDir(), nil, "mod")
+	require.NoError(t, err)
+	require.Len(t, modules, 2)
+
+	// vendorModules reports only what it observes on the stream. Started
+	// and Finished belong to the whole resolve and are reported by
+	// ResolveModule/ResolveWorkspace — see TestResolveModuleBracketsEvents.
+	require.Equal(t, []string{
+		"progress.Downloading",
+		"progress.Downloading",
+		"progress.PhaseChanged",
+		"progress.Vendored",
+		"progress.Vendored",
+	}, reporter.kinds())
+
+	phase := reporter.events[2].(progress.PhaseChanged)
+	assert.Equal(t, progress.Vendor, phase.Phase)
+
+	first := reporter.events[3].(progress.Vendored)
+	assert.Equal(t, "github.com/fatih/color", first.Path)
+	second := reporter.events[4].(progress.Vendored)
+	assert.Equal(t, "github.com/mattn/go-colorable", second.Path)
+}
+
+func TestResolveModuleReportsFinishedWithErrorOnFailure(t *testing.T) {
+	dir := t.TempDir()
+	goModPath := writeTestFile(t, dir, "go.mod", "module example.com/app\n\ngo 1.25.4\n")
+	goMod, err := mod.ParseGoModFile(goModPath)
+	require.NoError(t, err)
+
+	// no "go mod vendor" entry — fakeExecutor.Run returns "unexpected
+	// command" for it, standing in for a real toolchain failure.
+	exec := &fakeExecutor{responses: map[string]string{}}
+
+	reporter := &recordingReporter{}
+	r := New(exec, WithReporter(reporter))
+
+	_, err = r.ResolveModule(context.Background(), goMod, nil)
+	require.Error(t, err)
+
+	require.Equal(t, []string{"progress.Started", "progress.Finished"}, reporter.kinds())
+	finished := reporter.events[1].(progress.Finished)
+	assert.Error(t, finished.Err)
+	assert.Equal(t, progress.Manifest(filepath.Join(dir, "go.mod")), finished.Source())
+}
+
+func TestResolveModuleBracketsEvents(t *testing.T) {
+	dir := t.TempDir()
+	goModPath := writeTestFile(t, dir, "go.mod", `
+module example.com/app
+
+go 1.25.4
+
+require github.com/fatih/color v1.18.0
+`)
+	goMod, err := mod.ParseGoModFile(goModPath)
+	require.NoError(t, err)
+
+	exec := &fakeExecutor{
+		responses: map[string]string{
+			"go mod vendor": `# github.com/fatih/color v1.18.0
+## explicit; go 1.25.0
+github.com/fatih/color`,
+			"go mod": `{"Path":"github.com/fatih/color","Version":"v1.18.0","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}`,
+		},
+	}
+
+	hasher := &countingHasher{hash: "sha256-test"}
+	reporter := &recordingReporter{}
+	r := New(exec, WithReporter(reporter), WithHasher(hasher))
+
+	_, err = r.ResolveModule(context.Background(), goMod, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, []string{
+		"progress.Started",
+		"progress.PhaseChanged", // Vendor
+		"progress.Vendored",
+		"progress.Finished",
+	}, reporter.kinds(), "Finished must be reported only after download and hashing complete, not from inside vendorModules")
+
+	assert.Equal(t, int64(1), hasher.count.Load(), "hashing must have already happened by the time Finished is reported")
 }
 
 func writeTestFile(t *testing.T, dir, name, content string) string {
@@ -703,7 +841,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hasher := &countingHasher{hash: "sha256-fresh", err: tt.hasherErr}
-			r := &Resolver{exec: &fakeExecutor{}, hasher: hasher}
+			r := &Resolver{exec: &fakeExecutor{}, hasher: hasher, reporter: progress.NopReporter{}}
 
 			// Derive plain module entries from downloads when no explicit modules
 			// are provided (covers all non-replacement test cases cleanly).

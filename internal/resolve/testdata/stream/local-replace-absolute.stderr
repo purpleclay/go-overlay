@@ -1,0 +1,4 @@
+# example.com/lib v1.0.0 => /tmp/mods/lib
+## explicit; go 1.25
+example.com/lib
+# example.com/lib => /tmp/mods/lib

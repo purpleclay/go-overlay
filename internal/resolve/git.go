@@ -25,7 +25,11 @@ func GitTrackedFiles(ctx context.Context, exec Executor, dir string) (map[string
 	// plain `git ls-files` output on newlines would otherwise insert the
 	// quoted, escaped form into tracked, which never matches the real path
 	// the NAR walker sees, silently dropping the file from the hash.
-	out, err := exec.Run(ctx, []string{"git", "ls-files", "-z"}, dir, []string{"LC_ALL=C"})
+	out, err := exec.Run(ctx, Command{
+		Args: []string{"git", "ls-files", "-z"},
+		Dir:  dir,
+		Env:  []string{"LC_ALL=C"},
+	})
 	if err != nil {
 		var execErr *ExecError
 		if errors.As(err, &execErr) && strings.Contains(execErr.Stderr, "not a git repository") {
