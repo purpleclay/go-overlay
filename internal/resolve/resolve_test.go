@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/purpleclay/conker/pool"
 	"github.com/purpleclay/go-overlay/internal/mod"
 	"github.com/purpleclay/go-overlay/internal/modulestxt"
 	"github.com/purpleclay/go-overlay/internal/progress"
@@ -134,7 +136,7 @@ func TestVendorModulesRemovesTempDirOnCancellation(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := r.vendorModules(ctx, "test", t.TempDir(), nil, "mod")
+	_, err := r.vendorModules(ctx, "test", t.TempDir(), nil, "mod", nil, nil)
 	require.ErrorIs(t, err, context.Canceled)
 
 	// The temp dir vendorModules created is the last arg of "go mod vendor
@@ -168,7 +170,7 @@ github.com/mattn/go-colorable`,
 	reporter := &recordingReporter{}
 	r := New(exec, WithReporter(reporter))
 
-	modules, err := r.vendorModules(context.Background(), "test", t.TempDir(), nil, "mod")
+	modules, err := r.vendorModules(context.Background(), "test", t.TempDir(), nil, "mod", nil, nil)
 	require.NoError(t, err)
 	require.Len(t, modules, 2)
 
@@ -246,8 +248,14 @@ github.com/fatih/color`,
 		"progress.Started",
 		"progress.PhaseChanged", // Vendor
 		"progress.Vendored",
+		"progress.HashStarted",
+		"progress.Hashed",
 		"progress.Finished",
 	}, reporter.kinds(), "Finished must be reported only after download and hashing complete, not from inside vendorModules")
+
+	hashed := reporter.events[4].(progress.Hashed)
+	assert.Equal(t, "github.com/fatih/color", hashed.Path)
+	assert.False(t, hashed.Reused, "a cold run hashes rather than reusing")
 
 	assert.Equal(t, int64(1), hasher.count.Load(), "hashing must have already happened by the time Finished is reported")
 }
@@ -357,6 +365,44 @@ example.com/localmod`,
 	assert.Equal(t, []string{"example.com/localmod"}, deps[0].Packages)
 	assert.NotEmpty(t, deps[0].Hash)
 	assert.Empty(t, deps[0].ReplacedPath)
+}
+
+func TestSharedHashPoolSupportsConcurrentResolveLocalModulesCalls(t *testing.T) {
+	dirA := t.TempDir()
+	writeTestFile(t, dirA, "localmod/go.mod", "module example.com/a\n\ngo 1.25.4\n")
+	writeTestFile(t, dirA, "localmod/lib.go", "package a\n")
+
+	dirB := t.TempDir()
+	writeTestFile(t, dirB, "localmod/go.mod", "module example.com/b\n\ngo 1.25.4\n")
+	writeTestFile(t, dirB, "localmod/lib.go", "package b\n")
+
+	exec := &fakeExecutor{responses: map[string]string{"git ls-files": "go.mod\nlib.go"}}
+	r := New(exec)
+
+	localsA := []localModule{{repl: mod.Replacement{OldPath: "example.com/a", LocalPath: "./localmod"}, baseDir: dirA}}
+	localsB := []localModule{{repl: mod.Replacement{OldPath: "example.com/b", LocalPath: "./localmod"}, baseDir: dirB}}
+
+	var depsA, depsB []mod.ModuleConfig
+	var errA, errB error
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		depsA, errA = r.resolveLocalModules(context.Background(), localsA, nil)
+	}()
+	go func() {
+		defer wg.Done()
+		depsB, errB = r.resolveLocalModules(context.Background(), localsB, nil)
+	}()
+	wg.Wait()
+
+	require.NoError(t, errA)
+	require.NoError(t, errB)
+	require.Len(t, depsA, 1, "call A must see only its own result, not tasks the shared pool ran for call B")
+	require.Len(t, depsB, 1, "call B must see only its own result, not tasks the shared pool ran for call A")
+	assert.Equal(t, "example.com/a", depsA[0].Path)
+	assert.Equal(t, "example.com/b", depsB[0].Path)
 }
 
 func TestResolveModuleWithRemoteReplacement(t *testing.T) {
@@ -507,6 +553,20 @@ go 1.25.4
 	assert.Equal(t, "github.com/purpleclay/example/core", deps[0].Path)
 	assert.Empty(t, deps[0].Hash)
 	assert.Empty(t, deps[0].Packages)
+}
+
+func dirResolverFromDownloads(downloads []ModuleDownload) dirResolver {
+	byPath := make(map[string]string, len(downloads))
+	for _, dl := range downloads {
+		byPath[dl.Path] = dl.Dir
+	}
+	return func(_ context.Context, key contentKey) (string, error) {
+		dir, ok := byPath[key.path]
+		if !ok {
+			return "", fmt.Errorf("module %s not found in download output", key.path)
+		}
+		return dir, nil
+	}
 }
 
 func TestResolveRemoteModulesHashReuse(t *testing.T) {
@@ -857,7 +917,18 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 				}
 			}
 
-			deps, err := r.resolveRemoteModules(context.Background(), modules, tt.downloads, tt.existingMods, tt.replacements)
+			// Hashing now happens via the scheduler, submitted exactly as
+			// vendorStreamHandler would submit it from the live stream, then
+			// waited on before resolveRemoteModules reads the results back.
+			scheduler := newHashScheduler(context.Background(), pool.New(), hasher, progress.NopReporter{}, "test", tt.existingMods, dirResolverFromDownloads(tt.downloads))
+			for _, m := range modules {
+				if key, ok := remoteContentKey(m); ok {
+					scheduler.submit(key)
+				}
+			}
+			scheduler.wait()
+
+			deps, err := r.resolveRemoteModules(modules, scheduler, tt.replacements)
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tt.wantErr)

@@ -19,15 +19,25 @@ type vendorStreamHandler struct {
 	reporter      progress.Reporter
 	stream        modulestxt.Stream
 	inVendorPhase bool
+
+	// scheduler dispatches a hash task for each remote module the instant
+	// its header completes, rather than waiting for the whole vendor command
+	// to exit. Optional: nil for callers that only care about classification
+	// (e.g. unit tests exercising line() in isolation), which skips hashing
+	// entirely rather than requiring every caller to wire up a scheduler.
+	scheduler *hashScheduler
 }
 
-func newVendorStreamHandler(manifest progress.Manifest, reporter progress.Reporter) *vendorStreamHandler {
-	h := &vendorStreamHandler{manifest: manifest, reporter: reporter}
+func newVendorStreamHandler(manifest progress.Manifest, reporter progress.Reporter, scheduler *hashScheduler) *vendorStreamHandler {
+	h := &vendorStreamHandler{manifest: manifest, reporter: reporter, scheduler: scheduler}
 	h.stream.Emit = h.vendored
 	return h
 }
 
-// vendored reports one completed module entry from the stream.
+// vendored reports one completed module entry from the stream and, for a
+// remote module, submits it for hashing — the moment this fires is exactly
+// the moment `go mod vendor -v` has committed to the module, well before the
+// command itself exits.
 func (h *vendorStreamHandler) vendored(m modulestxt.Module) {
 	// The first modules.txt line to arrive marks the transition out of the
 	// load phase (spawn + download + package-graph resolution, all silent
@@ -42,6 +52,12 @@ func (h *vendorStreamHandler) vendored(m modulestxt.Module) {
 		Version:  m.Version,
 		Pkgs:     len(m.Packages),
 	})
+
+	if h.scheduler != nil {
+		if key, ok := remoteContentKey(m); ok {
+			h.scheduler.submit(key)
+		}
+	}
 }
 
 // line classifies and handles one line of stderr.

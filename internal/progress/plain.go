@@ -14,18 +14,19 @@ import (
 // lose information, not reduce noise.
 const summaryInterval = 500 * time.Millisecond
 
-// tally identifies which running count a summary belongs to. Summaries of
-// different tallies must not overwrite one another: switching tally flushes
-// whatever the previous one had pending, so a count suppressed by the rate
-// limit is never silently lost.
+// tally identifies which running count a summary belongs to.
 type tally int
 
 const (
-	noTally tally = iota
-	downloads
+	downloads tally = iota
 	vendoring
 	hashing
 )
+
+// tallyOrder is the fixed order flush prints pending tallies in, so a flush
+// covering more than one is deterministic regardless of which one triggered
+// it or what order their events actually arrived in.
+var tallyOrder = [...]tally{downloads, vendoring, hashing}
 
 // PlainReporter writes rate-limited, human-readable progress summaries to
 // an io.Writer (stderr in normal use). It exists for CI logs and non-TTY
@@ -47,12 +48,14 @@ type PlainReporter struct {
 }
 
 type manifestState struct {
-	// tally is the count the pending summary belongs to; pending is the
-	// most recently computed summary that has not yet been written, or ""
-	// if nothing is outstanding. lastSummary is when a summary for the
-	// current tally was last written.
-	tally       tally
-	pending     string
+	// pending holds each tally's most recently computed summary that hasn't
+	// been written yet. Vendoring and hashing now happen concurrently per
+	// module (issue 7's overlap), so two tallies can each have something
+	// outstanding at once — a single shared slot would lose one of them.
+	// lastSummary is when any tally for this manifest was last flushed,
+	// shared across all of them, so an interleaved switch between tallies
+	// doesn't itself reset the rate-limit window.
+	pending     map[tally]string
 	lastSummary time.Time
 
 	downloaded int
@@ -153,45 +156,50 @@ func (r *PlainReporter) Report(e Event) {
 func (r *PlainReporter) stateFor(m Manifest) *manifestState {
 	st, ok := r.state[m]
 	if !ok {
-		st = &manifestState{}
+		st = &manifestState{pending: make(map[tally]string, len(tallyOrder))}
 		r.state[m] = st
 	}
 	return st
 }
 
-// summarize records text as m's latest summary for t and writes it, unless
-// a summary for the same tally was already written within summaryInterval.
-// Moving to a different tally always writes: the previous tally's pending
-// summary is flushed first, then the new one starts a fresh window.
+// summarize records text as m's latest summary for tally t. Once the
+// rate-limit window has elapsed since the last flush for m — across every
+// tally, not just t — everything currently pending is flushed together.
+//
+// The window is shared across tallies rather than reset whenever t changes:
+// vendoring and hashing now interleave per module (issue 7's overlap), so
+// treating every switch as its own trigger would flush on almost every
+// event and defeat the rate limit entirely.
 func (r *PlainReporter) summarize(m Manifest, st *manifestState, t tally, text string) {
-	if t != st.tally {
-		r.flush(m)
-		st.tally = t
-		st.lastSummary = time.Time{}
-	}
-	st.pending = text
+	st.pending[t] = text
 
 	if r.interval <= 0 {
-		r.flush(m)
+		r.print(m, text)
+		st.pending[t] = ""
 		return
 	}
 
 	// A zero lastSummary saturates the subtraction to the maximum
-	// Duration, so the first summary of a tally always writes.
+	// Duration, so the very first summary for a manifest always writes.
 	if now := r.now(); now.Sub(st.lastSummary) >= r.interval {
 		st.lastSummary = now
 		r.flush(m)
 	}
 }
 
-// flush writes m's pending summary, if any, and clears it.
+// flush writes every tally's pending summary for m, in a fixed order, and
+// clears them.
 func (r *PlainReporter) flush(m Manifest) {
 	st, ok := r.state[m]
-	if !ok || st.pending == "" {
+	if !ok {
 		return
 	}
-	r.print(m, st.pending)
-	st.pending = ""
+	for _, t := range tallyOrder {
+		if text := st.pending[t]; text != "" {
+			r.print(m, text)
+			st.pending[t] = ""
+		}
+	}
 }
 
 func (r *PlainReporter) print(m Manifest, text string) {
