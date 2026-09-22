@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"sync"
 
 	"github.com/purpleclay/conker/pool"
 	"github.com/purpleclay/go-overlay/internal/mod"
@@ -14,10 +16,6 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// maxHashGoroutines bounds the hashing fan-out. NAR hashing is IO-bound on
-// the module cache, so more goroutines than this stop helping.
-const maxHashGoroutines = 8
-
 // Resolver resolves Go module dependencies via the Go toolchain. All external
 // commands go through the Executor interface, making the resolver testable
 // with injected output.
@@ -25,6 +23,15 @@ type Resolver struct {
 	exec     Executor
 	hasher   Hasher
 	reporter progress.Reporter
+
+	// hashPool bounds every hashing goroutine — remote module hashes and
+	// local-replacement hashes alike — across the whole Resolver, not per
+	// call. It's built once and has no context of its own: it outlives any
+	// single ResolveModule/ResolveWorkspace call (a future --recursive fan-out
+	// resolves several manifests concurrently against this same pool, see
+	// issue 9), so callers thread their own per-call context into the task
+	// closures they submit rather than relying on the pool to carry it.
+	hashPool *pool.Pool
 }
 
 // Option configures a Resolver.
@@ -52,7 +59,12 @@ func WithHasher(hasher Hasher) Option {
 
 // New creates a Resolver with the given executor.
 func New(exec Executor, opts ...Option) *Resolver {
-	r := &Resolver{exec: exec, hasher: NARHasher{}, reporter: progress.NopReporter{}}
+	r := &Resolver{
+		exec:     exec,
+		hasher:   NARHasher{},
+		reporter: progress.NopReporter{},
+		hashPool: pool.New().WithMaxGoroutines(runtime.NumCPU()),
+	}
 	for _, opt := range opts {
 		opt(r)
 	}
@@ -77,19 +89,31 @@ func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, exis
 }
 
 func (r *Resolver) resolveModule(ctx context.Context, manifest progress.Manifest, goMod *mod.GoModFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
-	vendored, err := r.vendorModules(ctx, manifest, goMod.Dir, []string{"GOWORK=off"}, "mod")
+	// go mod download runs concurrently with vendoring rather than after it:
+	// cancelling its context once resolveModule returns, on any path,
+	// guarantees the goroutine never outlives this call even if vendoring
+	// fails first and the download is still in flight.
+	downloadCtx, cancelDownload := context.WithCancel(ctx)
+	defer cancelDownload()
+	download := r.startDownload(downloadCtx, goMod.Dir, []string{"GOWORK=off"})
+
+	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, manifest, existingMods, download.dir)
+
+	vendored, err := r.vendorModules(ctx, manifest, goMod.Dir, []string{"GOWORK=off"}, "mod", scheduler, cancelDownload)
 	if err != nil {
 		return nil, err
 	}
 
-	downloads, err := r.downloadModules(ctx, goMod.Dir, []string{"GOWORK=off"})
-	if err != nil {
+	// Surfaces a download-level failure even for a go.mod with no remote
+	// dependencies at all, where nothing ever submitted a hash task and so
+	// nothing else would ever observe it.
+	if _, err := download.wait(ctx); err != nil {
 		return nil, err
 	}
 
 	pkgsByMod, remoteModules := splitVendored(vendored)
 
-	modules, err := r.resolveRemoteModules(ctx, remoteModules, downloads, existingMods, goMod.Replacements)
+	modules, err := r.resolveRemoteModules(remoteModules, scheduler, goMod.Replacements)
 	if err != nil {
 		return nil, err
 	}
@@ -128,16 +152,23 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 		workspaceMembers[m.ModulePath] = m.Dir
 	}
 
+	// Download from the workspace root with GOWORK active so the Go toolchain
+	// applies workspace-level MVS, producing one authoritative set of resolved
+	// module versions rather than per-member independent resolutions. Runs
+	// concurrently with vendoring; see resolveModule's downloadCtx comment.
+	downloadCtx, cancelDownload := context.WithCancel(ctx)
+	defer cancelDownload()
+	download := r.startDownload(downloadCtx, goWork.Dir, nil)
+
+	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, manifest, existingMods, download.dir)
+
 	// Single vendor pass from the workspace root with GOWORK active.
-	vendored, err := r.vendorModules(ctx, manifest, goWork.Dir, nil, "work")
+	vendored, err := r.vendorModules(ctx, manifest, goWork.Dir, nil, "work", scheduler, cancelDownload)
 	if err != nil {
 		return nil, err
 	}
 
-	// Download from the workspace root with GOWORK active so the Go toolchain
-	// applies workspace-level MVS, producing one authoritative set of resolved
-	// module versions rather than per-member independent resolutions.
-	downloads, err := r.downloadModules(ctx, goWork.Dir, nil)
+	downloads, err := download.wait(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +200,7 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 		replacements[path] = repl
 	}
 
-	remoteDeps, err := r.resolveRemoteModules(ctx, remoteModules, downloads, existingMods, replacements)
+	remoteDeps, err := r.resolveRemoteModules(remoteModules, scheduler, replacements)
 	if err != nil {
 		return nil, err
 	}
@@ -298,19 +329,34 @@ func sortModules(modules []mod.ModuleConfig) {
 // list. The temp dir is always removed before this function returns.
 //
 // -v streams the modules.txt content to stderr as it's generated, which
-// vendorStreamHandler classifies into progress events as they happen. The
-// written modules.txt file remains the source of truth for the returned
-// module list — the stream only drives progress reporting, so a stderr line
-// the classifier can't confidently handle never risks corrupting the actual
-// manifest data, only produces a stray Note event.
-func (r *Resolver) vendorModules(ctx context.Context, manifest progress.Manifest, dir string, env []string, verb string) ([]modulestxt.Module, error) {
+// vendorStreamHandler classifies into progress events — and, via scheduler,
+// hash tasks — as they happen. The written modules.txt file remains the
+// source of truth for the returned module list — the stream only drives
+// progress reporting and hash dispatch, so a stderr line the classifier
+// can't confidently handle never risks corrupting the actual manifest data,
+// only produces a stray Note event.
+//
+// By the time go exits, every module the stream saw has at least had its
+// hash task submitted; waiting for the scheduler here means those tasks are
+// always complete before the final modules.txt parse below is used to build
+// the returned manifest. scheduler is optional — nil skips hash dispatch
+// entirely, for callers that only care about the vendor stream itself.
+//
+// cancelDownload, when non-nil, is called before waiting for the scheduler
+// if vendoring itself failed. A hash task submitted for a module the stream
+// already saw can be blocked waiting on the concurrent download for its
+// module cache directory (see resolveModule); nothing else cancels that
+// download until the caller above this one returns, which can't happen
+// until this function does — so without this, a vendor failure while a
+// slow download is still in flight would never return at all.
+func (r *Resolver) vendorModules(ctx context.Context, manifest progress.Manifest, dir string, env []string, verb string, scheduler *hashScheduler, cancelDownload context.CancelFunc) ([]modulestxt.Module, error) {
 	tmpdir, err := os.MkdirTemp("", "govendor-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp vendor dir: %w", err)
 	}
 	defer os.RemoveAll(tmpdir)
 
-	handler := newVendorStreamHandler(manifest, r.reporter)
+	handler := newVendorStreamHandler(manifest, r.reporter, scheduler)
 	_, err = r.exec.Run(ctx, Command{
 		Args:     []string{"go", verb, "vendor", "-v", "-o", tmpdir},
 		Dir:      dir,
@@ -318,6 +364,12 @@ func (r *Resolver) vendorModules(ctx context.Context, manifest progress.Manifest
 		OnStderr: handler.line,
 	})
 	handler.close()
+	if err != nil && cancelDownload != nil {
+		cancelDownload()
+	}
+	if scheduler != nil {
+		scheduler.wait()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -354,28 +406,28 @@ func (r *Resolver) downloadModules(ctx context.Context, dir string, env []string
 // way to know whether a directive was versioned (see mod.ModuleConfig.Versioned):
 // modules.txt's header is byte-identical either way, so inferring this from
 // modules.txt output alone is not possible.
-func (r *Resolver) resolveRemoteModules(ctx context.Context, modules []modulestxt.Module, downloads []ModuleDownload, existingMods map[string]mod.ModuleConfig, replacements map[string]mod.Replacement) ([]mod.ModuleConfig, error) {
+//
+// Hashing itself already happened — scheduler's tasks were dispatched from
+// the vendor stream and waited on before this runs (see vendorModules). This
+// is now pure, fast bookkeeping with no I/O left to parallelize, so it's a
+// plain sequential pass rather than a pool.
+func (r *Resolver) resolveRemoteModules(modules []modulestxt.Module, scheduler *hashScheduler, replacements map[string]mod.Replacement) ([]mod.ModuleConfig, error) {
 	if len(modules) == 0 {
 		return nil, nil
 	}
 
-	dlByPath := make(map[string]ModuleDownload, len(downloads))
-	for _, dl := range downloads {
-		dlByPath[dl.Path] = dl
-	}
-
-	p := pool.NewWithResults[mod.ModuleConfig]().WithMaxGoroutines(maxHashGoroutines).WithContext(ctx)
-
+	result := make([]mod.ModuleConfig, 0, len(modules))
 	for _, m := range modules {
-		p.Go(func(_ context.Context) (mod.ModuleConfig, error) {
-			return r.resolveRemoteModule(m, dlByPath, existingMods, replacements)
-		})
+		cfg, err := r.resolveRemoteModule(m, scheduler, replacements)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, cfg)
 	}
-
-	return p.Wait()
+	return result, nil
 }
 
-func (r *Resolver) resolveRemoteModule(m modulestxt.Module, dlByPath map[string]ModuleDownload, existingMods map[string]mod.ModuleConfig, replacements map[string]mod.Replacement) (mod.ModuleConfig, error) {
+func (r *Resolver) resolveRemoteModule(m modulestxt.Module, scheduler *hashScheduler, replacements map[string]mod.Replacement) (mod.ModuleConfig, error) {
 	path := m.Path
 
 	// Unused replace: go.mod declares it, but nothing in the build
@@ -388,7 +440,9 @@ func (r *Resolver) resolveRemoteModule(m modulestxt.Module, dlByPath map[string]
 	// downloaded: it may have been anyway, coincidentally, because
 	// something else independently requires it too — pkgsByMod's
 	// entry for it stays populated by that unrelated module either way.
-	if m.Replace != nil && m.Replace.Path != "" && len(m.Packages) == 0 && !m.Explicit && m.GoVersion == "" {
+	// remoteContentKey recognises this same shape and never submitted a
+	// hash task for it.
+	if isUnusedReplace(m) {
 		repl := replacements[path]
 		var requiredVersion string
 		if repl.OldVersion != "" && repl.OldVersion != m.Replace.Version {
@@ -404,27 +458,28 @@ func (r *Resolver) resolveRemoteModule(m modulestxt.Module, dlByPath map[string]
 		}, nil
 	}
 
-	var replacedPath string
-	var meta ModuleDownload
-	var ok bool
-
+	var replacedPath, version string
 	if m.Replace != nil && m.Replace.Path != "" {
-		// Remote replacement: the download is keyed by the replacement path.
 		replacedPath = m.Replace.Path
-		meta, ok = dlByPath[m.Replace.Path]
+		version = m.Replace.Version
 	} else {
-		meta, ok = dlByPath[path]
+		version = m.Version
 	}
 
+	key, _ := remoteContentKey(m)
+	result, ok := scheduler.result(key)
 	if !ok {
-		return mod.ModuleConfig{}, fmt.Errorf("module %s not found in download output", path)
+		return mod.ModuleConfig{}, fmt.Errorf("internal error: no hash result submitted for module %s", path)
+	}
+	if result.err != nil {
+		return mod.ModuleConfig{}, result.err
 	}
 
 	// The version modules.txt reported as required, before the replace
 	// was applied. Only meaningful — and only kept — when it diverges
 	// from the replacement's resolved version.
 	var requiredVersion string
-	if replacedPath != "" && m.Version != meta.Version {
+	if replacedPath != "" && m.Version != version {
 		requiredVersion = m.Version
 	}
 
@@ -436,39 +491,22 @@ func (r *Resolver) resolveRemoteModule(m modulestxt.Module, dlByPath map[string]
 		versioned = replacements[path].OldVersion != ""
 	}
 
-	cfg := mod.ModuleConfig{
+	goVersion := m.GoVersion
+	if result.reused && result.goVersion != "" {
+		goVersion = result.goVersion
+	}
+
+	return mod.ModuleConfig{
 		Path:            path,
-		Version:         meta.Version,
+		Version:         version,
 		RequiredVersion: requiredVersion,
 		Versioned:       versioned,
 		Packages:        m.Packages,
-		GoVersion:       m.GoVersion,
+		GoVersion:       goVersion,
+		Hash:            result.hash,
 		ReplacedPath:    replacedPath,
 		Implicit:        !m.Explicit,
-	}
-
-	// Warm path: remote (path, version) pairs are immutable under the
-	// checksum DB — reuse hash and go version from the existing manifest
-	// when the (path, version, replacedPath) triple matches.
-	if entry, ok := existingMods[path]; ok &&
-		entry.Version == meta.Version &&
-		entry.Local == "" &&
-		entry.Hash != "" &&
-		entry.ReplacedPath == replacedPath {
-		cfg.Hash = entry.Hash
-		if entry.GoVersion != "" {
-			cfg.GoVersion = entry.GoVersion
-		}
-		return cfg, nil
-	}
-
-	// Cold path: hash the module.
-	hash, err := r.hasher.Hash(meta.Dir)
-	if err != nil {
-		return mod.ModuleConfig{}, fmt.Errorf("failed to hash downloaded module %s@%s: %w", meta.Path, meta.Version, err)
-	}
-	cfg.Hash = hash
-	return cfg, nil
+	}, nil
 }
 
 // resolveLocalModules hashes and builds ModuleConfig entries for a set of
@@ -480,11 +518,38 @@ func (r *Resolver) resolveLocalModules(ctx context.Context, locals []localModule
 		return nil, nil
 	}
 
-	p := pool.NewWithResults[mod.ModuleConfig]().WithMaxGoroutines(maxHashGoroutines).WithContext(ctx)
-	for _, lm := range locals {
-		p.Go(func(ctx context.Context) (mod.ModuleConfig, error) {
-			return r.resolveLocalModule(ctx, lm, pkgsByMod)
+	// r.hashPool is shared process-wide (see the Resolver.hashPool comment),
+	// so unlike a per-call pool.NewWithResults, it can't be Wait()-ed here:
+	// that would block for tasks other, concurrent calls submitted too, and
+	// on this same pool a future --recursive run submits from several
+	// manifests at once. Each task's own WaitGroup slot and result index,
+	// plus explicit ctx capture, replace what the per-call pool used to
+	// provide. The recover mirrors pool.Pool's own panic-safety: without it,
+	// a panicking task would leave its result slot silently at the zero
+	// value instead of surfacing as an error.
+	results := make([]mod.ModuleConfig, len(locals))
+	errs := make([]error, len(locals))
+
+	var wg sync.WaitGroup
+	for i, lm := range locals {
+		wg.Add(1)
+		r.hashPool.Go(func(_ context.Context) error {
+			defer wg.Done()
+			defer func() {
+				if p := recover(); p != nil {
+					errs[i] = fmt.Errorf("panic resolving local module %s: %v", lm.repl.OldPath, p)
+				}
+			}()
+			results[i], errs[i] = r.resolveLocalModule(ctx, lm, pkgsByMod)
+			return nil
 		})
 	}
-	return p.Wait()
+	wg.Wait()
+
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
+	return results, nil
 }

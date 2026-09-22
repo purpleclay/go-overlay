@@ -206,6 +206,27 @@ func TestPlainReporterFlushesASuppressedTallyOnPhaseChange(t *testing.T) {
 	}, lines())
 }
 
+func TestPlainReporterRateLimitsInterleavedVendorAndHashTallies(t *testing.T) {
+	r, advance, lines := reporter(t)
+
+	for i := range 20 {
+		r.Report(Vendored{Manifest: "go.mod", Pkgs: 1})
+		r.Report(Hashed{Manifest: "go.mod", Reused: i%2 == 0})
+	}
+
+	require.Equal(t, []string{"go.mod: vendored 1 module, 1 package"}, lines(),
+		"vendoring and hashing interleaving within one window must not flush on every switch")
+
+	advance(summaryInterval)
+	r.Report(Vendored{Manifest: "go.mod", Pkgs: 1})
+
+	assert.Equal(t, []string{
+		"go.mod: vendored 1 module, 1 package",
+		"go.mod: vendored 21 modules, 21 packages",
+		"go.mod: hashing 20 modules (10 reused)",
+	}, lines(), "once the window elapses, every tally with something pending flushes together, in a fixed order")
+}
+
 func TestPlainReporterFinishedDoesNotDuplicateAnAlreadyPrintedTally(t *testing.T) {
 	r, _, lines := reporter(t)
 

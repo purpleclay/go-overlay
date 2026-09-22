@@ -2,5 +2,4 @@ go.mod: resolving dependency graph
 go.mod: downloading modules (1 so far)
 go.mod: downloading modules (3 so far)
 go.mod: vendoring
-go.mod: vendored 1 module, 1 package
 go.mod: vendored 3 modules, 3 packages

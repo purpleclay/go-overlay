@@ -44,7 +44,7 @@ func TestPlainProgressOutput(t *testing.T) {
 			reporter := progress.NewPlainReporter(&buf, progress.WithInterval(0))
 
 			reporter.Report(progress.Started{Manifest: tt.manifest})
-			h := newVendorStreamHandler(tt.manifest, reporter)
+			h := newVendorStreamHandler(tt.manifest, reporter, nil)
 			for _, line := range readLines(t, tt.fixture) {
 				h.line(line)
 			}
@@ -62,7 +62,7 @@ func TestPlainProgressRateLimitedOutput(t *testing.T) {
 
 	const m progress.Manifest = "go.mod"
 	reporter.Report(progress.Started{Manifest: m})
-	h := newVendorStreamHandler(m, reporter)
+	h := newVendorStreamHandler(m, reporter, nil)
 	for _, line := range readLines(t, "cold-download.stderr") {
 		h.line(line)
 	}
