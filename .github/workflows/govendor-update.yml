@@ -27,7 +27,7 @@ permissions: {}
 jobs:
   govendor:
     name: govendor
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read # writes go through secrets.token, not GITHUB_TOKEN; this only covers Setup Nix's API calls
     steps:

@@ -19,7 +19,7 @@ permissions: {}
 
 jobs:
   alejandra:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     if: github.actor != 'renovate[bot]'
     name: check_formatting
     permissions:
