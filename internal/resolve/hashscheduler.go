@@ -74,11 +74,15 @@ type dirResolver func(ctx context.Context, key contentKey) (string, error)
 // pool is shared with other schedulers and callers across a resolve.
 type hashScheduler struct {
 	// ctx is the caller's own context, captured at construction rather than
-	// relied on from the pool. pool is shared across calls (and, under a
-	// future --recursive, across concurrently resolving manifests — see
-	// issue 9), so it carries no single call's context of its own; each
-	// scheduler threads its caller's ctx into the tasks it submits instead.
+	// relied on from the pool. pool is shared across calls, so it carries
+	// no single call's context of its own; each scheduler threads its caller's
+	// ctx into the tasks it submits instead.
+	//
+	// It's derived with its own cancel so a failed vendor pass can abort
+	// tasks still blocked in dirFor (a cache-miss download) rather than
+	// waiting on them; see abort.
 	ctx      context.Context
+	cancel   context.CancelFunc
 	pool     *pool.Pool
 	hasher   Hasher
 	reporter progress.Reporter
@@ -114,8 +118,10 @@ func newHashScheduler(ctx context.Context, p *pool.Pool, hasher Hasher, reporter
 		existing[contentKey{path: path, version: entry.Version}] = entry
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
 	return &hashScheduler{
 		ctx:       ctx,
+		cancel:    cancel,
 		pool:      p,
 		hasher:    hasher,
 		reporter:  reporter,
@@ -127,9 +133,21 @@ func newHashScheduler(ctx context.Context, p *pool.Pool, hasher Hasher, reporter
 	}
 }
 
-// submit dispatches a hash task for key unless one was already submitted.
+// submit dispatches resolution of key unless one was already submitted.
 // Safe to call repeatedly with the same key, including concurrently from
 // several modules that resolve to it.
+//
+// A reused hash needs neither dirFor nor the hasher, so it's settled
+// synchronously right here — no goroutine, no pool slot. Anything else is
+// handed to resolveAsync on a plain, unbounded goroutine rather than the
+// pool: dirFor can block for an arbitrary amount of time (a cache-miss
+// falls back to a targeted `go mod download`, see cachedModuleDir), and
+// submit is called synchronously from the goroutine draining `go mod
+// vendor -v`'s stderr. If that wait happened inside a pool slot, enough
+// concurrently-waiting tasks would exhaust the pool and block the next
+// submit — which blocks the stderr reader, which stalls `go mod vendor`
+// itself on a full pipe. The pool is only ever asked for a slot once dirFor
+// has already returned a real directory to hash.
 func (s *hashScheduler) submit(key contentKey) {
 	s.mu.Lock()
 	if _, ok := s.submitted[key]; ok {
@@ -139,18 +157,31 @@ func (s *hashScheduler) submit(key contentKey) {
 	s.submitted[key] = struct{}{}
 	s.mu.Unlock()
 
+	if entry, ok := s.existing[key]; ok {
+		start := time.Now()
+		s.reportStarted(key)
+		result := hashResult{hash: entry.Hash, reused: true, goVersion: entry.GoVersion}
+		s.reportHashed(key, result, time.Since(start))
+		s.store(key, result)
+		return
+	}
+
 	s.wg.Add(1)
-	s.pool.Go(func(_ context.Context) error {
-		defer s.wg.Done()
-		s.run(s.ctx, key)
-		return nil
-	})
+	go s.resolveAsync(key)
 }
 
 // wait blocks until every task submitted so far has completed. Callers must
 // not submit further keys for this scheduler afterwards.
 func (s *hashScheduler) wait() {
 	s.wg.Wait()
+	s.cancel()
+}
+
+// abort cancels every in-flight task, so a following wait returns promptly
+// instead of blocking on a cache-miss download whose result no longer
+// matters. Safe to call more than once.
+func (s *hashScheduler) abort() {
+	s.cancel()
 }
 
 // result returns key's outcome. Only meaningful after wait has returned for
@@ -165,35 +196,74 @@ func (s *hashScheduler) result(key contentKey) (hashResult, bool) {
 	return *r, true
 }
 
-func (s *hashScheduler) run(ctx context.Context, key contentKey) {
-	s.reporter.Report(progress.HashStarted{Manifest: s.manifest, Path: key.path, Version: key.version})
+// resolveAsync runs on its own goroutine, outside the pool, so waiting for
+// dirFor never holds a slot. Only the hash computation itself — the part
+// worth bounding — goes through the pool, via GoCtx so a cancelled context
+// aborts the wait for a slot rather than queuing regardless.
+//
+// GoCtx dispatches the task to its own goroutine and returns as soon as a
+// slot is acquired; it does not wait for the task to finish. hashed
+// signals completion of the actual hash computation back to this goroutine,
+// which is what actually needs to wait for it.
+func (s *hashScheduler) resolveAsync(key contentKey) {
+	defer s.wg.Done()
+
 	start := time.Now()
+	s.reportStarted(key)
 
-	result := s.resolve(ctx, key)
+	dir, err := s.dirFor(s.ctx, key)
+	if err != nil {
+		result := hashResult{err: err}
+		s.reportHashed(key, result, time.Since(start))
+		s.store(key, result)
+		return
+	}
 
-	s.reporter.Report(progress.Hashed{
-		Manifest: s.manifest, Path: key.path, Version: key.version,
-		Reused: result.reused, Took: time.Since(start),
+	hashed := make(chan hashResult, 1)
+	submitErr := s.pool.GoCtx(s.ctx, func(_ context.Context) error {
+		// The pool recovers a panicking task on its own, but that recovery
+		// is invisible here: without this recover, a panic in Hash would
+		// leave nothing ever sent to hashed, so the receive below blocks
+		// forever and this task's WaitGroup slot never closes.
+		defer func() {
+			if p := recover(); p != nil {
+				hashed <- hashResult{err: fmt.Errorf("panic hashing module %s@%s: %v", key.path, key.version, p)}
+			}
+		}()
+		hash, err := s.hasher.Hash(dir)
+		if err != nil {
+			hashed <- hashResult{err: fmt.Errorf("failed to hash downloaded module %s@%s: %w", key.path, key.version, err)}
+			return nil
+		}
+		hashed <- hashResult{hash: hash}
+		return nil
 	})
 
+	var result hashResult
+	if submitErr != nil {
+		// s.ctx was cancelled while waiting for a pool slot.
+		result = hashResult{err: submitErr}
+	} else {
+		result = <-hashed
+	}
+
+	s.reportHashed(key, result, time.Since(start))
+	s.store(key, result)
+}
+
+func (s *hashScheduler) reportStarted(key contentKey) {
+	s.reporter.Report(progress.HashStarted{Manifest: s.manifest, Path: key.path, Version: key.version})
+}
+
+func (s *hashScheduler) reportHashed(key contentKey, result hashResult, took time.Duration) {
+	s.reporter.Report(progress.Hashed{
+		Manifest: s.manifest, Path: key.path, Version: key.version,
+		Reused: result.reused, Took: took,
+	})
+}
+
+func (s *hashScheduler) store(key contentKey, result hashResult) {
 	s.mu.Lock()
 	s.results[key] = &result
 	s.mu.Unlock()
-}
-
-func (s *hashScheduler) resolve(ctx context.Context, key contentKey) hashResult {
-	if entry, ok := s.existing[key]; ok {
-		return hashResult{hash: entry.Hash, reused: true, goVersion: entry.GoVersion}
-	}
-
-	dir, err := s.dirFor(ctx, key)
-	if err != nil {
-		return hashResult{err: err}
-	}
-
-	hash, err := s.hasher.Hash(dir)
-	if err != nil {
-		return hashResult{err: fmt.Errorf("failed to hash downloaded module %s@%s: %w", key.path, key.version, err)}
-	}
-	return hashResult{hash: hash}
 }

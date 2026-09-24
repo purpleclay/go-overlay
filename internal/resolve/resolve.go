@@ -89,25 +89,14 @@ func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, exis
 }
 
 func (r *Resolver) resolveModule(ctx context.Context, manifest progress.Manifest, goMod *mod.GoModFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
-	// go mod download runs concurrently with vendoring rather than after it:
-	// cancelling its context once resolveModule returns, on any path,
-	// guarantees the goroutine never outlives this call even if vendoring
-	// fails first and the download is still in flight.
-	downloadCtx, cancelDownload := context.WithCancel(ctx)
-	defer cancelDownload()
-	download := r.startDownload(downloadCtx, goMod.Dir, []string{"GOWORK=off"})
+	// The hash scheduler resolves each module's cache directory directly
+	// (see moduleCache) rather than waiting on a concurrent `go mod
+	// download`, so nothing here runs before vendoring at all.
+	cache := newModuleCache(r.exec, goMod.Dir)
+	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, manifest, existingMods, cachedModuleDir(cache))
 
-	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, manifest, existingMods, download.dir)
-
-	vendored, err := r.vendorModules(ctx, manifest, goMod.Dir, []string{"GOWORK=off"}, "mod", scheduler, cancelDownload)
+	vendored, err := r.vendorModules(ctx, manifest, goMod.Dir, []string{"GOWORK=off"}, "mod", scheduler)
 	if err != nil {
-		return nil, err
-	}
-
-	// Surfaces a download-level failure even for a go.mod with no remote
-	// dependencies at all, where nothing ever submitted a hash task and so
-	// nothing else would ever observe it.
-	if _, err := download.wait(ctx); err != nil {
 		return nil, err
 	}
 
@@ -152,23 +141,11 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 		workspaceMembers[m.ModulePath] = m.Dir
 	}
 
-	// Download from the workspace root with GOWORK active so the Go toolchain
-	// applies workspace-level MVS, producing one authoritative set of resolved
-	// module versions rather than per-member independent resolutions. Runs
-	// concurrently with vendoring; see resolveModule's downloadCtx comment.
-	downloadCtx, cancelDownload := context.WithCancel(ctx)
-	defer cancelDownload()
-	download := r.startDownload(downloadCtx, goWork.Dir, nil)
-
-	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, manifest, existingMods, download.dir)
+	cache := newModuleCache(r.exec, goWork.Dir)
+	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, manifest, existingMods, cachedModuleDir(cache))
 
 	// Single vendor pass from the workspace root with GOWORK active.
-	vendored, err := r.vendorModules(ctx, manifest, goWork.Dir, nil, "work", scheduler, cancelDownload)
-	if err != nil {
-		return nil, err
-	}
-
-	downloads, err := download.wait(ctx)
+	vendored, err := r.vendorModules(ctx, manifest, goWork.Dir, nil, "work", scheduler)
 	if err != nil {
 		return nil, err
 	}
@@ -229,8 +206,10 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 		}
 	}
 
+	memberVersions := workspaceVersions(goWork, memberGoMods, vendored)
+
 	workspaceLocalDeps, err := r.resolveLocalModules(ctx,
-		localModulesOf(goWork, goWork.Dir, workspaceVersions(goWork, memberGoMods, downloads)), pkgsByMod)
+		localModulesOf(goWork, goWork.Dir, memberVersions), pkgsByMod)
 	if err != nil {
 		return nil, err
 	}
@@ -238,12 +217,12 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 		allDeps[dep.Path] = dep
 	}
 
-	// Workspace members that are also required by other members appear in
-	// downloads but not in modules.txt. Emit them as local source entries.
-	downloadVersions := make(map[string]string, len(downloads))
-	for _, dl := range downloads {
-		downloadVersions[dl.Path] = dl.Version
-	}
+	// A workspace member required by another member has no explicit local
+	// replace of its own — go.work's implicit substitution covers it — so it
+	// never appears in modules.txt (workspace members are never vendored).
+	// Its required version is still known directly from whichever member's
+	// go.mod declared it (memberVersions above). Emit it as a local source
+	// entry.
 	for modulePath, localDir := range workspaceMembers {
 		if existing, found := allDeps[modulePath]; found {
 			// resolveLocalModule stores the path relative to the member's
@@ -252,7 +231,7 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 			// the govendor.toml location.
 			existing.Local = localDir
 			allDeps[modulePath] = existing
-		} else if version, isDep := downloadVersions[modulePath]; isDep {
+		} else if version, isDep := memberVersions[modulePath]; isDep {
 			allDeps[modulePath] = mod.ModuleConfig{
 				Path:    modulePath,
 				Version: version,
@@ -286,36 +265,70 @@ func localModulesOf(src localReplacer, baseDir string, versions map[string]strin
 	return out
 }
 
-// workspaceVersions picks the version to record for each workspace-level
-// local replacement. The workspace build list wins (downloadModules from the
-// root applies full MVS across all members and transitive dependencies);
-// member requires — highest version — are the fallback for anything absent
-// from it, such as a pure local-only replacement.
-func workspaceVersions(goWork *mod.GoWorkFile, memberGoMods map[string]*mod.GoModFile, downloads []ModuleDownload) map[string]string {
+// workspaceVersions picks the version to record for each path any workspace
+// member requires. Used both for workspace-level local replacements (a pure
+// local-only replacement has no other source for a version) and for a
+// workspace member required by a sibling with no explicit local replace of
+// its own (see resolveWorkspace).
+//
+// Direct member go.mod requires are the base, but vendored — the same
+// single vendor pass's own parsed modules.txt — wins whenever it has an
+// answer: it reflects Go's real, pruning-aware MVS resolution for the
+// actual build list, including a path no member's go.mod lists directly at
+// all. Confirmed empirically: a workspace member requiring only an old
+// (pre-module-graph-pruning) intermediate dependency, which in turn
+// requires a module a go.work-level replace targets, never lists that
+// module in its own go.mod — but the vendor pass's per-member output still
+// reports its correct, real version. Highest wins on either source when
+// more than one candidate exists, matching modules.txt's own semantics for
+// a path multiple members request at different versions.
+func workspaceVersions(goWork *mod.GoWorkFile, memberGoMods map[string]*mod.GoModFile, vendored []modulestxt.Module) map[string]string {
 	versions := make(map[string]string)
-	for _, modDir := range goWork.Modules {
-		for path, version := range memberGoMods[modDir].Requires {
-			if existing, exists := versions[path]; !exists || semver.Compare(version, existing) > 0 {
-				versions[path] = version
-			}
+	merge := func(path, version string) {
+		if version == "" {
+			return
+		}
+		if existing, exists := versions[path]; !exists || semver.Compare(version, existing) > 0 {
+			versions[path] = version
 		}
 	}
-	for _, dl := range downloads {
-		versions[dl.Path] = dl.Version
+	for _, modDir := range goWork.Modules {
+		for path, version := range memberGoMods[modDir].Requires {
+			merge(path, version)
+		}
+	}
+	for _, m := range vendored {
+		merge(m.Path, m.Version)
 	}
 	return versions
 }
 
 // splitVendored indexes the vendored modules by path and separates out the
-// remote ones, which are the only entries the download/hash pass handles.
+// remote ones, which are the only entries the hash pass handles.
+//
+// A workspace MVS conflict streams one modules.txt entry per version a
+// member required, not just the one actually selected — confirmed against a
+// real `go work vendor -v` run on a fixture where one member requires
+// v1.1.0 and another v1.1.1: both appear, but only the selected v1.1.1 has
+// packages attached. Only the selected version was ever downloaded into the
+// module cache, so hashing the superseded one fails. remote keeps only the
+// last entry per path, matching the same "last one wins" convention
+// pkgsByMod above already relies on for its own duplicates.
 func splitVendored(vendored []modulestxt.Module) (map[string][]string, []modulestxt.Module) {
 	pkgsByMod := make(map[string][]string, len(vendored))
+	remoteIdx := make(map[string]int, len(vendored))
 	remote := make([]modulestxt.Module, 0, len(vendored))
 	for _, m := range vendored {
 		pkgsByMod[m.Path] = m.Packages
-		if m.Replace == nil || m.Replace.Local == "" {
-			remote = append(remote, m)
+		if m.Replace != nil && m.Replace.Local != "" {
+			continue
 		}
+		if idx, ok := remoteIdx[m.Path]; ok {
+			remote[idx] = m
+			continue
+		}
+		remoteIdx[m.Path] = len(remote)
+		remote = append(remote, m)
 	}
 	return pkgsByMod, remote
 }
@@ -342,14 +355,11 @@ func sortModules(modules []mod.ModuleConfig) {
 // the returned manifest. scheduler is optional — nil skips hash dispatch
 // entirely, for callers that only care about the vendor stream itself.
 //
-// cancelDownload, when non-nil, is called before waiting for the scheduler
-// if vendoring itself failed. A hash task submitted for a module the stream
-// already saw can be blocked waiting on the concurrent download for its
-// module cache directory (see resolveModule); nothing else cancels that
-// download until the caller above this one returns, which can't happen
-// until this function does — so without this, a vendor failure while a
-// slow download is still in flight would never return at all.
-func (r *Resolver) vendorModules(ctx context.Context, manifest progress.Manifest, dir string, env []string, verb string, scheduler *hashScheduler, cancelDownload context.CancelFunc) ([]modulestxt.Module, error) {
+// If vendoring itself fails, the scheduler is aborted before waiting: a
+// task for a module the stream already saw may be blocked on a cache-miss
+// download (see cachedModuleDir) that would otherwise delay — or, if
+// stalled, withhold — the vendor error.
+func (r *Resolver) vendorModules(ctx context.Context, manifest progress.Manifest, dir string, env []string, verb string, scheduler *hashScheduler) ([]modulestxt.Module, error) {
 	tmpdir, err := os.MkdirTemp("", "govendor-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp vendor dir: %w", err)
@@ -364,10 +374,10 @@ func (r *Resolver) vendorModules(ctx context.Context, manifest progress.Manifest
 		OnStderr: handler.line,
 	})
 	handler.close()
-	if err != nil && cancelDownload != nil {
-		cancelDownload()
-	}
 	if scheduler != nil {
+		if err != nil {
+			scheduler.abort()
+		}
 		scheduler.wait()
 	}
 	if err != nil {
@@ -384,21 +394,6 @@ func (r *Resolver) vendorModules(ctx context.Context, manifest progress.Manifest
 	defer f.Close()
 
 	return modulestxt.Parse(f)
-}
-
-// downloadModules runs go mod download -json from dir. For a workspace, dir
-// is the workspace root and env is nil so GOWORK stays active and the
-// toolchain applies workspace-level MVS.
-func (r *Resolver) downloadModules(ctx context.Context, dir string, env []string) ([]ModuleDownload, error) {
-	out, err := r.exec.Run(ctx, Command{
-		Args: []string{"go", "mod", "download", "-json"},
-		Dir:  dir,
-		Env:  env,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return ParseDownloadOutput(out)
 }
 
 // replacements is keyed by the original (left-hand) module path, sourced

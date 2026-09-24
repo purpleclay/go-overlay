@@ -18,6 +18,7 @@ import (
 	"github.com/purpleclay/go-overlay/internal/progress"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/mod/module"
 )
 
 // countingHasher counts Hash calls and returns a fixed or per-dir hash.
@@ -126,6 +127,45 @@ func (b blockingExecutor) Run(ctx context.Context, c Command) (string, error) {
 	return "", ctx.Err()
 }
 
+func TestSplitVendoredKeepsOnlyTheSelectedVersionOfAWorkspaceMVSConflict(t *testing.T) {
+	// Shape confirmed against a real `go work vendor -v` run on a fixture
+	// where one workspace member requires v1.1.0 and another v1.1.1: both
+	// stream as separate modules.txt entries, but only the selected v1.1.1
+	// has packages attached.
+	vendored := []modulestxt.Module{
+		{Path: "github.com/davecgh/go-spew", Version: "v1.1.0", Explicit: true},
+		{Path: "github.com/davecgh/go-spew", Version: "v1.1.1", Explicit: true, Packages: []string{"github.com/davecgh/go-spew/spew"}},
+	}
+
+	pkgsByMod, remote := splitVendored(vendored)
+
+	require.Len(t, remote, 1, "the superseded v1.1.0 entry must not be treated as needing its own hash")
+	assert.Equal(t, "v1.1.1", remote[0].Version)
+	assert.Equal(t, []string{"github.com/davecgh/go-spew/spew"}, pkgsByMod["github.com/davecgh/go-spew"])
+}
+
+func TestWorkspaceVersionsFindsAVersionVendoredExposesButNoMemberDirectlyRequires(t *testing.T) {
+	// Mirrors a real repro: a workspace member requires only "mid", an
+	// unpruned (pre-module-graph-pruning) intermediate dependency that
+	// itself requires "leaf" — the target of a go.work-level local
+	// replacement. "leaf" never appears in any member's own go.mod, but the
+	// vendor pass's own per-member output still reports its true,
+	// pruning-aware resolved version. Confirmed against the real Go
+	// toolchain with a deliberately old (go 1.16) intermediate dependency.
+	goWork := &mod.GoWorkFile{Modules: []string{"cli"}}
+	memberGoMods := map[string]*mod.GoModFile{
+		"cli": {Requires: map[string]string{"example.com/mid": "v0.0.0"}},
+	}
+	vendored := []modulestxt.Module{
+		{Path: "example.com/mid", Version: "v0.0.0"},
+		{Path: "example.com/leaf", Version: "v1.0.0", Replace: &modulestxt.Replace{Local: "./local-leaf"}},
+	}
+
+	versions := workspaceVersions(goWork, memberGoMods, vendored)
+
+	assert.Equal(t, "v1.0.0", versions["example.com/leaf"])
+}
+
 func TestVendorModulesRemovesTempDirOnCancellation(t *testing.T) {
 	exec := blockingExecutor{args: make(chan []string, 1)}
 	r := &Resolver{exec: exec, hasher: &countingHasher{}, reporter: progress.NopReporter{}}
@@ -136,7 +176,7 @@ func TestVendorModulesRemovesTempDirOnCancellation(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := r.vendorModules(ctx, "test", t.TempDir(), nil, "mod", nil, nil)
+	_, err := r.vendorModules(ctx, "test", t.TempDir(), nil, "mod", nil)
 	require.ErrorIs(t, err, context.Canceled)
 
 	// The temp dir vendorModules created is the last arg of "go mod vendor
@@ -147,6 +187,56 @@ func TestVendorModulesRemovesTempDirOnCancellation(t *testing.T) {
 	tmpdir := args[len(args)-1]
 	_, statErr := os.Stat(tmpdir)
 	assert.True(t, os.IsNotExist(statErr), "expected temp dir %s to have been removed", tmpdir)
+}
+
+// vendorFailsWhileDownloadBlocksExecutor streams one module header from the
+// vendor command and then fails it, while a `go mod download` for that
+// module — the cache-miss fallback — blocks until its context is cancelled
+// (or the test ends), standing in for a stalled network fetch.
+type vendorFailsWhileDownloadBlocksExecutor struct {
+	gomodcache string
+	release    chan struct{}
+}
+
+func (e *vendorFailsWhileDownloadBlocksExecutor) Run(ctx context.Context, c Command) (string, error) {
+	switch {
+	case len(c.Args) >= 3 && c.Args[1] == "env":
+		return e.gomodcache + "\n", nil
+	case len(c.Args) >= 3 && c.Args[2] == "download":
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-e.release:
+			return "", errors.New("download released by test cleanup")
+		}
+	case len(c.Args) >= 3 && c.Args[2] == "vendor":
+		c.OnStderr("# example.com/foo v1.0.0")
+		c.OnStderr("## explicit")
+		c.OnStderr("example.com/foo")
+		return "", errors.New("go: vendor failed")
+	}
+	return "", fmt.Errorf("unexpected command: %v", c.Args)
+}
+
+func TestVendorModulesReturnsPromptlyWhenVendorFailsWhileADownloadIsInFlight(t *testing.T) {
+	exec := &vendorFailsWhileDownloadBlocksExecutor{gomodcache: t.TempDir(), release: make(chan struct{})}
+	t.Cleanup(func() { close(exec.release) })
+
+	r := New(exec)
+	scheduler := newHashScheduler(context.Background(), r.hashPool, r.hasher, r.reporter, "test", nil, cachedModuleDir(newModuleCache(exec, "/repo")))
+
+	errc := make(chan error, 1)
+	go func() {
+		_, err := r.vendorModules(context.Background(), "test", t.TempDir(), nil, "mod", scheduler)
+		errc <- err
+	}()
+
+	select {
+	case err := <-errc:
+		assert.ErrorContains(t, err, "vendor failed")
+	case <-time.After(2 * time.Second):
+		t.Fatal("vendorModules withheld the vendor error while a cache-miss download was still in flight")
+	}
 }
 
 func TestVendorModulesReportsExpectedEventSequence(t *testing.T) {
@@ -170,7 +260,7 @@ github.com/mattn/go-colorable`,
 	reporter := &recordingReporter{}
 	r := New(exec, WithReporter(reporter))
 
-	modules, err := r.vendorModules(context.Background(), "test", t.TempDir(), nil, "mod", nil, nil)
+	modules, err := r.vendorModules(context.Background(), "test", t.TempDir(), nil, "mod", nil)
 	require.NoError(t, err)
 	require.Len(t, modules, 2)
 
@@ -228,12 +318,15 @@ require github.com/fatih/color v1.18.0
 	goMod, err := mod.ParseGoModFile(goModPath)
 	require.NoError(t, err)
 
+	gomodcache := t.TempDir()
+	writeModuleCacheDir(t, gomodcache, "github.com/fatih/color", "v1.18.0")
+
 	exec := &fakeExecutor{
 		responses: map[string]string{
 			"go mod vendor": `# github.com/fatih/color v1.18.0
 ## explicit; go 1.25.0
 github.com/fatih/color`,
-			"go mod": `{"Path":"github.com/fatih/color","Version":"v1.18.0","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}`,
+			"go env GOMODCACHE": gomodcache + "\n",
 		},
 	}
 
@@ -268,6 +361,21 @@ func writeTestFile(t *testing.T, dir, name, content string) string {
 	return path
 }
 
+// writeModuleCacheDir creates an empty directory at path@version's location
+// under gomodcache, escaped exactly as the real module cache would — so
+// cachedModuleDir's stat check finds it, matching what a real, already-warm
+// module cache looks like on disk.
+func writeModuleCacheDir(t *testing.T, gomodcache, path, version string) string {
+	t.Helper()
+	escapedPath, err := module.EscapePath(path)
+	require.NoError(t, err)
+	escapedVersion, err := module.EscapeVersion(version)
+	require.NoError(t, err)
+	dir := filepath.Join(gomodcache, escapedPath+"@"+escapedVersion)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	return dir
+}
+
 func TestResolveModule(t *testing.T) {
 	dir := t.TempDir()
 	goModPath := writeTestFile(t, dir, "go.mod", `
@@ -286,8 +394,11 @@ require (
 	goMod, err := mod.ParseGoModFile(goModPath)
 	require.NoError(t, err)
 
-	// testdata/module is used as a stand-in downloaded module directory so
-	// NARHash can compute a real hash without needing a real module cache.
+	gomodcache := t.TempDir()
+	writeModuleCacheDir(t, gomodcache, "github.com/fatih/color", "v1.18.0")
+	writeModuleCacheDir(t, gomodcache, "github.com/mattn/go-colorable", "v0.1.13")
+	writeModuleCacheDir(t, gomodcache, "github.com/mattn/go-isatty", "v0.0.20")
+
 	exec := &fakeExecutor{
 		responses: map[string]string{
 			"go mod vendor": `# github.com/fatih/color v1.18.0
@@ -299,9 +410,7 @@ github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.20
 ## explicit; go 1.25.0
 github.com/mattn/go-isatty`,
-			"go mod": `{"Path":"github.com/fatih/color","Version":"v1.18.0","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}
-{"Path":"github.com/mattn/go-colorable","Version":"v0.1.13","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}
-{"Path":"github.com/mattn/go-isatty","Version":"v0.0.20","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}`,
+			"go env GOMODCACHE": gomodcache + "\n",
 		},
 	}
 
@@ -420,15 +529,19 @@ replace gopkg.in/ini.v1 => github.com/go-ini/ini v1.67.0
 	goMod, err := mod.ParseGoModFile(goModPath)
 	require.NoError(t, err)
 
-	// go mod download returns the replacement target path (github.com/go-ini/ini).
-	// The resolver must map it back to the original (gopkg.in/ini.v1) via
-	// the Replace field in modules.txt.
+	gomodcache := t.TempDir()
+	// The hash scheduler resolves the replacement target's cache directory
+	// (github.com/go-ini/ini), not the original path. The resolver must
+	// still map the result back to the original (gopkg.in/ini.v1) via the
+	// Replace field in modules.txt.
+	writeModuleCacheDir(t, gomodcache, "github.com/go-ini/ini", "v1.67.0")
+
 	exec := &fakeExecutor{
 		responses: map[string]string{
 			"go mod vendor": `# gopkg.in/ini.v1 v1.67.0 => github.com/go-ini/ini v1.67.0
 ## explicit; go 1.14
 gopkg.in/ini.v1`,
-			"go mod": `{"Path":"github.com/go-ini/ini","Version":"v1.67.0","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}`,
+			"go env GOMODCACHE": gomodcache + "\n",
 		},
 	}
 
@@ -478,6 +591,11 @@ require (
 	goWork, err := mod.ParseGoWorkFile(filepath.Join(dir, "go.work"))
 	require.NoError(t, err)
 
+	gomodcache := t.TempDir()
+	writeModuleCacheDir(t, gomodcache, "github.com/fatih/color", "v1.18.0")
+	writeModuleCacheDir(t, gomodcache, "github.com/mattn/go-colorable", "v0.1.13")
+	writeModuleCacheDir(t, gomodcache, "github.com/mattn/go-isatty", "v0.0.20")
+
 	// Both workspace modules share github.com/fatih/color. The resolver must
 	// deduplicate it, merging packages from both modules into a single entry.
 	exec := &fakeExecutor{
@@ -492,9 +610,7 @@ github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.20
 ## explicit; go 1.25.0
 github.com/mattn/go-isatty`,
-			"go mod": `{"Path":"github.com/fatih/color","Version":"v1.18.0","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}
-{"Path":"github.com/mattn/go-colorable","Version":"v0.1.13","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}
-{"Path":"github.com/mattn/go-isatty","Version":"v0.0.20","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}`,
+			"go env GOMODCACHE": gomodcache + "\n",
 		},
 	}
 
@@ -535,13 +651,13 @@ go 1.25.4
 	require.NoError(t, err)
 
 	// cli depends on core, which is also a workspace member. core does not
-	// appear in modules.txt (workspace members are never vendored), but it
-	// does appear in go mod download output. The resolver must emit it as a
-	// local source entry with empty hash and packages.
+	// appear in modules.txt (workspace members are never vendored) — its
+	// version comes directly from cli's own go.mod require line instead. The
+	// resolver must emit it as a local source entry with empty hash and
+	// packages.
 	exec := &fakeExecutor{
 		responses: map[string]string{
 			"go work vendor": `## workspace`,
-			"go mod":         `{"Path":"github.com/purpleclay/example/core","Version":"v1.0.0","Dir":"testdata/module","GoMod":"testdata/module/go.mod"}`,
 		},
 	}
 
