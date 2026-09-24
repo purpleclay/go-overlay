@@ -21,7 +21,7 @@ permissions: {}
 
 jobs:
   golangci_lint:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     if: github.actor != 'renovate[bot]'
     name: golangci_lint
     permissions:
@@ -48,7 +48,7 @@ jobs:
         run: nix develop -c golangci-lint run
 
   test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: test
     permissions:
       contents: read
@@ -74,7 +74,7 @@ jobs:
         run: nix develop -c go test -short -race -vet=off -shuffle=on ./...
 
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: build
     permissions:
       contents: read

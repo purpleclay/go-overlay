@@ -12,7 +12,7 @@ permissions: {}
 
 jobs:
   go_update:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: go_update
     permissions:
       contents: read # writes go through secrets.GH_NSV, not GITHUB_TOKEN; this only covers setup_nix's API calls
