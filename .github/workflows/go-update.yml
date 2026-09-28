@@ -76,7 +76,7 @@ jobs:
             nix run .#goscrape -- go-dev generate "$version" --output manifests/go
 
             git checkout -b "$branch"
-            git add "$manifest"
+            git add "$manifest" manifests/go/index.nix
             git commit -s -m "chore(go): generated nix manifest for go release ${version}"
             git push -u origin "$branch"
 
