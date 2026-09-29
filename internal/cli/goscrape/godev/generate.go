@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -129,6 +130,33 @@ func parse(page string, version string, date time.Time) (*Scrape, error) {
 	return s, nil
 }
 
+// writeManifests writes each manifest to outputDir and regenerates its
+// index, or prints the manifests to w when outputDir is empty. outputDir is
+// checked before anything is written, so a directory the index can't be
+// built from fails without leaving new manifests beside a stale index.
+func writeManifests(results []*Scrape, outputDir string, w io.Writer) error {
+	if outputDir != "" {
+		replacing := make(map[string]bool, len(results))
+		for _, s := range results {
+			replacing[s.Filename()] = true
+		}
+		if _, err := readIndexEntries(outputDir, replacing); err != nil {
+			return err
+		}
+	}
+
+	for _, s := range results {
+		if err := manifest.Write(s, outputDir, w); err != nil {
+			return err
+		}
+	}
+
+	if outputDir == "" {
+		return nil
+	}
+	return writeIndex(outputDir)
+}
+
 func newGenerateCmd() *cobra.Command {
 	var outputDir string
 
@@ -218,13 +246,7 @@ func newGenerateCmd() *cobra.Command {
 				return cmp.Compare(a.Version, b.Version)
 			})
 
-			for _, s := range results {
-				if err := manifest.Write(s, outputDir, cmd.OutOrStdout()); err != nil {
-					return err
-				}
-			}
-
-			return nil
+			return writeManifests(results, outputDir, cmd.OutOrStdout())
 		},
 	}
 

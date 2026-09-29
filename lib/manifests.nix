@@ -5,10 +5,11 @@
   manifestDir = ../manifests/go;
   manifestFiles = builtins.readDir manifestDir;
 
-  # Filter to only .nix files and strip the extension to get version
+  # Filter to only per-version .nix files; index.nix is a generated summary,
+  # not a version
   nixFiles =
     lib.filterAttrs
-    (name: type: type == "regular" && lib.hasSuffix ".nix" name)
+    (name: type: type == "regular" && lib.hasSuffix ".nix" name && name != "index.nix")
     manifestFiles;
 
   # Load each manifest, keyed by version string (filename without .nix)
