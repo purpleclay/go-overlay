@@ -118,7 +118,7 @@
         };
 
         # Generate versioned package names (e.g., "1.25.5" -> "go_1_25_5", "1.25rc3" -> "go_1_25rc3")
-        versionToPackageName = version: "go_" + builtins.replaceStrings ["."] ["_"] version;
+        versionToPackageName = (import ./lib/version.nix {inherit (pkgs) lib;}).packageName;
 
         versionedPackages =
           pkgs.lib.mapAttrs' (
@@ -126,7 +126,10 @@
           )
           pkgs.go-bin.versions;
 
-        libTests = import ./test {inherit pkgs;};
+        libTests = import ./test {
+          inherit pkgs;
+          packageNames = builtins.attrNames versionedPackages;
+        };
         examples = import ./examples {
           inherit pkgs;
           go = pkgs.go-bin.fromGoMod ./go.mod;

@@ -61,6 +61,9 @@
     else if va.stage != vb.stage
     then va.stage - vb.stage
     else va.counter - vb.counter;
+
+  # The flake package attribute for a Go version, e.g. "1.27rc1" -> "go_1_27rc1"
+  packageName = version: "go_" + builtins.replaceStrings ["."] ["_"] version;
 in {
-  inherit parseVersion compareVersions;
+  inherit parseVersion compareVersions packageName;
 }
