@@ -2,8 +2,11 @@
 {
   lib,
   pkgs,
+  # Loads a per-version Go manifest; overridden by tests to prove which
+  # manifests an evaluation imports (see lib/manifests.nix)
+  importManifest ? import,
 }: let
-  manifestsLib = import ./manifests.nix {inherit lib;};
+  manifestsLib = import ./manifests.nix {inherit lib importManifest;};
   toolManifestsLib = import ./tool-manifests.nix {inherit lib;};
 
   # Get builder functions for tool building
@@ -125,9 +128,12 @@
 
   # Check if a version is deprecated (EOL) according to Go's support policy
   isDeprecated = manifestsLib.isDeprecated;
+
+  # Metadata for every available Go version, newest first
+  versionInfo = import ./versions.nix {inherit lib manifestsLib;};
 in {
   latest = allVersions.${manifestsLib.latest};
   latestStable = allVersions.${manifestsLib.latestStable};
   versions = allVersions;
-  inherit fromGoMod fromGoModStrict hasVersion isDeprecated;
+  inherit fromGoMod fromGoModStrict hasVersion isDeprecated versionInfo;
 }

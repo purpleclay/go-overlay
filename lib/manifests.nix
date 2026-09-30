@@ -1,4 +1,11 @@
-{lib}: let
+# importManifest loads a single per-version manifest file. It exists so tests
+# can prove which manifests an evaluation actually imports: version names and
+# ordering come from filenames alone, so importing is deferred until a
+# specific version's contents are needed.
+{
+  lib,
+  importManifest ? import,
+}: let
   inherit (import ./version.nix {inherit lib;}) parseVersion compareVersions;
 
   # Load all manifest files from the manifests directory
@@ -13,7 +20,7 @@
     manifestFiles;
 
   # Load each manifest, keyed by version string (filename without .nix)
-  loadManifest = filename: import (manifestDir + "/${filename}");
+  loadManifest = filename: importManifest (manifestDir + "/${filename}");
 
   # Create attribute set: { "1.21.6" = <manifest>; "1.25.5" = <manifest>; ... }
   manifests =
@@ -68,5 +75,5 @@
   in
     matching;
 in {
-  inherit manifests latest latestStable latestPatch isDeprecated versionsForMinor;
+  inherit manifests sortedVersions latest latestStable latestPatch isDeprecated versionsForMinor;
 }
