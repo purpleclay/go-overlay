@@ -19,11 +19,38 @@
 
 ## Getting Started
 
-### Try Go without installing anything
+### Find a Go version
+
+List the Go versions go-overlay provides, without cloning the repository or compiling anything:
+
+```bash
+nix run github:purpleclay/go-overlay#goversions
+```
+
+```
+VERSION  RELEASED    STATUS           PACKAGE
+1.27.1   2026-09-01  latest (stable)  go_1_27_1
+1.26.8   2026-09-01  supported        go_1_26_8
+1.25.13  2026-08-13  eol              go_1_25_13
+...
+```
+
+Run it with `-- --help` to see how to filter the list.
+
+### Try a Go version without installing anything
+
+Run the latest release, including release candidates:
 
 ```bash
 nix run github:purpleclay/go-overlay -- version
-# go version go1.26.2 linux/amd64
+# go version go1.27.1 linux/amd64
+```
+
+Or run a specific version from the `PACKAGE` column:
+
+```bash
+nix run github:purpleclay/go-overlay#go_1_24_13 -- version
+# go version go1.24.13 linux/amd64
 ```
 
 ### Create a new project

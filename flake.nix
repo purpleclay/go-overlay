@@ -161,6 +161,9 @@
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
                 commit = self.rev or "unknown";
               };
+              goversions = pkgs.callPackage ./goversions.nix {
+                records = pkgs.go-bin.versionInfo;
+              };
             };
 
           apps.default = {
@@ -193,6 +196,12 @@
               license = licenses.mit;
               maintainers = with lib.maintainers; [purpleclay];
             };
+          };
+
+          apps.goversions = {
+            type = "app";
+            program = "${self.packages.${system}.goversions}/bin/goversions";
+            inherit (self.packages.${system}.goversions) meta;
           };
         }
     );

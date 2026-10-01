@@ -12,6 +12,12 @@ on:
       - "test/**"
       - "examples/**"
       - "govendor.toml"
+      # The goversions app and its renderer have their own checks, and every
+      # Go release PR rewrites manifests/go/index.nix, whose consistency
+      # checks must run on exactly those PRs.
+      - "goversions.nix"
+      - "scripts/**"
+      - "manifests/go/**"
   pull_request:
     branches:
       - main
@@ -24,6 +30,12 @@ on:
       - "test/**"
       - "examples/**"
       - "govendor.toml"
+      # The goversions app and its renderer have their own checks, and every
+      # Go release PR rewrites manifests/go/index.nix, whose consistency
+      # checks must run on exactly those PRs.
+      - "goversions.nix"
+      - "scripts/**"
+      - "manifests/go/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

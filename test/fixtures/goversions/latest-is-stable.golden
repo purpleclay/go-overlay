@@ -1,0 +1,6 @@
+VERSION  RELEASED    STATUS           PACKAGE
+1.27.2   2026-10-07  latest (stable)  go_1_27_2
+1.26.10  2026-10-07  supported        go_1_26_10
+1.25.14  2026-08-13  eol              go_1_25_14
+
+1 more release hidden - pass a prefix (e.g. 1.27) or --all

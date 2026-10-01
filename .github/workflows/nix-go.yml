@@ -5,11 +5,25 @@ on:
       - main
     paths:
       - "manifests/go/**"
+      # Everything goversions is built from: its data comes through lib/ and its
+      # gawk and bash through the pinned nixpkgs, so a change to any of them is a
+      # new store path that needs pushing.
+      - "lib/**"
+      - "flake.lock"
+      - "goversions.nix"
+      - "scripts/goversions.awk"
   pull_request:
     branches:
       - main
     paths:
       - "manifests/go/**"
+      # Everything goversions is built from: its data comes through lib/ and its
+      # gawk and bash through the pinned nixpkgs, so a change to any of them is a
+      # new store path that needs pushing.
+      - "lib/**"
+      - "flake.lock"
+      - "goversions.nix"
+      - "scripts/goversions.awk"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,3 +59,8 @@ jobs:
 
       - name: build_toolchain
         run: nix build
+
+      # Its data changes with every Go release, so it's pushed alongside the
+      # toolchain; users without the cache would otherwise build it locally.
+      - name: build_goversions
+        run: nix build .#goversions

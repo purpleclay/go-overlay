@@ -1,0 +1,53 @@
+List the Go toolchains available in go-overlay, without cloning the
+repository or compiling anything.
+
+By default, shows the newest release of each minor version. A PREFIX lists
+every release whose version starts with it, so 1.24 lists every 1.24 release
+and 1.2 widens to 1.20 through 1.29. Each row's PACKAGE is a flake output
+that can be used directly, for example:
+
+  nix shell github:purpleclay/go-overlay#go_1_25_5
+
+USAGE
+
+  goversions [FLAGS] [PREFIX]
+
+EXAMPLES
+
+  # List the newest release of each minor version
+  goversions
+
+  # List every 1.24 release
+  goversions 1.24
+
+  # List every release
+  goversions --all
+
+  # Run it straight from the flake, without installing it
+  nix run github:purpleclay/go-overlay#goversions -- 1.24
+
+FLAGS
+
+  -a, --all
+          list every version, not just the newest per minor
+
+  -h, --help
+          help for goversions
+
+  -V, --version
+          print the goversions version
+
+STATUSES
+
+  latest      the newest release; latest (stable) when it is also the newest
+              stable release
+  stable      the newest stable release, shown when an rc is newer
+  supported   a stable release in a release line Go still supports
+  prerelease  an rc or beta in a release line Go still supports
+  eol         any release in a release line Go no longer supports
+
+EXIT CODES
+
+  0  versions listed
+  1  no versions match PREFIX
+  2  bad flags or arguments
