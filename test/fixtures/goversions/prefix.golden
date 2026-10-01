@@ -1,0 +1,4 @@
+VERSION  RELEASED    STATUS      PACKAGE
+1.27.2   2026-10-07  stable      go_1_27_2
+1.27.1   2026-09-01  supported   go_1_27_1
+1.27rc1  2026-06-18  prerelease  go_1_27rc1

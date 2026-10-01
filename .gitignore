@@ -24,6 +24,7 @@
 !govendor.toml
 !LICENSE
 !README.md
+!scripts/goversions.awk
 !test/fixtures/*
 !typos.toml
 

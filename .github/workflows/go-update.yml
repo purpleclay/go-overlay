@@ -77,6 +77,17 @@ jobs:
 
             git checkout -b "$branch"
             git add "$manifest" manifests/go/index.nix
+
+            # Gate on the index's consistency checks before anything is
+            # pushed. This PR auto-merges and nix-checks isn't a required
+            # check, so a goscrape bug that let index.nix drift from the
+            # manifests would otherwise reach main unchecked. Both checks
+            # only evaluate Nix, so this takes seconds.
+            system=$(nix eval --raw --impure --expr builtins.currentSystem)
+            nix build --no-link \
+              ".#checks.${system}.go-index-lists-every-manifest-version" \
+              ".#checks.${system}.go-index-dates-match-manifests"
+
             git commit -s -m "chore(go): generated nix manifest for go release ${version}"
             git push -u origin "$branch"
 

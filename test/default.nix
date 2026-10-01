@@ -36,6 +36,99 @@
   versionInfo = go-bin.versionInfo;
   versionInfoMinors = pkgs.lib.unique (map (r: r.minor) versionInfo);
 
+  goversionsFixtureRecord = version: date: minor: status: newestInMinor: {
+    inherit version date minor status newestInMinor;
+    attr = versionLib.packageName version;
+  };
+
+  # A fixed stand-in for versionInfo, so goversions goldens don't change with
+  # every Go release. Covers every status, an rc ahead of every stable release,
+  # a two-digit patch and the widest version string (1.17beta1).
+  goversionsFixture = [
+    (goversionsFixtureRecord "1.28rc1" "2026-11-12" "1.28" "latest" true)
+    (goversionsFixtureRecord "1.27.2" "2026-10-07" "1.27" "stable" true)
+    (goversionsFixtureRecord "1.27.1" "2026-09-01" "1.27" "supported" false)
+    (goversionsFixtureRecord "1.27rc1" "2026-06-18" "1.27" "prerelease" false)
+    (goversionsFixtureRecord "1.26.10" "2026-10-07" "1.26" "supported" true)
+    (goversionsFixtureRecord "1.26.9" "2026-09-01" "1.26" "supported" false)
+    (goversionsFixtureRecord "1.25.14" "2026-08-13" "1.25" "eol" true)
+    (goversionsFixtureRecord "1.25rc2" "2025-07-08" "1.25" "eol" false)
+    (goversionsFixtureRecord "1.17beta1" "2021-06-10" "1.17" "eol" true)
+  ];
+  goversionsApp = pkgs.callPackage ../goversions.nix {records = goversionsFixture;};
+  goversionsGoldens = ./fixtures/goversions;
+
+  # The other half of the latest/stable split: the newest release is stable,
+  # so go-bin.latest and go-bin.latestStable are the same version.
+  goversionsStableApp = pkgs.callPackage ../goversions.nix {
+    records = [
+      (goversionsFixtureRecord "1.27.2" "2026-10-07" "1.27" "latest" true)
+      (goversionsFixtureRecord "1.27.1" "2026-09-01" "1.27" "supported" false)
+      (goversionsFixtureRecord "1.26.10" "2026-10-07" "1.26" "supported" true)
+      (goversionsFixtureRecord "1.25.14" "2026-08-13" "1.25" "eol" true)
+    ];
+  };
+
+  # Runs goversions against the fixture and checks its exit status, stdout and
+  # stderr. stdout is compared with test/fixtures/goversions/<golden>.golden
+  # when golden is set; otherwise stdout and stderr are each checked against
+  # an expected first line, where "" means nothing may be printed at all.
+  #
+  # The goldens are rendered from goversionsFixture, so they never change with
+  # a Go release. Regenerate one with the fixture-built app each check exposes:
+  #   $(nix build --no-link --print-out-paths .#checks.<system>.goversions-default.app)/bin/goversions \
+  #     > test/fixtures/goversions/default.golden
+  goversionsCase = name: {
+    app ? goversionsApp,
+    args ? [],
+    exit ? 0,
+    golden ? null,
+    stdout ? "",
+    stderr ? "",
+  }: let
+    expectFirstLine = file: expected:
+      if expected == ""
+      then ''[ -s ${file} ] && { echo "${file}: expected nothing, got:"; cat ${file}; failed=1; }''
+      else ''[ "$(head -n 1 ${file})" = ${pkgs.lib.escapeShellArg expected} ] || { echo "${file}: expected first line ${pkgs.lib.escapeShellArg expected}, got:"; head -n 1 ${file}; failed=1; }'';
+  in
+    pkgs.runCommand "test-goversions-${name}" {
+      nativeBuildInputs = [pkgs.diffutils];
+      passthru = {inherit app;};
+    } ''
+      set +e
+      ${app}/bin/goversions ${pkgs.lib.escapeShellArgs args} >stdout 2>stderr
+      status=$?
+      set -e
+      failed=0
+      [ "$status" -eq ${toString exit} ] || { echo "exit status: expected ${toString exit}, got $status"; failed=1; }
+      ${
+        if golden != null
+        then "diff -u ${goversionsGoldens}/${golden}.golden stdout || failed=1"
+        else expectFirstLine "stdout" stdout
+      }
+      ${expectFirstLine "stderr" stderr}
+      [ "$failed" -eq 0 ] && touch $out
+    '';
+
+  # Runs the renderer directly under gawk and mawk: colour can be forced here
+  # without a terminal, and both must produce byte-identical output.
+  # Records stdout, stderr and the exit status separately ($out/{stdout,stderr,
+  # status}), so a failure that both awks share can't pass as agreement.
+  goversionsRenderApp = app: awk: mode: color: prefix:
+    pkgs.runCommand "goversions-render-${awk.pname}-${mode}-${toString color}-${
+      if prefix == ""
+      then "none"
+      else prefix
+    }" {} ''
+      mkdir $out
+      set +e
+      GOVERSIONS_PREFIX=${pkgs.lib.escapeShellArg prefix} ${awk}/bin/${awk.pname} \
+        -v mode=${mode} -v color=${toString color} \
+        -f ${../scripts/goversions.awk} ${app.tsv} >$out/stdout 2>$out/stderr
+      echo $? >$out/status
+    '';
+  goversionsRender = goversionsRenderApp goversionsApp;
+
   # Direct access to the testPackages shell-expression builder
   inherit (import ../builder/test-packages.nix {inherit (pkgs) lib;}) mkTestPackages;
 
@@ -253,6 +346,106 @@ in {
   # String context would mean a record references a store path, i.e. that
   # evaluating versionInfo instantiated a derivation.
   versionInfo-references-no-derivation = assertEq "versionInfo-references-no-derivation" false (builtins.hasContext (builtins.toJSON versionInfo));
+
+  # goversions
+  goversions-default = goversionsCase "default" {golden = "default";};
+  goversions-prefix = goversionsCase "prefix" {
+    args = ["1.27"];
+    golden = "prefix";
+  };
+  goversions-all = goversionsCase "all" {
+    args = ["--all"];
+    golden = "all";
+  };
+  goversions-help = goversionsCase "help" {
+    args = ["--help"];
+    golden = "help";
+  };
+  goversions-version = goversionsCase "version" {
+    args = ["--version"];
+    stdout = goversionsApp.version;
+  };
+  goversions-no-match = goversionsCase "no-match" {
+    args = ["1.99"];
+    exit = 1;
+    stderr = ''goversions: no versions match "1.99"'';
+  };
+  # awk's -v would turn this into "1.2" and match; the prefix must be literal.
+  goversions-prefix-is-literal = goversionsCase "prefix-is-literal" {
+    args = ["1\\.2"];
+    exit = 1;
+    stderr = ''goversions: no versions match "1\.2"'';
+  };
+  goversions-bad-flag = goversionsCase "bad-flag" {
+    args = ["--bogus"];
+    exit = 2;
+    stderr = "goversions: unknown option --bogus";
+  };
+  goversions-two-prefixes = goversionsCase "two-prefixes" {
+    args = ["1.27" "1.26"];
+    exit = 2;
+    stderr = "goversions: only one version prefix may be given";
+  };
+  # Colour needs a terminal through the wrapper, so this renders directly.
+  # Regenerate: cp $(nix build --no-link --print-out-paths .#checks.<system>.goversions-colour.render)/stdout test/fixtures/goversions/colour.golden
+  goversions-colour = let
+    render = goversionsRender pkgs.gawk "all" 1 "";
+  in
+    pkgs.runCommand "test-goversions-colour" {
+      nativeBuildInputs = [pkgs.diffutils];
+      passthru = {inherit render;};
+    } ''
+      [ "$(cat ${render}/status)" = 0 ] || { echo "renderer exited $(cat ${render}/status)"; cat ${render}/stderr; exit 1; }
+      diff -u ${goversionsGoldens}/colour.golden ${render}/stdout && touch $out
+    '';
+  goversions-latest-is-stable = goversionsCase "latest-is-stable" {
+    app = goversionsStableApp;
+    golden = "latest-is-stable";
+  };
+  goversions-latest-is-stable-coloured-as-latest = let
+    render = goversionsRenderApp goversionsStableApp pkgs.gawk "minor" 1 "";
+  in
+    pkgs.runCommand "test-goversions-latest-is-stable-coloured-as-latest" {} ''
+      # -F: the escape code contains "[", which a regex would misread.
+      [ "$(cat ${render}/status)" = 0 ] || { echo "renderer exited $(cat ${render}/status)"; cat ${render}/stderr; exit 1; }
+      row=$(grep -F "$(printf '\033[32m')1.27.2 " ${render}/stdout) || { echo "1.27.2 row is not green:"; cat -v ${render}/stdout; exit 1; }
+      case "$row" in
+        *"latest (stable)"*) touch $out ;;
+        *) echo "green row is not labelled latest (stable): $row"; exit 1 ;;
+      esac
+    '';
+  goversions-gawk-and-mawk-agree = let
+    cases = pkgs.lib.cartesianProduct {
+      mode = ["minor" "all"];
+      color = [0 1];
+      prefix = ["" "1.2" "1.99"];
+    };
+    # Agreement alone would let a failure both awks share pass, so each run
+    # must also exit as expected: 1 when nothing matches, 0 otherwise.
+    compare = c: let
+      gawk = goversionsRender pkgs.gawk c.mode c.color c.prefix;
+      mawk = goversionsRender pkgs.mawk c.mode c.color c.prefix;
+      label = "mode=${c.mode} color=${toString c.color} prefix='${c.prefix}'";
+      expected =
+        if c.prefix == "1.99"
+        then "1"
+        else "0";
+    in ''
+      for part in stdout stderr status; do
+        if ! cmp -s ${gawk}/$part ${mawk}/$part; then
+          echo "gawk and mawk $part differ: ${label}"; failed=1
+        fi
+      done
+      if [ "$(cat ${gawk}/status)" != ${expected} ]; then
+        echo "expected exit ${expected}, got $(cat ${gawk}/status): ${label}"; cat ${gawk}/stderr; failed=1
+      fi
+    '';
+  in
+    pkgs.runCommand "test-goversions-gawk-and-mawk-agree" {} ''
+      failed=0
+      ${pkgs.lib.concatMapStrings compare cases}
+      [ "$failed" -eq 0 ] && touch $out
+    '';
 
   # hasVersion
   hasVersion-exact = assertEq "hasVersion-exact" true (go-bin.hasVersion "1.21.4");
