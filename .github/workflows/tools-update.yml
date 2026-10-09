@@ -35,7 +35,7 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Build tool matrix
+      - name: build_tool_matrix
         id: matrix
         env:
           TOOL_INPUT: ${{ inputs.tool }}
@@ -71,20 +71,20 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout
+      - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ secrets.GH_NSV }}
           # relied on by the later git push/gh pr create steps
           persist-credentials: true
 
-      - name: Setup Nix
+      - name: setup_nix
         uses: $/.github/actions/setup-nix
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           cachix-token: ${{ secrets.GH_CACHIX }}
 
-      - name: Detect Latest Version
+      - name: detect_latest_version
         id: detect
         env:
           TOOL_MODULE: ${{ matrix.tool.module }}
@@ -92,7 +92,7 @@ jobs:
           version=$(nix run .#goscrape -- mod-proxy detect "${TOOL_MODULE}" --include-prerelease)
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Check and Generate Manifest
+      - name: generate_manifest
         id: generate
         env:
           GITHUB_TOKEN: ${{ secrets.GH_NSV }}
@@ -126,17 +126,27 @@ jobs:
           echo "manifest=${manifest}" >> "$GITHUB_OUTPUT"
           echo "branch=${branch}" >> "$GITHUB_OUTPUT"
 
-      - name: GPG Import
+      - name: import_gpg
         if: steps.generate.outputs.generated == 'true'
         uses: purpleclay/gpg-import-action@b3678ccc1d6c597a08e9e6e32c17e974eb7bf9c8 # v0.2.0
         with:
           key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
-      - name: Create PR
+      - name: approver_token
+        if: steps.generate.outputs.generated == 'true'
+        id: approver
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APPROVER_CLIENT_ID }}
+          private-key: ${{ secrets.APPROVER_PRIVATE_KEY }}
+          permission-pull-requests: write
+
+      - name: create_pr
         if: steps.generate.outputs.generated == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GH_NSV }}
+          APPROVER_TOKEN: ${{ steps.approver.outputs.token }}
           TOOL_NAME: ${{ matrix.tool.name }}
           GENERATED_VERSION: ${{ steps.generate.outputs.version }}
           GENERATED_MANIFEST: ${{ steps.generate.outputs.manifest }}
@@ -157,6 +167,8 @@ jobs:
             --body "Auto-generated nix manifest for ${name} ${version}." \
             --base main \
             --head "$branch"
+
+          GH_TOKEN="$APPROVER_TOKEN" gh pr review "$branch" --approve
 
           # enablePullRequestAutoMerge only succeeds while something is still
           # pending; if checks already completed by this point, the PR is
