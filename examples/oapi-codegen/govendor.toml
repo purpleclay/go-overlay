@@ -87,23 +87,23 @@ schema = 4
     go = "1.26.0"
     packages = ["golang.org/x/mod/internal/lazyregexp", "golang.org/x/mod/modfile", "golang.org/x/mod/module", "golang.org/x/mod/semver"]
   [mod."golang.org/x/sync"]
-    version = "v0.22.0"
-    hash = "sha256-VZjl0fAM0p/nI81zh+pdBjzxFupx0UcKYXBBpL2ZS7k="
-    go = "1.25.0"
+    version = "v0.24.0"
+    hash = "sha256-gViyLpsZFBKTEUtK6Li3m6plz5J/VCAcpTLymQVRpj4="
+    go = "1.26.0"
     packages = ["golang.org/x/sync/errgroup"]
   [mod."golang.org/x/sys"]
     version = "v0.48.0"
     hash = "sha256-u+LwI76YIeg1asQKZItD2mnL4Yvx8veLhBuL8wv60Ls="
     go = "1.26.0"
   [mod."golang.org/x/text"]
-    version = "v0.40.0"
-    hash = "sha256-LJfnki46XEreGbSgjl+DeqgcTsINTOu2owyXNvijMcA="
-    go = "1.25.0"
+    version = "v0.43.0"
+    hash = "sha256-gykmMKFe61Tc4tblLPd3IyMKCqL0MSTQpgb6yE5EnDA="
+    go = "1.26.0"
     packages = ["golang.org/x/text/cases", "golang.org/x/text/feature/plural", "golang.org/x/text/internal", "golang.org/x/text/internal/catmsg", "golang.org/x/text/internal/format", "golang.org/x/text/internal/language", "golang.org/x/text/internal/language/compact", "golang.org/x/text/internal/number", "golang.org/x/text/internal/stringset", "golang.org/x/text/internal/tag", "golang.org/x/text/language", "golang.org/x/text/message", "golang.org/x/text/message/catalog", "golang.org/x/text/transform", "golang.org/x/text/unicode/norm"]
   [mod."golang.org/x/tools"]
-    version = "v0.49.0"
-    hash = "sha256-3oaXp2PlfuIn6/UTarnYD279YqJKTyaCWT/KD7ABjD4="
-    go = "1.25.0"
+    version = "v0.51.0"
+    hash = "sha256-WeEH4D7+d5RHq5oSb4cCxxYOtKooq+JTNlEYz2Y4YrA="
+    go = "1.26.0"
     packages = ["golang.org/x/tools/go/ast/astutil", "golang.org/x/tools/imports", "golang.org/x/tools/internal/event", "golang.org/x/tools/internal/event/core", "golang.org/x/tools/internal/event/keys", "golang.org/x/tools/internal/event/label", "golang.org/x/tools/internal/gocommand", "golang.org/x/tools/internal/gopathwalk", "golang.org/x/tools/internal/imports", "golang.org/x/tools/internal/modindex", "golang.org/x/tools/internal/stdlib"]
   [mod."gopkg.in/yaml.v3"]
     version = "v3.0.1"
