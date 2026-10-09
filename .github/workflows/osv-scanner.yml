@@ -33,6 +33,7 @@ jobs:
             api.osv.dev:443
             ghcr.io:443
             github.com:443
+            proxy.golang.org:443
 
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
