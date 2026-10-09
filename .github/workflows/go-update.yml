@@ -53,9 +53,18 @@ jobs:
           key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
+      - name: approver_token
+        id: approver
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APPROVER_CLIENT_ID }}
+          private-key: ${{ secrets.APPROVER_PRIVATE_KEY }}
+          permission-pull-requests: write
+
       - name: generate_manifests
         env:
           GITHUB_TOKEN: ${{ secrets.GH_NSV }}
+          APPROVER_TOKEN: ${{ steps.approver.outputs.token }}
         run: |
           for version in ${GO_VERSIONS}; do
             manifest="manifests/go/${version}.nix"
@@ -97,6 +106,7 @@ jobs:
               --base main \
               --head "$branch"
 
+            GH_TOKEN="$APPROVER_TOKEN" gh pr review "$branch" --approve
             gh pr merge --auto --squash "$branch"
 
             # Return to main for the next version
