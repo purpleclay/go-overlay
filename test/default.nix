@@ -89,7 +89,7 @@
     expectFirstLine = file: expected:
       if expected == ""
       then ''[ -s ${file} ] && { echo "${file}: expected nothing, got:"; cat ${file}; failed=1; }''
-      else ''[ "$(head -n 1 ${file})" = ${pkgs.lib.escapeShellArg expected} ] || { echo "${file}: expected first line ${pkgs.lib.escapeShellArg expected}, got:"; head -n 1 ${file}; failed=1; }'';
+      else ''[ "$(head -n 1 ${file})" = ${pkgs.lib.escapeShellArg expected} ] || { printf '%s: expected first line %s, got:\n' ${file} ${pkgs.lib.escapeShellArg expected}; head -n 1 ${file}; failed=1; }'';
   in
     pkgs.runCommand "test-goversions-${name}" {
       nativeBuildInputs = [pkgs.diffutils];
@@ -365,6 +365,32 @@ in {
     args = ["--version"];
     stdout = goversionsApp.version;
   };
+  goversions-json = goversionsCase "json" {
+    args = ["--json"];
+    golden = "json";
+  };
+  goversions-json-prefix = goversionsCase "json-prefix" {
+    args = ["--json" "1.27"];
+    golden = "json-prefix";
+  };
+  goversions-json-no-match = goversionsCase "json-no-match" {
+    args = ["--json" "1.99"];
+    exit = 1;
+    stderr = ''goversions: no versions match "1.99"'';
+  };
+  # The quote would match the one closing the version in the raw JSON line.
+  goversions-json-prefix-with-quote = goversionsCase "json-prefix-with-quote" {
+    args = ["--json" ''1.27.2"''];
+    exit = 1;
+    stderr = ''goversions: no versions match "1.27.2""'';
+  };
+  # The output is one JSON array whose records have exactly the documented
+  # keys, version first, which the prefix filter depends on.
+  goversions-json-is-an-array = pkgs.runCommand "test-goversions-json-is-an-array" {nativeBuildInputs = [pkgs.jq];} ''
+    ${goversionsApp}/bin/goversions --json \
+      | jq -e 'type == "array" and length > 0 and all(.[]; keys_unsorted == ["version","date","minor","status","package","newestInMinor"])' \
+        >/dev/null && touch $out
+  '';
   goversions-no-match = goversionsCase "no-match" {
     args = ["1.99"];
     exit = 1;

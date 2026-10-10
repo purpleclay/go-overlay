@@ -1,0 +1,5 @@
+[
+{"version":"1.27.2","date":"2026-10-07","minor":"1.27","status":"stable","package":"go_1_27_2","newestInMinor":true},
+{"version":"1.27.1","date":"2026-09-01","minor":"1.27","status":"supported","package":"go_1_27_1","newestInMinor":false},
+{"version":"1.27rc1","date":"2026-06-18","minor":"1.27","status":"prerelease","package":"go_1_27rc1","newestInMinor":false}
+]

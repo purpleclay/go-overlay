@@ -1,0 +1,11 @@
+[
+{"version":"1.28rc1","date":"2026-11-12","minor":"1.28","status":"latest","package":"go_1_28rc1","newestInMinor":true},
+{"version":"1.27.2","date":"2026-10-07","minor":"1.27","status":"stable","package":"go_1_27_2","newestInMinor":true},
+{"version":"1.27.1","date":"2026-09-01","minor":"1.27","status":"supported","package":"go_1_27_1","newestInMinor":false},
+{"version":"1.27rc1","date":"2026-06-18","minor":"1.27","status":"prerelease","package":"go_1_27rc1","newestInMinor":false},
+{"version":"1.26.10","date":"2026-10-07","minor":"1.26","status":"supported","package":"go_1_26_10","newestInMinor":true},
+{"version":"1.26.9","date":"2026-09-01","minor":"1.26","status":"supported","package":"go_1_26_9","newestInMinor":false},
+{"version":"1.25.14","date":"2026-08-13","minor":"1.25","status":"eol","package":"go_1_25_14","newestInMinor":true},
+{"version":"1.25rc2","date":"2025-07-08","minor":"1.25","status":"eol","package":"go_1_25rc2","newestInMinor":false},
+{"version":"1.17beta1","date":"2021-06-10","minor":"1.17","status":"eol","package":"go_1_17beta1","newestInMinor":true}
+]

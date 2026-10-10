@@ -23,8 +23,8 @@ EXAMPLES
   # List every release
   goversions --all
 
-  # Run it straight from the flake, without installing it
-  nix run github:purpleclay/go-overlay#goversions -- 1.24
+  # List every 1.24 release as a JSON array
+  goversions --json 1.24
 
 FLAGS
 
@@ -33,6 +33,9 @@ FLAGS
 
   -h, --help
           help for goversions
+
+  -j, --json
+          print every matching version as a JSON array
 
   -V, --version
           print the goversions version
