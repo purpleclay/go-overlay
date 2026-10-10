@@ -13,7 +13,7 @@
   records,
 }: let
   pname = "goversions";
-  version = "v0.1.0";
+  version = "v0.2.0";
 
   inherit (import ./lib/version.nix {inherit lib;}) parseVersion;
 
@@ -42,6 +42,15 @@
     ];
 
   versionsTsv = writeText "${pname}.tsv" (lib.concatMapStrings (r: tsvRow r + "\n") records);
+
+  # Assembled by hand because builtins.toJSON sorts attrset keys, and --json's
+  # prefix filter relies on "version" being the first key. status is
+  # versionInfo's own value, never the table's combined "latest (stable)".
+  jsonRow = r: let
+    j = builtins.toJSON;
+  in ''{"version":${j r.version},"date":${j r.date},"minor":${j r.minor},"status":${j r.status},"package":${j r.attr},"newestInMinor":${j r.newestInMinor}}'';
+
+  versionsJsonl = writeText "${pname}.jsonl" (lib.concatMapStrings (r: jsonRow r + "\n") records);
 in
   writeShellApplication {
     name = pname;
@@ -51,6 +60,7 @@ in
     # use braces must be written ''${...}. Bare $1, $# and "$tsv" need no escaping.
     text = ''
       tsv="${versionsTsv}"
+      jsonl="${versionsJsonl}"
       renderer="${./scripts/goversions.awk}"
 
       # Whether to colour output written to file descriptor $1: only on a
@@ -106,12 +116,13 @@ in
         example 'List the newest release of each minor version' "''${cmd}goversions''${reset}"
         example 'List every 1.24 release' "''${cmd}goversions''${reset} 1.24"
         example 'List every release' "''${cmd}goversions''${reset} ''${flag}--all''${reset}"
-        example 'Run it straight from the flake, without installing it' \
-          "''${cmd}nix run''${reset} github:purpleclay/go-overlay#goversions -- 1.24"
+        example 'List every 1.24 release as a JSON array' \
+          "''${cmd}goversions''${reset} ''${flag}--json''${reset} 1.24"
 
         heading FLAGS
         option '-a, --all' 'list every version, not just the newest per minor'
         option '-h, --help' 'help for goversions'
+        option '-j, --json' 'print every matching version as a JSON array'
         option '-V, --version' 'print the goversions version'
 
         heading STATUSES
@@ -131,10 +142,12 @@ in
 
       prefix=""
       mode="minor"
+      json=0
 
       while [ "$#" -gt 0 ]; do
         case "$1" in
           -a | --all) mode="all" ;;
+          -j | --json) json=1 ;;
           -h | --help)
             usage 1
             exit 0
@@ -159,6 +172,25 @@ in
         shift
       done
 
+      # A JSON array of every record, whatever the minor, one per line; consumers
+      # filter on newestInMinor. Each line opens {"version":"<v>", so splitting
+      # on quotes gives the version as field 4. The prefix is matched as literal
+      # text against that value alone, so a quote in it can't match the rest of
+      # the line.
+      if [ "$json" -eq 1 ]; then
+        GOVERSIONS_PREFIX="$prefix" exec gawk '
+          split($0, f, "\"") && index(f[4], ENVIRON["GOVERSIONS_PREFIX"]) == 1 {
+            printf("%s%s", n++ ? ",\n" : "[\n", $0)
+          }
+          END {
+            if (!n) {
+              printf("goversions: no versions match \"%s\"\n", ENVIRON["GOVERSIONS_PREFIX"]) > "/dev/stderr"
+              exit 1
+            }
+            printf("\n]\n")
+          }' "$jsonl"
+      fi
+
       # A prefix is a request to see everything underneath it.
       if [ -n "$prefix" ]; then
         mode="all"
@@ -178,7 +210,10 @@ in
 
     # Exposed so tests can drive the renderer directly with the exact data the
     # wrapper uses.
-    passthru.tsv = versionsTsv;
+    passthru = {
+      tsv = versionsTsv;
+      jsonl = versionsJsonl;
+    };
 
     meta = with lib; {
       homepage = "https://github.com/purpleclay/go-overlay";
