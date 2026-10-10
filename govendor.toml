@@ -199,8 +199,8 @@ schema = 4
     go = "1.19"
     packages = ["github.com/xo/terminfo"]
   [mod."golang.org/x/mod"]
-    version = "v0.41.0"
-    hash = "sha256-euzxa6DC2qmU+LgEwjOM71nc/lRrU9XRC9nESAaDw6Q="
+    version = "v0.42.0"
+    hash = "sha256-jgjKlIzteE99u8/TbuZTk4cLAwDOVZePXaRwqEpYvPk="
     go = "1.26.0"
     packages = ["golang.org/x/mod/internal/lazyregexp", "golang.org/x/mod/modfile", "golang.org/x/mod/module", "golang.org/x/mod/semver"]
   [mod."golang.org/x/sync"]
