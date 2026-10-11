@@ -11,10 +11,17 @@ on:
         description: "Co-author for the commit trailer (e.g., 'name <email>'). If not provided, uses git config from GPG import"
         required: false
         type: string
+      app-client-id:
+        description: "Client ID of a GitHub App to push the commit as, instead of the token secret. The app becomes the co-author unless co-author is set"
+        required: false
+        type: string
     secrets:
       token:
-        description: "GitHub token with contents:write and workflows:write permissions to push commits"
-        required: true
+        description: "GitHub token with contents:write and workflows:write permissions to push commits. Not needed when app-client-id is set"
+        required: false
+      app-private-key:
+        description: "Private key of the GitHub App identified by app-client-id"
+        required: false
       gpg-private-key:
         description: "GPG private key for signing commits"
         required: true
@@ -29,19 +36,28 @@ jobs:
     name: govendor
     runs-on: ubuntu-26.04
     permissions:
-      contents: read # writes go through secrets.token, not GITHUB_TOKEN; this only covers Setup Nix's API calls
+      contents: read # writes go through the app token or secrets.token, not GITHUB_TOKEN; this only covers Setup Nix's API calls
     steps:
       - name: harden_runner
         uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
+      - name: app_token
+        if: inputs.app-client-id != ''
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ inputs.app-client-id }}
+          private-key: ${{ secrets.app-private-key }}
+          permission-contents: write
+
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 2
-          token: ${{ secrets.token }}
+          token: ${{ steps.app.outputs.token || secrets.token }}
           # relied on by the later git push --force-with-lease step
           persist-credentials: true
 
@@ -60,6 +76,8 @@ jobs:
         env:
           CO_AUTHOR: ${{ inputs.co-author }}
           DIRS: ${{ inputs.working-directory }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           while IFS= read -r dir; do
             [ -z "$dir" ] && continue
@@ -78,7 +96,10 @@ jobs:
             exit 0
           fi
 
-          if [ -z "$CO_AUTHOR" ]; then
+          if [ -z "$CO_AUTHOR" ] && [ -n "$APP_SLUG" ]; then
+            bot="${APP_SLUG}[bot]"
+            CO_AUTHOR="$bot <$(gh api "users/$bot" --jq .id)+$bot@users.noreply.github.com>"
+          elif [ -z "$CO_AUTHOR" ]; then
             CO_AUTHOR="$(git config user.name) <$(git config user.email)>"
           fi
 

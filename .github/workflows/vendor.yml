@@ -51,11 +51,13 @@ jobs:
     needs: detect
     if: needs.detect.outputs.dirs != ''
     permissions:
-      contents: read # passed through to govendor-update.yml, which pushes via its own token secret
+      contents: read # passed through to govendor-update.yml, which pushes as purplebot via its own app token
     uses: $/.github/workflows/govendor-update.yml
     with:
       working-directory: ${{ needs.detect.outputs.dirs }}
+      # pushing as purplebot rather than GH_NSV leaves @purpleclay free to approve under require_last_push_approval
+      app-client-id: ${{ vars.APPROVER_CLIENT_ID }}
     secrets:
-      token: ${{ secrets.GH_NSV }}
+      app-private-key: ${{ secrets.APPROVER_PRIVATE_KEY }}
       gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
       gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
