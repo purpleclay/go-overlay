@@ -83,12 +83,12 @@ func listVersions(page, prefix string) ([]string, error) {
 		var ver string
 		var err error
 
-		rem, out, err = scrape.Href(prefix)(rem)
+		rem, out, err = scrape.Href(prefix).Run(rem)
 		if err != nil {
 			break
 		}
 
-		_, ver, err = scrape.GoVersion()(strings.TrimPrefix(out, "/dl/"))
+		_, ver, err = scrape.GoVersion().Run(strings.TrimPrefix(out, "/dl/"))
 		if err != nil {
 			continue
 		}

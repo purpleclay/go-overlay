@@ -3,6 +3,7 @@ package scrape
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/purpleclay/chomp"
@@ -21,12 +22,12 @@ var exactPrereleaseSuffix = regexp.MustCompile(`(rc|beta)[0-9]+$`)
 // (e.g. "go1.21.4.aix-ppc64.tar.gz").
 var prereleaseTag = chomp.Opt(chomp.Recognize(chomp.Pair(
 	chomp.First(chomp.Tag("rc"), chomp.Tag("beta")),
-	chomp.Any("1234567890"),
+	chomp.IsA("1234567890"),
 )))
 
 func GoVersion() chomp.Combinator[string] {
-	return func(s string) (string, string, error) {
-		rem, rel, err := chomp.All(chomp.Tag("go"), chomp.Any(".1234567890"), prereleaseTag)(s)
+	return func(s chomp.State) (chomp.State, string, error) {
+		rem, rel, err := chomp.All(chomp.Tag("go"), chomp.IsA(".1234567890"), prereleaseTag)(s)
 		if err != nil {
 			return rem, "", err
 		}
@@ -41,7 +42,7 @@ func SeekDownloadSection(version string) chomp.Combinator[string] {
 		normalizedVersion = "go" + normalizedVersion
 	}
 
-	return func(s string) (string, string, error) {
+	return func(s chomp.State) (chomp.State, string, error) {
 		rem, _, err := chomp.Until(fmt.Sprintf(`id="%s"`, normalizedVersion))(s)
 		if err != nil {
 			return rem, "", err
@@ -74,7 +75,7 @@ func Href(version string) chomp.Combinator[string] {
 		hrefPrefix = fmt.Sprintf(`<a class="download" href="/dl/%s`, hrefVersion)
 	}
 
-	return func(s string) (string, string, error) {
+	return func(s chomp.State) (chomp.State, string, error) {
 		rem, ext, err := chomp.All(
 			chomp.Until(hrefPrefix),
 			chomp.Delimited(chomp.Tag(`<a class="download" href="`), chomp.Until(`"`), chomp.Tag(`"`)),
@@ -88,7 +89,7 @@ func Href(version string) chomp.Combinator[string] {
 }
 
 func eol() chomp.Combinator[string] {
-	return func(s string) (string, string, error) {
+	return func(s chomp.State) (chomp.State, string, error) {
 		rem, _, err := chomp.Pair(chomp.Until("\n"), chomp.LineEnding())(s)
 		if err != nil {
 			return rem, "", err
@@ -99,18 +100,23 @@ func eol() chomp.Combinator[string] {
 }
 
 func Target() chomp.Combinator[[]string] {
-	return func(s string) (string, []string, error) {
-		return chomp.All(
+	return func(s chomp.State) (chomp.State, []string, error) {
+		rem, cells, err := chomp.All(
 			chomp.Repeat(tableCell("<td>", "</td>"), 4),
 			chomp.S(tableCell("<td><tt>", "</tt></td>")),
 		)(s)
+		if err != nil {
+			return rem, nil, err
+		}
+
+		return rem, slices.Concat(cells...), nil
 	}
 }
 
 func tableCell(deliml, delimr string) chomp.Combinator[string] {
-	return func(s string) (string, string, error) {
+	return func(s chomp.State) (chomp.State, string, error) {
 		rem, ext, err := chomp.Pair(
-			chomp.Any(" "),
+			chomp.IsA(" "),
 			chomp.Delimited(chomp.Tag(deliml), chomp.Until(delimr), chomp.Tag(delimr)))(s)
 		if err != nil {
 			return rem, "", err
@@ -121,6 +127,6 @@ func tableCell(deliml, delimr string) chomp.Combinator[string] {
 			return rem, "", err
 		}
 
-		return rem, ext[1], nil
+		return rem, ext.Second, nil
 	}
 }

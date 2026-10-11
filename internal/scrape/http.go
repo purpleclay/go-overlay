@@ -45,7 +45,7 @@ func FetchLatestVersion() (string, error) {
 		return "", err
 	}
 
-	_, version, err := GoVersion()(data)
+	_, version, err := GoVersion().Run(data)
 	if err != nil {
 		return "", err
 	}
