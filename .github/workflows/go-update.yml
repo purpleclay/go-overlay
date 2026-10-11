@@ -60,6 +60,8 @@ jobs:
           client-id: ${{ vars.APPROVER_CLIENT_ID }}
           private-key: ${{ secrets.APPROVER_PRIVATE_KEY }}
           permission-pull-requests: write
+          # an approval only counts towards required reviews if the reviewer has write access
+          permission-contents: write
 
       - name: generate_manifests
         env:
