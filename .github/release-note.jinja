@@ -1,0 +1,134 @@
+{%- macro commit_contributors(commit) -%}
+{%- if commit.contributors %} ({{ commit.contributors | mention | join(", ") }}){% endif -%}
+{%- endmacro -%}
+
+{%- macro contributor_link(contributor) -%}
+{%- if contributor.is_ai -%}
+**`{{ contributor.count }}`** commit{% if contributor.count != 1 %}s{% endif %}
+{%- else -%}
+{%- set since = contributor.first_commit_timestamp | date(format="%Y-%m-%d") -%}
+{%- set until = contributor.last_commit_timestamp | date(format="%Y-%m-%d") -%}
+{%- set url = contributor_commits_url(author=contributor.username, since=since, until=until) -%}
+{%- if url -%}
+[**`{{ contributor.count }}`**]({{ url }}) commit{% if contributor.count != 1 %}s{% endif %}
+{%- else -%}
+**`{{ contributor.count }}`** commit{% if contributor.count != 1 %}s{% endif %}
+{%- endif -%}
+{%- endif -%}
+{%- endmacro -%}
+
+{%- macro avatar_url(url, size) -%}
+{{ url }}{% if "?" in url %}&{% else %}?{% endif %}size={{ size }}&width={{ size }}
+{%- endmacro -%}
+
+{%- macro commit_entry(commit) -%}
+- {{ commit_url(sha = commit.hash) }} {{ commit.description }}{{ commit_contributors(commit=commit) }}
+{%- if commit.body %}
+
+{{ commit.body | unwrap | indent(2, first=true) }}
+{%- endif %}
+{%- endmacro -%}
+
+{#- One section per scope, each split by commit type. Commits with any other
+    scope (or none) are left out. -#}
+{%- macro group(section, commits) -%}
+{%- set features = commits | typed(include="feat") -%}
+{%- set fixes = commits | typed(include="fix") -%}
+{%- set perf = commits | typed(include="perf") -%}
+{%- if features or fixes or perf %}
+## `{{ section.title }}`
+
+{{ section.summary }}
+{%- if features %}
+
+### New Features
+{%- for commit in features %}
+{{ commit_entry(commit=commit) }}
+{%- endfor %}
+{%- endif %}
+{%- if fixes %}
+
+### Bug Fixes
+{%- for commit in fixes %}
+{{ commit_entry(commit=commit) }}
+{%- endfor %}
+{%- endif %}
+{%- if perf %}
+
+### Performance Improvements
+{%- for commit in perf %}
+{{ commit_entry(commit=commit) }}
+{%- endfor %}
+{%- endif %}
+{% endif %}
+{%- endmacro -%}
+
+{%- set sections = [
+  {"scope": "nix", "title": "go-overlay", "summary": "The Nix overlay itself: Go toolchains, pinned Go tools and the builders for Go modules and workspaces."},
+  {"scope": "govendor", "title": "govendor", "summary": "Generates and maintains `govendor.toml`, the per-module dependency manifest used during builds."},
+  {"scope": "goscrape", "title": "goscrape", "summary": "Scrapes Go and tool releases and generates the Nix manifests that keep go-overlay up to date."},
+  {"scope": "goversions", "title": "goversions", "summary": "Lists the Go versions go-overlay provides, with release dates, support status and package names."},
+] -%}
+{%- set breaking = commits | selectattr("breaking") -%}
+{%- set non_breaking = commits | rejectattr("breaking") -%}
+{%- set dependencies = non_breaking | scoped(include="deps") -%}
+{%- set changes = non_breaking | scoped(include=sections | map(attribute="scope") | list) -%}
+{%- set features = changes | typed(include="feat") -%}
+{%- set fixes = changes | typed(include="fix") -%}
+
+## {{ git_ref }} - {{ release_date | date(format="%B %d, %Y") }}
+
+{%- set stats = [] -%}
+{%- if breaking -%}
+  {%- set n = breaking | length -%}
+  {%- set stats = stats + ["[**`" ~ n ~ "`**](#breaking-changes) breaking change" ~ ("s" if n != 1 else "")] -%}
+{%- endif -%}
+{%- if features -%}
+  {%- set n = features | length -%}
+  {%- set stats = stats + ["**`" ~ n ~ "`** new feature" ~ ("s" if n != 1 else "")] -%}
+{%- endif -%}
+{%- if fixes -%}
+  {%- set n = fixes | length -%}
+  {%- set stats = stats + ["**`" ~ n ~ "`** bug fix" ~ ("es" if n != 1 else "")] -%}
+{%- endif -%}
+{%- if stats %}
+
+{{ stats | join(" • ") }}
+{% endif %}
+{%- set humans = contributors | rejectattr("is_bot") -%}
+{%- if humans %}
+## Contributors
+{%- for contributor in humans %}
+- <img src="{{ avatar_url(url=contributor.avatar_url, size=20) }}" width="20" height="20" align="center">&nbsp;&nbsp;@{{ contributor.username }} ({{ contributor_link(contributor=contributor) }})
+{%- endfor %}
+{% endif %}
+{%- if breaking %}
+## Breaking Changes
+{%- for commit in breaking %}
+{{ commit_entry(commit=commit) }}
+{%- if commit.breaking_description %}
+
+> [!IMPORTANT]
+{{ "> " ~ (commit.breaking_description | unwrap) | replace("\n", "\n> ") }}
+{%- endif %}
+{%- endfor %}
+{% endif %}
+{%- for section in sections %}
+{{- group(section=section, commits=changes | scoped(include=section.scope)) }}
+{%- endfor %}
+{%- if dependencies %}
+## Dependency Updates
+
+| Commit | Update | Contributors |
+|--------|--------|--------------|
+{%- for commit in dependencies %}
+| {{ commit_url(sha = commit.hash) }} | {{ commit.description | table_escape }} |{% if commit.contributors %} {{ commit.contributors | mention | join(", ") }}{% endif %} |
+{%- endfor %}
+{%- endif %}
+{%- set compare = compare_url() %}
+{%- if compare %}
+
+**Full Changelog**: [`{{ to_ref }}...{{ from_ref }}`]({{ compare }})
+{%- endif %}
+
+*Generated with [release-note](https://github.com/purpleclay/release-note)*
