@@ -154,8 +154,8 @@ schema = 4
     go = "1.20"
     packages = ["github.com/nix-community/go-nix/pkg/nar", "github.com/nix-community/go-nix/pkg/wire"]
   [mod."github.com/purpleclay/chomp"]
-    version = "v0.7.1"
-    hash = "sha256-jztQlwuz54ob7CSEd4pP+E0mtZtg/NLqLUEndlXS73Y="
+    version = "v0.8.0"
+    hash = "sha256-rzVlDwRSv0mH6Ey7ppnbqH3xtVN40adSK12MsNHqLC0="
     go = "1.22.12"
     packages = ["github.com/purpleclay/chomp"]
   [mod."github.com/purpleclay/conker"]
