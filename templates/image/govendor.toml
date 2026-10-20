@@ -4,7 +4,7 @@ schema = 4
 
 [mod]
   [mod."github.com/go-chi/chi/v5"]
-    version = "v5.4.0"
-    hash = "sha256-5b6cUUCZeLiEweHFRlvinwTGicKPxLtKMC4hKEd58eQ="
+    version = "v5.5.0"
+    hash = "sha256-FoMSgy+VQKVPgPr6xr/OZn9QeYhwtDFlSYjpQDs77AA="
     go = "1.24"
     packages = ["github.com/go-chi/chi/v5", "github.com/go-chi/chi/v5/middleware"]
