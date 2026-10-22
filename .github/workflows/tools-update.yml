@@ -128,7 +128,7 @@ jobs:
 
       - name: import_gpg
         if: steps.generate.outputs.generated == 'true'
-        uses: purpleclay/gpg-import-action@b3678ccc1d6c597a08e9e6e32c17e974eb7bf9c8 # v0.2.0
+        uses: purpleclay/gpg-import-action@43fb976a9a0b0292ab3694121586aa57741f5255 # v0.3.0
         with:
           key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
