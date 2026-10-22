@@ -72,7 +72,7 @@ jobs:
 
       - name: release_note
         id: notes
-        uses: purpleclay/release-note-action@173903da3997acebdb2c04f3de707c7c4c1a283e # v0.3.1
+        uses: purpleclay/release-note-action@35a3b27b93d24ded4436b5266df8cccbbbe18d82 # v0.4.0
 
       - name: publish_release
         id: publish
