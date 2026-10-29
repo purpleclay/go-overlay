@@ -37,6 +37,14 @@
 
   subPackages = manifest.subPackages or ["."];
 
+  # go install names a binary after its package directory (cmd/dlv -> dlv);
+  # a package at the module root takes the tool's name.
+  mainPackage = builtins.head subPackages;
+  mainProgram =
+    if mainPackage == "."
+    then pname
+    else baseNameOf mainPackage;
+
   version = manifest.version;
 in
   stdenv.mkDerivation {
@@ -116,7 +124,7 @@ in
       {
         description = "${pname} - built from ${manifest.module}@v${manifest.version}";
         homepage = "https://pkg.go.dev/${manifest.module}";
-        mainProgram = pname;
+        inherit mainProgram;
       }
       // lib.optionalAttrs (licenseBySpdxId ? ${license}) {
         license = licenseBySpdxId.${license};

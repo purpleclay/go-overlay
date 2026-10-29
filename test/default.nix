@@ -1,8 +1,10 @@
 # packageNames are the flake's versioned package attributes (go_1_27_1, ...),
 # so versionInfo's attr can be checked against what the flake really exposes.
+# toolPackages are the flake's per-tool aliases (gopls, delve, ...).
 {
   pkgs,
   packageNames,
+  toolPackages,
 }: let
   go-bin = pkgs.go-bin;
 
@@ -568,6 +570,24 @@ in {
 
   # tools - binary exists
   tools-govulncheck-has-binary = testBinaryExists "tools-govulncheck-has-binary" go-bin.latest.tools.govulncheck.latest "bin/govulncheck";
+
+  # manifests/.zed holds editor settings, not a tool
+  tools-skips-hidden-directories = assertEq "tools-skips-hidden-directories" [] (builtins.filter (pkgs.lib.hasPrefix ".") (builtins.attrNames toolManifests.tools));
+
+  # The flake exposes one alias per tool, each the latest version built with the latest Go
+  tools-flake-aliases-cover-every-tool = assertEq "tools-flake-aliases-cover-every-tool" (builtins.attrNames toolManifests.tools) (builtins.attrNames toolPackages);
+  tools-flake-aliases-are-latest = assertEq "tools-flake-aliases-are-latest" [] (builtins.filter (name: !(toolPackages ? ${name}) || toolPackages.${name}.drvPath != go-bin.latest.tools.${name}.latest.drvPath) (builtins.attrNames toolManifests.tools));
+
+  # nix run executes lib.getExe, so meta.mainProgram must name a real binary
+  tools-main-program-exists = pkgs.runCommand "test-tools-main-program-exists" {} ''
+    failed=0
+    ${pkgs.lib.concatMapStringsSep "\n" (name: let
+      exe = pkgs.lib.getExe go-bin.latest.tools.${name}.latest;
+    in ''
+      [ -x ${exe} ] || { echo "${name}: ${exe} is not an executable"; failed=1; }
+    '') (builtins.attrNames toolManifests.tools)}
+    [ "$failed" -eq 0 ] && touch $out
+  '';
 
   # tools - compatibility (Go 1.21.4 is compatible with govulncheck up to 1.1.3, but not 1.1.4+ which requires Go 1.22.0)
   tools-govulncheck-compat-old-go = assertEq "tools-govulncheck-compat-old-go" "1.1.3" go-bin.versions."1.21.4".tools.govulncheck.latest.version;

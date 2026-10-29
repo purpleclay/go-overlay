@@ -4,10 +4,11 @@
   manifestBase = ../manifests;
   allEntries = builtins.readDir manifestBase;
 
-  # Tool directories are any directory under manifests/ that isn't "go"
+  # Tool directories are any directory under manifests/ that isn't "go" or
+  # hidden (e.g. .zed editor settings)
   toolDirs =
     lib.filterAttrs
-    (name: type: type == "directory" && name != "go")
+    (name: type: type == "directory" && name != "go" && !lib.hasPrefix "." name)
     allEntries;
 
   # Parse semver "major.minor.patch" into comparable components.

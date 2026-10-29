@@ -231,6 +231,17 @@ in {
 
 For selecting specific tools or pinning versions, see the [Go Tools reference](docs/reference.md#go-tools).
 
+### Using go-overlay just for tools
+
+You don't need go-overlay's toolchains or builders to use its tools. nixpkgs ships one version of each, while go-overlay keeps every released version:
+
+```bash
+nix run github:purpleclay/go-overlay#gopls -- version                       # latest
+nix shell 'github:purpleclay/go-overlay#go.tools.golangci-lint."2.14.0"'   # pinned
+```
+
+To build a tool with a specific Go version, or pin tools in CI, see [Using tools from the flake](docs/reference.md#from-the-flake).
+
 ## Detecting Drift with Git Hooks
 
 Use [cachix/git-hooks.nix](https://github.com/cachix/git-hooks.nix) to check for manifest drift on commit:
