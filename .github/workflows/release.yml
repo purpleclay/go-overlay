@@ -71,42 +71,8 @@ jobs:
           fi
 
       - name: release_note
-        id: notes
-        uses: purpleclay/release-note-action@173903da3997acebdb2c04f3de707c7c4c1a283e # v0.3.1
-
-      - name: publish_release
-        id: publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
-          NOTES_FILE: ${{ steps.notes.outputs.release-note-path }}
-        run: |
-          set -euo pipefail
-          # gh release view's failure text ("release not found") is an
-          # internal error string with no documented stability guarantee —
-          # only gh's exit status is part of its contract, so a future gh
-          # release could reword it and silently steer a valid first-time
-          # publish into the fatal branch below. Query the REST API
-          # directly instead: GitHub's own error body always carries a
-          # "status" field mirroring the real HTTP status code, which is
-          # part of the documented API response shape, not gh's wording.
-          #
-          # Immutable releases mean an existing release for this tag can
-          # never be deleted or modified, complete or not — there is no
-          # recovery path here but a new tag (see "Fixing a bad release" in
-          # RELEASE.md). So existence is treated as done, not something to
-          # replace: no delete, ever, on this path.
-          if response=$(gh api "repos/$REPO/releases/tags/$TAG" 2>/dev/null); then
-            echo "release for '$TAG' already exists; nothing to publish"
-            url=$(jq -r '.html_url' <<< "$response")
-          elif [ "$(jq -r '.status // empty' <<< "$response" 2>/dev/null)" = "404" ]; then
-            url=$(gh release create "$TAG" \
-              --title "$TAG" \
-              --notes-file "$NOTES_FILE" \
-              --verify-tag)
-          else
-            echo "::error::could not confirm whether a release for '$TAG' already exists: $response"
-            exit 1
-          fi
-          echo "url=${url}" >> "$GITHUB_OUTPUT"
+        uses: purpleclay/release-note-action@35a3b27b93d24ded4436b5266df8cccbbbe18d82 # v0.4.0
+        with:
+          # An existing release for the tag is left untouched: immutable
+          # releases can't be replaced, only superseded by a new tag.
+          publish: true
