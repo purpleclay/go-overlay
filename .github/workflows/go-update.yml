@@ -48,7 +48,7 @@ jobs:
           echo "GO_VERSIONS=$LATEST $PREV $PRE" >> $GITHUB_ENV
 
       - name: import_gpg
-        uses: purpleclay/gpg-import-action@b3678ccc1d6c597a08e9e6e32c17e974eb7bf9c8 # v0.2.0
+        uses: purpleclay/gpg-import-action@2c76f9f1d87df4537b0d2d12e309458e072947ea # v0.5.0
         with:
           key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
