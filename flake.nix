@@ -126,8 +126,11 @@
           )
           pkgs.go-bin.versions;
 
+        # One package per tool (nix run .#gopls), the latest version built with the latest Go
+        toolPackages = pkgs.lib.mapAttrs (_: tool: tool.latest) pkgs.go-bin.latest.tools;
+
         libTests = import ./test {
-          inherit pkgs;
+          inherit pkgs toolPackages;
           packageNames = builtins.attrNames versionedPackages;
         };
         examples = import ./examples {
@@ -148,6 +151,7 @@
           packages =
             versionedPackages
             // examples
+            // toolPackages
             // {
               default = pkgs.go-bin.latest;
               go = pkgs.go-bin.latest;

@@ -104,6 +104,42 @@ but the selected toolchain is Go 1.21.4.
 Latest compatible version: 1.1.3
 ```
 
+### From the flake
+
+Every tool has a flake package for its latest version, built with `go-bin.latest`:
+
+```bash
+nix run github:purpleclay/go-overlay#gopls -- version
+```
+
+| Package         | Same as                                    | Runs            |
+| :-------------- | :----------------------------------------- | :-------------- |
+| `delve`         | `go-bin.latest.tools.delve.latest`         | `dlv`           |
+| `gofumpt`       | `go-bin.latest.tools.gofumpt.latest`       | `gofumpt`       |
+| `golangci-lint` | `go-bin.latest.tools.golangci-lint.latest` | `golangci-lint` |
+| `gopls`         | `go-bin.latest.tools.gopls.latest`         | `gopls`         |
+| `govulncheck`   | `go-bin.latest.tools.govulncheck.latest`   | `govulncheck`   |
+| `staticcheck`   | `go-bin.latest.tools.staticcheck.latest`   | `staticcheck`   |
+
+The attribute paths above also work as flake references, for pinning a tool version or the Go that builds it. Quote a pinned version, since it contains dots:
+
+```bash
+nix shell 'github:purpleclay/go-overlay#go.tools.golangci-lint."2.14.0"'   # pinned tool, latest Go
+nix shell github:purpleclay/go-overlay#go_1_26_10.tools.gopls.latest       # latest tool compatible with Go 1.26.10
+```
+
+Choosing the Go matters for gopls and golangci-lint, which only understand code up to the Go version they were built with.
+
+Most tools call the `go` command, so they need a Go on your `PATH` too. In CI, pin the tool so a new release can't change your results, and bring in a Go alongside it:
+
+```yaml
+- name: lint
+  run: |
+    nix shell github:purpleclay/go-overlay#go \
+      'github:purpleclay/go-overlay#go.tools.golangci-lint."2.14.0"' \
+      -c golangci-lint run ./...
+```
+
 ## Builder Functions
 
 All builders apply environment variables in three tiers: builder defaults, then `attrs.env`, then required invariants. User-provided `attrs.env` values override defaults such as `GOFLAGS` and `GODEBUG`, but the following vars are always enforced and cannot be overridden:
