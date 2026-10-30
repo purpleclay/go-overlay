@@ -1,19 +1,25 @@
-# Builds the `goversions` CLI from a list of versionInfo records.
+# Builds the `goversions` CLI from versionInfo records and toolInfo.
 #
-# Everything is resolved at evaluation time and written into the store as a
-# TSV that scripts/goversions.awk renders. The only runtime input is the
-# user's version prefix, so running it needs bash and gawk and compiles
-# nothing. records is a parameter so tests can build the app against a fixed
-# fixture rather than the real, ever-growing version list.
+# Everything is resolved at evaluation time and written into the store as
+# TSVs that scripts/goversions.awk (Go) and scripts/goversions-tools.awk
+# (tools) render. The only runtime inputs are the user's arguments, so
+# running it needs bash and gawk and compiles nothing. records, tools and
+# latestGo are parameters so tests can build the app against fixed fixtures
+# rather than the real, ever-growing version lists.
 {
   lib,
   writeText,
   writeShellApplication,
   gawk,
   records,
+  # toolInfo: tool name -> records, newest first
+  tools ? {},
+  # The Go version a tool's "latest" is resolved against without --go:
+  # go-bin.latest, which the per-tool flake packages are built with
+  latestGo ? "",
 }: let
   pname = "goversions";
-  version = "v0.2.0";
+  version = "v0.3.0";
 
   inherit (import ./lib/version.nix {inherit lib;}) parseVersion;
 
@@ -51,6 +57,27 @@
   in ''{"version":${j r.version},"date":${j r.date},"minor":${j r.minor},"status":${j r.status},"package":${j r.attr},"newestInMinor":${j r.newestInMinor}}'';
 
   versionsJsonl = writeText "${pname}.jsonl" (lib.concatMapStrings (r: jsonRow r + "\n") records);
+
+  # 1 tool  2 version  3 released  4 minor  5 prerelease  6 min go  7 license
+  # 8-12 min go as major, minor, patch, stage, counter
+  toolRow = r:
+    lib.concatStringsSep "\t" ([
+        r.tool
+        r.version
+        r.date
+        r.minor
+        (
+          if r.prerelease
+          then "1"
+          else "0"
+        )
+        r.go
+        r.license
+      ]
+      ++ map toString [r.goVersion.major r.goVersion.minor r.goVersion.patch r.goVersion.stage r.goVersion.counter]);
+
+  toolNames = builtins.attrNames tools;
+  toolsTsv = writeText "${pname}-tools.tsv" (lib.concatMapStrings (r: toolRow r + "\n") (lib.concatMap (name: tools.${name}) toolNames));
 in
   writeShellApplication {
     name = pname;
@@ -62,6 +89,10 @@ in
       tsv="${versionsTsv}"
       jsonl="${versionsJsonl}"
       renderer="${./scripts/goversions.awk}"
+      tools_tsv="${toolsTsv}"
+      tools_renderer="${./scripts/goversions-tools.awk}"
+      tool_names="${lib.concatStringsSep " " toolNames}"
+      latest_go="${latestGo}"
 
       # Whether to colour output written to file descriptor $1: only on a
       # terminal, and never with NO_COLOR set or a dumb TERM.
@@ -98,8 +129,8 @@ in
         entry() { printf '  %s%-*s%s  %s\n' "$code" "$1" "$2" "$reset" "$3"; }
 
         printf '%s\n' \
-          'List the Go toolchains available in go-overlay, without cloning the' \
-          'repository or compiling anything.' \
+          'List the Go toolchains and Go tools available in go-overlay, without' \
+          'cloning the repository or compiling anything.' \
           "" \
           'By default, shows the newest release of each minor version. A PREFIX lists' \
           'every release whose version starts with it, so 1.24 lists every 1.24 release' \
@@ -107,10 +138,17 @@ in
           'that can be used directly, for example:' \
           "" \
           '  nix shell github:purpleclay/go-overlay#go_1_25_5' \
+          "" \
+          'Name a TOOL to list its versions instead. Its PACKAGE is the attribute to' \
+          'use from a toolchain, which can also be used directly:' \
+          "" \
+          "  nix shell 'github:purpleclay/go-overlay#go.tools.gopls.\"0.24.0\"'" \
           ""
 
         heading USAGE
-        printf '  %sgoversions%s %s[FLAGS]%s %s[PREFIX]%s\n\n' "$cmd" "$reset" "$arg" "$reset" "$arg" "$reset"
+        printf '  %sgoversions%s %s[FLAGS]%s %s[PREFIX]%s\n' "$cmd" "$reset" "$arg" "$reset" "$arg" "$reset"
+        printf '  %sgoversions%s %s[FLAGS]%s %sTOOL%s %s[PREFIX]%s\n' "$cmd" "$reset" "$arg" "$reset" "$arg" "$reset" "$arg" "$reset"
+        printf '  %sgoversions%s %s--tools%s %s[--go VERSION]%s\n\n' "$cmd" "$reset" "$flag" "$reset" "$arg" "$reset"
 
         heading EXAMPLES
         example 'List the newest release of each minor version' "''${cmd}goversions''${reset}"
@@ -118,11 +156,17 @@ in
         example 'List every release' "''${cmd}goversions''${reset} ''${flag}--all''${reset}"
         example 'List every 1.24 release as a JSON array' \
           "''${cmd}goversions''${reset} ''${flag}--json''${reset} 1.24"
+        example 'List every tool and its latest version' "''${cmd}goversions''${reset} ''${flag}--tools''${reset}"
+        example 'List the newest gopls release of each minor version' "''${cmd}goversions''${reset} gopls"
+        example 'List the gopls versions that work with Go 1.26' \
+          "''${cmd}goversions''${reset} gopls ''${flag}--go''${reset} 1.26"
 
         heading FLAGS
         option '-a, --all' 'list every version, not just the newest per minor'
+        option '-g, --go VERSION' 'only list tool versions that work with this Go version'
         option '-h, --help' 'help for goversions'
         option '-j, --json' 'print every matching version as a JSON array'
+        option '-t, --tools' 'list every tool and its latest version'
         option '-V, --version' 'print the goversions version'
 
         heading STATUSES
@@ -136,18 +180,30 @@ in
 
         heading 'EXIT CODES'
         entry 1 0 'versions listed'
-        entry 1 1 'no versions match PREFIX'
+        entry 1 1 'no versions match PREFIX or --go'
         entry 1 2 'bad flags or arguments'
       }
 
       prefix=""
       mode="minor"
       json=0
+      list_tools=0
+      go=""
+      positional=()
 
       while [ "$#" -gt 0 ]; do
         case "$1" in
           -a | --all) mode="all" ;;
           -j | --json) json=1 ;;
+          -t | --tools) list_tools=1 ;;
+          -g | --go)
+            if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+              printf 'goversions: --go needs a Go version\n' >&2
+              exit 2
+            fi
+            go="$2"
+            shift
+            ;;
           -h | --help)
             usage 1
             exit 0
@@ -161,16 +217,63 @@ in
             usage 2 >&2
             exit 2
             ;;
-          *)
-            if [ -n "$prefix" ]; then
-              printf 'goversions: only one version prefix may be given\n' >&2
-              exit 2
-            fi
-            prefix="$1"
-            ;;
+          *) positional+=("$1") ;;
         esac
         shift
       done
+
+      # A first positional argument starting with a digit is a Go prefix;
+      # anything else names a tool. No tool name starts with a digit.
+      tool=""
+      if [ "''${#positional[@]}" -gt 0 ] && [[ ! "''${positional[0]}" =~ ^[0-9] ]]; then
+        tool="''${positional[0]}"
+        positional=("''${positional[@]:1}")
+      fi
+      if [ "''${#positional[@]}" -gt 1 ]; then
+        printf 'goversions: only one version prefix may be given\n' >&2
+        exit 2
+      fi
+      prefix="''${positional[0]:-}"
+
+      if [ "$list_tools" -eq 1 ] && { [ -n "$tool" ] || [ -n "$prefix" ]; }; then
+        printf 'goversions: --tools takes no TOOL or PREFIX\n' >&2
+        exit 2
+      fi
+      if [ -n "$go" ] && [ "$list_tools" -eq 0 ] && [ -z "$tool" ]; then
+        printf 'goversions: --go needs a TOOL or --tools\n' >&2
+        exit 2
+      fi
+      if [ -n "$go" ] && [[ ! "$go" =~ ^[0-9]+\.[0-9]+((\.[0-9]+)?|(rc|beta)[0-9]+)$ ]]; then
+        printf 'goversions: invalid Go version "%s"\n' "$go" >&2
+        exit 2
+      fi
+      if [ -n "$tool" ] && [[ " $tool_names " != *" $tool "* ]]; then
+        printf 'goversions: unknown tool "%s"; valid tools: %s\n' "$tool" "''${tool_names// /, }" >&2
+        exit 2
+      fi
+
+      color=0
+      if use_colour 1; then
+        color=1
+      fi
+
+      if [ "$list_tools" -eq 1 ] || [ -n "$tool" ]; then
+        view="tool"
+        if [ "$list_tools" -eq 1 ]; then
+          view="summary"
+        fi
+        filter=0
+        if [ -n "$go" ]; then
+          filter=1
+        fi
+        # A prefix is a request to see everything underneath it.
+        if [ -n "$prefix" ]; then
+          mode="all"
+        fi
+        GOVERSIONS_TOOL="$tool" GOVERSIONS_PREFIX="$prefix" GOVERSIONS_GO="''${go:-$latest_go}" \
+          exec gawk -v view="$view" -v json="$json" -v mode="$mode" -v color="$color" -v filter="$filter" \
+          -f "$tools_renderer" "$tools_tsv"
+      fi
 
       # A JSON array of every record, whatever the minor, one per line; consumers
       # filter on newestInMinor. Each line opens {"version":"<v>", so splitting
@@ -196,11 +299,6 @@ in
         mode="all"
       fi
 
-      color=0
-      if use_colour 1; then
-        color=1
-      fi
-
       GOVERSIONS_PREFIX="$prefix" exec gawk -v mode="$mode" -v color="$color" -f "$renderer" "$tsv"
     '';
 
@@ -213,11 +311,12 @@ in
     passthru = {
       tsv = versionsTsv;
       jsonl = versionsJsonl;
+      inherit toolsTsv;
     };
 
     meta = with lib; {
       homepage = "https://github.com/purpleclay/go-overlay";
-      description = "List the Go toolchains available in go-overlay";
+      description = "List the Go toolchains and Go tools available in go-overlay";
       mainProgram = pname;
       license = licenses.mit;
       maintainers = with maintainers; [purpleclay];

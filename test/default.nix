@@ -38,6 +38,19 @@
   versionInfo = go-bin.versionInfo;
   versionInfoMinors = pkgs.lib.unique (map (r: r.minor) versionInfo);
 
+  toolInfo = go-bin.toolInfo;
+
+  # toolInfo built with every per-version tool manifest replaced by a throw, so
+  # it only evaluates if it reads nothing but the index.nix files.
+  lazyToolInfo = import ../lib/tool-info.nix {
+    inherit (pkgs) lib;
+    toolManifests = import ../lib/tool-manifests.nix {
+      inherit (pkgs) lib;
+      importManifest = path: throw "go-overlay test: imported ${baseNameOf path}";
+    };
+  };
+  toolInfoRecord = tool: version: pkgs.lib.findFirst (r: r.version == version) null toolInfo.${tool};
+
   goversionsFixtureRecord = version: date: minor: status: newestInMinor: {
     inherit version date minor status newestInMinor;
     attr = versionLib.packageName version;
@@ -57,7 +70,51 @@
     (goversionsFixtureRecord "1.25rc2" "2025-07-08" "1.25" "eol" false)
     (goversionsFixtureRecord "1.17beta1" "2021-06-10" "1.17" "eol" true)
   ];
-  goversionsApp = pkgs.callPackage ../goversions.nix {records = goversionsFixture;};
+  goversionsToolRecord = tool: version: date: go: license: let
+    parts = pkgs.lib.splitString "." version;
+  in {
+    inherit tool version date go license;
+    minor = "${builtins.elemAt parts 0}.${builtins.elemAt parts 1}";
+    prerelease = pkgs.lib.hasInfix "-" version;
+    goVersion = versionLib.parseVersion go;
+  };
+
+  # A fixed stand-in for toolInfo, newest first per tool. gopls's newest
+  # release is a pre-release needing an rc of Go, so it's also latest against
+  # the fixture's newest Go (1.28rc1). Nothing in gofumpt or gopls works with
+  # Go 1.17, so --go 1.17 has tools with no compatible version.
+  goversionsToolsFixture = let
+    r = goversionsToolRecord;
+  in {
+    delve = [
+      (r "delve" "1.27.2" "2026-08-20" "1.25.0" "MIT")
+      (r "delve" "1.26.3" "2026-03-02" "1.24" "MIT")
+      (r "delve" "1.21.1" "2023-10-04" "1.17" "MIT")
+    ];
+    gofumpt = [(r "gofumpt" "0.12.0" "2026-09-11" "1.26.0" "BSD-3-Clause")];
+    gopls = [
+      (r "gopls" "0.25.0-pre.1" "2026-11-19" "1.28rc1" "BSD-3-Clause")
+      (r "gopls" "0.24.0" "2026-10-14" "1.27.0" "BSD-3-Clause")
+      (r "gopls" "0.24.0-pre.1" "2026-09-02" "1.27.0" "BSD-3-Clause")
+      (r "gopls" "0.23.0" "2026-08-26" "1.26.0" "BSD-3-Clause")
+      (r "gopls" "0.21.1" "2026-02-05" "1.25" "BSD-3-Clause")
+      (r "gopls" "0.20.0" "2025-07-28" "1.24.2" "BSD-3-Clause")
+    ];
+  };
+
+  goversionsApp = pkgs.callPackage ../goversions.nix {
+    records = goversionsFixture;
+    tools = goversionsToolsFixture;
+    latestGo = "1.28rc1";
+  };
+
+  # Built from the real data, as the flake builds it, to check the CLI agrees
+  # with go.tools.<name>.latest
+  goversionsRealApp = pkgs.callPackage ../goversions.nix {
+    records = versionInfo;
+    tools = toolInfo;
+    latestGo = go-bin.latest.version;
+  };
   goversionsGoldens = ./fixtures/goversions;
 
   # The other half of the latest/stable split: the newest release is stable,
@@ -360,6 +417,33 @@ in {
   # evaluating versionInfo instantiated a derivation.
   versionInfo-references-no-derivation = assertEq "versionInfo-references-no-derivation" false (builtins.hasContext (builtins.toJSON versionInfo));
 
+  # toolInfo
+  toolInfo-lists-every-tool = assertEq "toolInfo-lists-every-tool" (builtins.attrNames toolManifests.tools) (builtins.attrNames toolInfo);
+  # The same newest-first order go.tools.<name>.latest resolves from
+  toolInfo-matches-overlay-order =
+    assertEq "toolInfo-matches-overlay-order"
+    (builtins.mapAttrs (_: t: t.sortedVersions) toolManifests.tools)
+    (builtins.mapAttrs (_: map (r: r.version)) toolInfo);
+  toolInfo-indexes-list-every-version =
+    assertEq "toolInfo-indexes-list-every-version"
+    (builtins.mapAttrs (_: t: builtins.sort builtins.lessThan t.sortedVersions) toolManifests.tools)
+    (builtins.mapAttrs (_: t: builtins.attrNames t.index) toolManifests.tools);
+  toolInfo-stable-record =
+    assertEq "toolInfo-stable-record" {
+      tool = "gopls";
+      version = "0.24.0";
+      date = "2026-10-14";
+      minor = "0.24";
+      prerelease = false;
+      go = "1.27.0";
+      license = "BSD-3-Clause";
+    }
+    (builtins.removeAttrs (toolInfoRecord "gopls" "0.24.0") ["goVersion"]);
+  toolInfo-prerelease-record = assertEq "toolInfo-prerelease-record" true (toolInfoRecord "gopls" "0.24.0-pre.3").prerelease;
+  toolInfo-parses-min-go = assertEq "toolInfo-parses-min-go" (versionLib.parseVersion "1.25") (toolInfoRecord "gopls" "0.21.1").goVersion;
+  toolInfo-reads-only-indexes = assertEq "toolInfo-reads-only-indexes" true (evaluates lazyToolInfo);
+  toolInfo-references-no-derivation = assertEq "toolInfo-references-no-derivation" false (builtins.hasContext (builtins.toJSON toolInfo));
+
   # goversions
   goversions-default = goversionsCase "default" {golden = "default";};
   goversions-prefix = goversionsCase "prefix" {
@@ -425,6 +509,120 @@ in {
     exit = 2;
     stderr = "goversions: only one version prefix may be given";
   };
+
+  # tools
+  goversions-tools = goversionsCase "tools" {
+    args = ["--tools"];
+    golden = "tools";
+  };
+  goversions-tools-go = goversionsCase "tools-go" {
+    args = ["--tools" "--go" "1.17"];
+    golden = "tools-go";
+  };
+  goversions-tools-json = goversionsCase "tools-json" {
+    args = ["--tools" "--json" "--go" "1.17"];
+    golden = "tools-json";
+  };
+  goversions-tool = goversionsCase "tool" {
+    args = ["gopls"];
+    golden = "tool";
+  };
+  goversions-tool-prefix = goversionsCase "tool-prefix" {
+    args = ["gopls" "0.24"];
+    golden = "tool-prefix";
+  };
+  goversions-tool-all = goversionsCase "tool-all" {
+    args = ["gopls" "--all"];
+    golden = "tool-all";
+  };
+  goversions-tool-go = goversionsCase "tool-go" {
+    args = ["gopls" "--go" "1.26"];
+    golden = "tool-go";
+  };
+  goversions-tool-json = goversionsCase "tool-json" {
+    args = ["--json" "gopls"];
+    golden = "tool-json";
+  };
+  goversions-tool-json-go = goversionsCase "tool-json-go" {
+    args = ["--json" "gopls" "--go" "1.26"];
+    golden = "tool-json-go";
+  };
+  goversions-tool-no-match = goversionsCase "tool-no-match" {
+    args = ["gopls" "0.99"];
+    exit = 1;
+    stderr = ''goversions: no gopls versions match "0.99"'';
+  };
+  goversions-tool-none-compatible = goversionsCase "tool-none-compatible" {
+    args = ["gopls" "--go" "1.17"];
+    exit = 1;
+    stderr = "goversions: no gopls versions work with Go 1.17";
+  };
+  goversions-unknown-tool = goversionsCase "unknown-tool" {
+    args = ["goplz"];
+    exit = 2;
+    stderr = ''goversions: unknown tool "goplz"; valid tools: delve, gofumpt, gopls'';
+  };
+  goversions-go-without-tool = goversionsCase "go-without-tool" {
+    args = ["--go" "1.26"];
+    exit = 2;
+    stderr = "goversions: --go needs a TOOL or --tools";
+  };
+  goversions-go-without-version = goversionsCase "go-without-version" {
+    args = ["gopls" "--go"];
+    exit = 2;
+    stderr = "goversions: --go needs a Go version";
+  };
+  goversions-go-invalid = goversionsCase "go-invalid" {
+    args = ["gopls" "--go" "1.x"];
+    exit = 2;
+    stderr = ''goversions: invalid Go version "1.x"'';
+  };
+  goversions-tools-with-argument = goversionsCase "tools-with-argument" {
+    args = ["--tools" "gopls"];
+    exit = 2;
+    stderr = "goversions: --tools takes no TOOL or PREFIX";
+  };
+  goversions-tool-two-prefixes = goversionsCase "tool-two-prefixes" {
+    args = ["gopls" "0.24" "0.23"];
+    exit = 2;
+    stderr = "goversions: only one version prefix may be given";
+  };
+  goversions-tool-json-shape = pkgs.runCommand "test-goversions-tool-json-shape" {nativeBuildInputs = [pkgs.jq];} ''
+    ${goversionsApp}/bin/goversions --json gopls \
+      | jq -e 'type == "array" and length > 0 and all(.[]; keys_unsorted == ["tool","version","date","go","license","status","package"])' >/dev/null
+    ${goversionsApp}/bin/goversions --json --tools --go 1.17 \
+      | jq -e 'type == "array" and length == 3 and all(.[]; keys_unsorted == ["tool","version","date","go","license","package"])' >/dev/null
+    touch $out
+  '';
+
+  # For every tool and several Go versions, the CLI's latest row must be what
+  # go.tools.<name>.latest resolves to, and --tools must agree with it.
+  goversions-tools-match-overlay = let
+    goVersions = pkgs.lib.unique [go-bin.latest.version go-bin.latestStable.version "1.26.10" "1.21.4"];
+    cases = pkgs.lib.cartesianProduct {
+      tool = builtins.attrNames toolManifests.tools;
+      go = goVersions;
+    };
+    compare = c: let
+      expected = go-bin.versions.${c.go}.tools.${c.tool}.latest.version;
+      app = "${goversionsRealApp}/bin/goversions";
+    in ''
+      got=$(${app} --json ${c.tool} --go ${c.go} | jq -r '.[] | select(.status == "latest") | .version')
+      [ "$got" = ${expected} ] || { echo "${c.tool} --go ${c.go}: latest is '$got', overlay resolves ${expected}"; failed=1; }
+      got=$(${app} --json --tools --go ${c.go} | jq -r '.[] | select(.tool == "${c.tool}") | .version')
+      [ "$got" = ${expected} ] || { echo "--tools --go ${c.go}: ${c.tool} is '$got', overlay resolves ${expected}"; failed=1; }
+    '';
+    defaultLatest = tool: ''
+      got=$(${goversionsRealApp}/bin/goversions --json ${tool} | jq -r '.[] | select(.status == "latest") | .version')
+      [ "$got" = ${go-bin.latest.tools.${tool}.latest.version} ] || { echo "${tool}: latest is '$got' without --go"; failed=1; }
+    '';
+  in
+    pkgs.runCommand "test-goversions-tools-match-overlay" {nativeBuildInputs = [pkgs.jq];} ''
+      failed=0
+      ${pkgs.lib.concatMapStrings compare cases}
+      ${pkgs.lib.concatMapStrings defaultLatest (builtins.attrNames toolManifests.tools)}
+      [ "$failed" -eq 0 ] && touch $out
+    '';
   # Colour needs a terminal through the wrapper, so this renders directly.
   # Regenerate: cp $(nix build --no-link --print-out-paths .#checks.<system>.goversions-colour.render)/stdout test/fixtures/goversions/colour.golden
   goversions-colour = let
@@ -481,6 +679,74 @@ in {
     '';
   in
     pkgs.runCommand "test-goversions-gawk-and-mawk-agree" {} ''
+      failed=0
+      ${pkgs.lib.concatMapStrings compare cases}
+      [ "$failed" -eq 0 ] && touch $out
+    '';
+
+  # A tool table has no STATUS column, so colour is what marks latest (green)
+  # and pre-releases (yellow) on a terminal.
+  goversions-tool-latest-and-prerelease-coloured = let
+    render = pkgs.runCommand "goversions-tool-colour-render" {} ''
+      GOVERSIONS_TOOL=gopls GOVERSIONS_PREFIX="" GOVERSIONS_GO=1.28rc1 \
+        ${pkgs.gawk}/bin/gawk -v view=tool -v json=0 -v mode=all -v color=1 -v filter=0 \
+        -f ${../scripts/goversions-tools.awk} ${goversionsApp.toolsTsv} >$out
+    '';
+  in
+    pkgs.runCommand "test-goversions-tool-latest-and-prerelease-coloured" {} ''
+      # -F: the escape codes contain "[", which a regex would misread.
+      grep -qF "$(printf '\033[32m')0.25.0-pre.1 " ${render} || { echo "latest row is not green:"; cat -v ${render}; exit 1; }
+      grep -qF "$(printf '\033[33m')0.24.0-pre.1 " ${render} || { echo "pre-release row is not yellow:"; cat -v ${render}; exit 1; }
+      grep -qF "$(printf '\033[33m')0.24.0 " ${render} && { echo "stable row is yellow:"; cat -v ${render}; exit 1; }
+      touch $out
+    '';
+
+  goversions-tools-gawk-and-mawk-agree = let
+    cases = pkgs.lib.cartesianProduct {
+      view = ["tool" "summary"];
+      json = [0 1];
+      mode = ["minor" "all"];
+      color = [0 1];
+      go = ["" "1.26" "1.17"];
+    };
+    render = awk: c:
+      pkgs.runCommand "goversions-tools-render-${awk.pname}" {} ''
+        mkdir $out
+        set +e
+        GOVERSIONS_TOOL=gopls GOVERSIONS_PREFIX="" GOVERSIONS_GO=${
+          if c.go == ""
+          then "1.28rc1"
+          else c.go
+        } \
+          ${awk}/bin/${awk.pname} -v view=${c.view} -v json=${toString c.json} -v mode=${c.mode} \
+          -v color=${toString c.color} -v filter=${
+          if c.go == ""
+          then "0"
+          else "1"
+        } \
+          -f ${../scripts/goversions-tools.awk} ${goversionsApp.toolsTsv} >$out/stdout 2>$out/stderr
+        echo $? >$out/status
+      '';
+    compare = c: let
+      gawk = render pkgs.gawk c;
+      mawk = render pkgs.mawk c;
+      label = "view=${c.view} json=${toString c.json} mode=${c.mode} color=${toString c.color} go='${c.go}'";
+      expected =
+        if c.view == "tool" && c.go == "1.17"
+        then "1"
+        else "0";
+    in ''
+      for part in stdout stderr status; do
+        if ! cmp -s ${gawk}/$part ${mawk}/$part; then
+          echo "gawk and mawk $part differ: ${label}"; failed=1
+        fi
+      done
+      if [ "$(cat ${gawk}/status)" != ${expected} ]; then
+        echo "expected exit ${expected}, got $(cat ${gawk}/status): ${label}"; cat ${gawk}/stderr; failed=1
+      fi
+    '';
+  in
+    pkgs.runCommand "test-goversions-tools-gawk-and-mawk-agree" {} ''
       failed=0
       ${pkgs.lib.concatMapStrings compare cases}
       [ "$failed" -eq 0 ] && touch $out

@@ -130,6 +130,19 @@ nix shell github:purpleclay/go-overlay#go_1_26_10.tools.gopls.latest       # lat
 
 Choosing the Go matters for gopls and golangci-lint, which only understand code up to the Go version they were built with.
 
+To find a version, `goversions` lists every tool or every version of one. The PACKAGE column is the attribute path to use, and `--go` keeps only versions that work with a given Go, so the first row is what `go.tools.<name>.latest` resolves to for it:
+
+```bash
+$ nix run github:purpleclay/go-overlay#goversions -- gopls --go 1.26
+VERSION  RELEASED    MIN GO  PACKAGE
+0.23.0   2026-07-07  1.26.0  go.tools.gopls."0.23.0"
+0.22.0   2026-05-15  1.26.0  go.tools.gopls."0.22.0"
+0.21.1   2026-02-10  1.25    go.tools.gopls."0.21.1"
+...
+```
+
+`goversions --tools` lists every tool and its latest version (`--tools --go 1.26` shows what `go.withTools` picks for each on Go 1.26), and `--json` works with every form.
+
 Most tools call the `go` command, so they need a Go on your `PATH` too. In CI, pin the tool so a new release can't change your results, and bring in a Go alongside it:
 
 ```yaml

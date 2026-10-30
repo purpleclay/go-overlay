@@ -1,5 +1,5 @@
-List the Go toolchains available in go-overlay, without cloning the
-repository or compiling anything.
+List the Go toolchains and Go tools available in go-overlay, without
+cloning the repository or compiling anything.
 
 By default, shows the newest release of each minor version. A PREFIX lists
 every release whose version starts with it, so 1.24 lists every 1.24 release
@@ -8,9 +8,16 @@ that can be used directly, for example:
 
   nix shell github:purpleclay/go-overlay#go_1_25_5
 
+Name a TOOL to list its versions instead. Its PACKAGE is the attribute to
+use from a toolchain, which can also be used directly:
+
+  nix shell 'github:purpleclay/go-overlay#go.tools.gopls."0.24.0"'
+
 USAGE
 
   goversions [FLAGS] [PREFIX]
+  goversions [FLAGS] TOOL [PREFIX]
+  goversions --tools [--go VERSION]
 
 EXAMPLES
 
@@ -26,16 +33,31 @@ EXAMPLES
   # List every 1.24 release as a JSON array
   goversions --json 1.24
 
+  # List every tool and its latest version
+  goversions --tools
+
+  # List the newest gopls release of each minor version
+  goversions gopls
+
+  # List the gopls versions that work with Go 1.26
+  goversions gopls --go 1.26
+
 FLAGS
 
   -a, --all
           list every version, not just the newest per minor
+
+  -g, --go VERSION
+          only list tool versions that work with this Go version
 
   -h, --help
           help for goversions
 
   -j, --json
           print every matching version as a JSON array
+
+  -t, --tools
+          list every tool and its latest version
 
   -V, --version
           print the goversions version
@@ -52,5 +74,5 @@ STATUSES
 EXIT CODES
 
   0  versions listed
-  1  no versions match PREFIX
+  1  no versions match PREFIX or --go
   2  bad flags or arguments
