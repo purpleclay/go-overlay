@@ -1,0 +1,4 @@
+TOOL     LATEST        RELEASED    MIN GO   LICENSE
+delve    1.27.2        2026-08-20  1.25.0   MIT
+gofumpt  0.12.0        2026-09-11  1.26.0   BSD-3-Clause
+gopls    0.25.0-pre.1  2026-11-19  1.28rc1  BSD-3-Clause

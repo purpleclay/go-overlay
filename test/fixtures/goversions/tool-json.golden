@@ -1,0 +1,8 @@
+[
+{"tool":"gopls","version":"0.25.0-pre.1","date":"2026-11-19","go":"1.28rc1","license":"BSD-3-Clause","status":"latest","package":"go.tools.gopls.\"0.25.0-pre.1\""},
+{"tool":"gopls","version":"0.24.0","date":"2026-10-14","go":"1.27.0","license":"BSD-3-Clause","status":"","package":"go.tools.gopls.\"0.24.0\""},
+{"tool":"gopls","version":"0.24.0-pre.1","date":"2026-09-02","go":"1.27.0","license":"BSD-3-Clause","status":"prerelease","package":"go.tools.gopls.\"0.24.0-pre.1\""},
+{"tool":"gopls","version":"0.23.0","date":"2026-08-26","go":"1.26.0","license":"BSD-3-Clause","status":"","package":"go.tools.gopls.\"0.23.0\""},
+{"tool":"gopls","version":"0.21.1","date":"2026-02-05","go":"1.25","license":"BSD-3-Clause","status":"","package":"go.tools.gopls.\"0.21.1\""},
+{"tool":"gopls","version":"0.20.0","date":"2025-07-28","go":"1.24.2","license":"BSD-3-Clause","status":"","package":"go.tools.gopls.\"0.20.0\""}
+]

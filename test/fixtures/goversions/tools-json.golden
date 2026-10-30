@@ -1,0 +1,5 @@
+[
+{"tool":"delve","version":"1.21.1","date":"2023-10-04","go":"1.17","license":"MIT","package":"go.tools.delve.\"1.21.1\""},
+{"tool":"gofumpt","version":null,"date":null,"go":null,"license":null,"package":null},
+{"tool":"gopls","version":null,"date":null,"go":null,"license":null,"package":null}
+]

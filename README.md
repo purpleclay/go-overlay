@@ -35,6 +35,13 @@ VERSION  RELEASED    STATUS           PACKAGE
 ...
 ```
 
+It lists Go tools too. Pass `--tools` for every tool and its latest version, or name a tool to list its versions, optionally only those that work with your Go:
+
+```bash
+nix run github:purpleclay/go-overlay#goversions -- --tools
+nix run github:purpleclay/go-overlay#goversions -- gopls --go 1.26
+```
+
 Run it with `-- --help` to see how to filter the list.
 
 ### Try a Go version without installing anything
@@ -240,7 +247,7 @@ nix run github:purpleclay/go-overlay#gopls -- version                       # la
 nix shell 'github:purpleclay/go-overlay#go.tools.golangci-lint."2.14.0"'   # pinned
 ```
 
-To build a tool with a specific Go version, or pin tools in CI, see [Using tools from the flake](docs/reference.md#from-the-flake).
+To find a version, run [`goversions`](#find-a-go-version) with the tool's name. To build a tool with a specific Go version, or pin tools in CI, see [Using tools from the flake](docs/reference.md#from-the-flake).
 
 ## Detecting Drift with Git Hooks
 

@@ -1,0 +1,4 @@
+TOOL     LATEST  RELEASED    MIN GO  LICENSE
+delve    1.21.1  2023-10-04  1.17    MIT
+gofumpt  none    -           -       -
+gopls    none    -           -       -

@@ -131,9 +131,15 @@
 
   # Metadata for every available Go version, newest first
   versionInfo = import ./versions.nix {inherit lib manifestsLib;};
+
+  # Metadata for every available tool version, keyed by tool, newest first
+  toolInfo = import ./tool-info.nix {
+    inherit lib;
+    toolManifests = toolManifestsLib;
+  };
 in {
   latest = allVersions.${manifestsLib.latest};
   latestStable = allVersions.${manifestsLib.latestStable};
   versions = allVersions;
-  inherit fromGoMod fromGoModStrict hasVersion isDeprecated versionInfo;
+  inherit fromGoMod fromGoModStrict hasVersion isDeprecated versionInfo toolInfo;
 }

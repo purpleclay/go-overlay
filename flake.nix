@@ -167,6 +167,8 @@
               };
               goversions = pkgs.callPackage ./goversions.nix {
                 records = pkgs.go-bin.versionInfo;
+                tools = pkgs.go-bin.toolInfo;
+                latestGo = pkgs.go-bin.latest.version;
               };
             };
 

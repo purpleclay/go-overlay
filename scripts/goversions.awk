@@ -36,7 +36,9 @@ BEGIN {
         next
 
     if (mode == "minor" && $6 != "1") {
-        collapsed++
+        # Suggested as a prefix: its minor always has a hidden release
+        if (!collapsed++)
+            hiddenMinor = $3
         next
     }
 
@@ -80,5 +82,5 @@ END {
 
     if (collapsed > 0)
         printf("\n%s\n", paint(sprintf("%d more release%s hidden - pass a prefix (e.g. %s) or --all", \
-            collapsed, collapsed == 1 ? "" : "s", minor[1]), dim))
+            collapsed, collapsed == 1 ? "" : "s", hiddenMinor), dim))
 }

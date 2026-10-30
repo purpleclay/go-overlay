@@ -1,6 +1,12 @@
 # Loads tool manifests from manifests/<tool>/ directories.
 # Each subdirectory under manifests/ (except "go/") is treated as a tool.
-{lib}: let
+#
+# importManifest loads a single per-version manifest file, so tests can prove
+# what reads only each tool's index.nix (see lib/manifests.nix).
+{
+  lib,
+  importManifest ? import,
+}: let
   manifestBase = ../manifests;
   allEntries = builtins.readDir manifestBase;
 
@@ -75,7 +81,7 @@
       (filename: _: let
         version = lib.removeSuffix ".nix" filename;
       in
-        lib.nameValuePair version (import (toolDir + "/${filename}")))
+        lib.nameValuePair version (importManifest (toolDir + "/${filename}")))
       nixFiles;
 
     sortedVersions = lib.sort (a: b: compareToolVersions a b > 0) (builtins.attrNames manifests);

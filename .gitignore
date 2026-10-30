@@ -25,6 +25,7 @@
 !LICENSE
 !README.md
 !scripts/goversions.awk
+!scripts/goversions-tools.awk
 !test/fixtures/*
 !typos.toml
 
