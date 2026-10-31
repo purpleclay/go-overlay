@@ -46,7 +46,7 @@ jobs:
   # and on which runners. Pushes to main run every group on every runner, so
   # the cache holds them all for the next pull request.
   detect_changes:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: detect_changes
     permissions:
       contents: read
