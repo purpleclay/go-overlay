@@ -129,19 +129,32 @@
         # One package per tool (nix run .#gopls), the latest version built with the latest Go
         toolPackages = pkgs.lib.mapAttrs (_: tool: tool.latest) pkgs.go-bin.latest.tools;
 
-        libTests = import ./test {
-          inherit pkgs toolPackages;
-          packageNames = builtins.attrNames versionedPackages;
-        };
         examples = import ./examples {
           inherit pkgs;
           go = pkgs.go-bin.fromGoMod ./go.mod;
         };
+
+        # Checks by group, one file each under test/; the examples build with
+        # the builder, so they join that group
+        checkGroups = let
+          groups = import ./test {
+            inherit pkgs toolPackages;
+            packageNames = builtins.attrNames versionedPackages;
+          };
+        in
+          groups
+          // {
+            builder = groups.builder // pkgs.lib.filterAttrs (name: _: pkgs.lib.hasPrefix "example-" name) examples;
+          };
       in
         with pkgs; {
-          checks =
-            libTests
-            // (pkgs.lib.filterAttrs (name: _: pkgs.lib.hasPrefix "example-" name) examples);
+          checks = pkgs.lib.foldlAttrs (acc: _: group: acc // group) {} checkGroups;
+
+          # One derivation per group of checks, so CI can build each group as
+          # its own job: nix build .#checkGroups.<group>
+          legacyPackages.checkGroups = builtins.mapAttrs (group: checks:
+            linkFarm "checks-${group}" (pkgs.lib.mapAttrsToList (name: path: {inherit name path;}) checks))
+          checkGroups;
 
           devShells.default = mkShell {
             inherit (pre-commit-check) shellHook;

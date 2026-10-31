@@ -12,12 +12,11 @@ on:
       - "test/**"
       - "examples/**"
       - "govendor.toml"
-      # The goversions app and its renderer have their own checks, and every
-      # Go release PR rewrites manifests/go/index.nix, whose consistency
-      # checks must run on exactly those PRs.
       - "goversions.nix"
       - "scripts/**"
-      - "manifests/go/**"
+      - "manifests/**"
+      - ".github/workflows/nix-checks.yml"
+      - ".github/actions/setup-nix/**"
   pull_request:
     branches:
       - main
@@ -30,12 +29,11 @@ on:
       - "test/**"
       - "examples/**"
       - "govendor.toml"
-      # The goversions app and its renderer have their own checks, and every
-      # Go release PR rewrites manifests/go/index.nix, whose consistency
-      # checks must run on exactly those PRs.
       - "goversions.nix"
       - "scripts/**"
-      - "manifests/go/**"
+      - "manifests/**"
+      - ".github/workflows/nix-checks.yml"
+      - ".github/actions/setup-nix/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -44,14 +42,107 @@ concurrency:
 permissions: {}
 
 jobs:
+  # Picks which groups of checks (one file each under test/) a pull request needs
+  # and on which runners. Pushes to main run every group on every runner, so
+  # the cache holds them all for the next pull request.
+  detect_changes:
+    runs-on: ubuntu-24.04
+    name: detect_changes
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: harden_runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: detect_changes
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: changes
+        with:
+          filters: |
+            shared:
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'default.nix'
+              - 'lib/**'
+              - 'test/**'
+              - '.github/workflows/nix-checks.yml'
+              - '.github/actions/setup-nix/**'
+            manifests:
+              - 'manifests/**'
+            goversions:
+              - 'goversions.nix'
+              - 'scripts/**'
+            builder:
+              - 'builder/**'
+              - 'examples/**'
+              - 'govendor.toml'
+
+      - name: matrix
+        id: matrix
+        env:
+          EVENT: ${{ github.event_name }}
+          SHARED: ${{ steps.changes.outputs.shared }}
+          MANIFESTS: ${{ steps.changes.outputs.manifests }}
+          GOVERSIONS: ${{ steps.changes.outputs.goversions }}
+          BUILDER: ${{ steps.changes.outputs.builder }}
+        run: |
+          set -euo pipefail
+          linux="ubuntu-24.04"
+          macos="macos-15"
+          all=false
+          if [ "$EVENT" = push ] || [ "$SHARED" = true ]; then
+            all=true
+          fi
+
+          entries=()
+          add() { entries+=("{\"group\":\"$1\",\"os\":\"$2\"}"); }
+
+          # A new Go release changes go-bin.latest, which the manifests,
+          # goversions and tools checks all build against. The builder checks
+          # pin their Go through go.mod, so they only follow builder changes.
+          if [ "$all" = true ] || [ "$MANIFESTS" = true ]; then
+            add manifests "$linux"
+            add tools "$linux"
+            add tools "$macos"
+          fi
+          if [ "$all" = true ] || [ "$MANIFESTS" = true ] || [ "$GOVERSIONS" = true ]; then
+            add goversions "$linux"
+          fi
+          if [ "$all" = true ] || [ "$BUILDER" = true ]; then
+            add builder "$linux"
+            add builder "$macos"
+          fi
+          # The evaluation-only groups find nothing new on macOS, so pull
+          # requests skip it; main still runs them there.
+          if [ "$EVENT" = push ]; then
+            add manifests "$macos"
+            add goversions "$macos"
+          fi
+
+          matrix="[$(IFS=,; echo "${entries[*]-}")]"
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+          echo "matrix: ${matrix}"
+
   checks:
+    needs: detect_changes
+    if: needs.detect_changes.outputs.matrix != '[]'
     runs-on: ${{ matrix.os }}
-    name: checks / ${{ matrix.os }}
+    name: checks / ${{ matrix.group }} / ${{ matrix.os }}
     permissions:
       contents: read
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15]
+        include: ${{ fromJSON(needs.detect_changes.outputs.matrix) }}
     steps:
       - name: harden_runner
         uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
@@ -67,6 +158,11 @@ jobs:
         uses: $/.github/actions/setup-nix
         with:
           cachix-token: ${{ secrets.GH_CACHIX }}
+          # Only main writes to the cache, so pull request code never can.
+          # Every pull request then downloads the checks main already built.
+          push-to-cachix: ${{ github.event_name == 'push' }}
 
       - name: run
-        run: nix flake check
+        env:
+          GROUP: ${{ matrix.group }}
+        run: nix build --no-link ".#checkGroups.${GROUP}"
