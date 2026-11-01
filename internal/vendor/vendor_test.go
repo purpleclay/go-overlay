@@ -284,3 +284,65 @@ func TestVendor_UnchangedManifestSkipsWrite(t *testing.T) {
 	require.Len(t, results, 1)
 	assert.Equal(t, vendor.StatusOK, results[0].Status)
 }
+
+func setupWorkspaceAndModule(t *testing.T) (string, string) {
+	t.Helper()
+	root := t.TempDir()
+	files := map[string]string{
+		"ws/go.work":    "go 1.25\n\nuse ./api\n",
+		"ws/api/go.mod": "module example.com/api\n\ngo 1.25\n",
+		"plain/go.mod":  "module example.com/plain\n\ngo 1.25\n",
+	}
+	for name, content := range files {
+		path := filepath.Join(root, name)
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+	}
+	return filepath.Join(root, "ws"), filepath.Join(root, "plain")
+}
+
+func TestVendorFilesChecksEveryPathForAWorkspace(t *testing.T) {
+	tests := []struct {
+		name           string
+		workspaceFirst bool
+	}{
+		{name: "workspace first", workspaceFirst: true},
+		{name: "workspace last", workspaceFirst: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ws, plain := setupWorkspaceAndModule(t)
+			paths := []string{plain, ws}
+			if tt.workspaceFirst {
+				paths = []string{ws, plain}
+			}
+
+			v := vendor.NewVendor(&fakeResolver{}, vendor.WithPaths(paths...))
+			results, err := v.VendorFiles(context.Background())
+			require.NoError(t, err)
+
+			require.Len(t, results, 2)
+			assert.Equal(t, filepath.Join(plain, "go.mod"), results[0].Path)
+			assert.Equal(t, vendor.StatusGenerated, results[0].Status)
+			assert.Equal(t, filepath.Join(ws, "go.work"), results[1].Path)
+			assert.Equal(t, vendor.StatusGenerated, results[1].Status)
+		})
+	}
+}
+
+func TestVendorFilesReportsABadWorkspaceWithoutAbortingOtherPaths(t *testing.T) {
+	ws, plain := setupWorkspaceAndModule(t)
+	require.NoError(t, os.WriteFile(filepath.Join(ws, "go.work"), []byte("not a go.work file\n"), 0o644))
+
+	v := vendor.NewVendor(&fakeResolver{}, vendor.WithPaths(ws, plain))
+	results, err := v.VendorFiles(context.Background())
+	require.ErrorIs(t, err, vendor.ErrVendorFailed)
+
+	require.Len(t, results, 2)
+	assert.Equal(t, filepath.Join(plain, "go.mod"), results[0].Path)
+	assert.Equal(t, vendor.StatusGenerated, results[0].Status)
+	assert.Equal(t, filepath.Join(ws, "go.work"), results[1].Path)
+	assert.Equal(t, vendor.StatusError, results[1].Status)
+	assert.Contains(t, results[1].Message, "failed to parse")
+}
