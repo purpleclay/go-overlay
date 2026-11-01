@@ -43,8 +43,6 @@ require (
 	assert.Equal(t, dir, goMod.Dir)
 	assert.Equal(t, "github.com/purpleclay/example/with-deps", goMod.ModulePath)
 	assert.Equal(t, "1.25.4", goMod.GoVersion)
-	assert.True(t, goMod.HasDependencies())
-	assert.False(t, goMod.HasTools())
 
 	reqs := goMod.Requires
 	assert.Len(t, reqs, 4)
@@ -74,7 +72,7 @@ go 1.25.4
 
 	goMod, err := mod.ParseGoModFile(path)
 	require.NoError(t, err)
-	assert.False(t, goMod.HasDependencies())
+	assert.Empty(t, goMod.Requires)
 }
 
 func TestLocalReplacements(t *testing.T) {
@@ -101,29 +99,4 @@ replace github.com/purpleclay/example/remote => github.com/fork/remote v1.0.0
 	require.Len(t, local, 1)
 	assert.Equal(t, "github.com/purpleclay/example/local", local[0].OldPath)
 	assert.Equal(t, "./libs/local", local[0].NewPath)
-}
-
-func TestRemoteReplacements(t *testing.T) {
-	content := `
-module github.com/purpleclay/example/replacements
-
-go 1.25.4
-
-require (
-	github.com/purpleclay/example/local v1.0.0
-	github.com/purpleclay/example/remote v1.0.0
-)
-
-replace github.com/purpleclay/example/local => ./libs/local
-replace github.com/purpleclay/example/remote => github.com/fork/remote v1.0.0
-`
-	dir := t.TempDir()
-	path := writeFile(t, dir, goModFile, content)
-
-	goMod, err := mod.ParseGoModFile(path)
-	require.NoError(t, err)
-
-	remote := goMod.RemoteReplacements()
-	require.Len(t, remote, 1)
-	assert.Equal(t, "github.com/purpleclay/example/remote", remote["github.com/fork/remote"].OldPath)
 }

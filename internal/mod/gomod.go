@@ -68,14 +68,6 @@ func ParseGoModFile(path string) (*GoModFile, error) {
 	}, nil
 }
 
-func (f *GoModFile) HasDependencies() bool {
-	return len(f.Requires) > 0
-}
-
-func (f *GoModFile) HasTools() bool {
-	return len(f.Tools) > 0
-}
-
 type Replacement struct {
 	OldPath string
 	NewPath string
@@ -104,19 +96,6 @@ func (f *GoModFile) LocalReplacements() []Replacement {
 		return strings.Compare(a.OldPath, b.OldPath)
 	})
 	return local
-}
-
-// RemoteReplacements returns a map keyed by the replacement target path (the
-// right side of replace A => B). This keying matches go mod download output,
-// which uses the replacement target path.
-func (f *GoModFile) RemoteReplacements() map[string]Replacement {
-	remote := make(map[string]Replacement)
-	for _, repl := range f.Replacements {
-		if !repl.IsLocal {
-			remote[repl.NewPath] = repl
-		}
-	}
-	return remote
 }
 
 func parseReplacements(repls []*modfile.Replace) map[string]Replacement {

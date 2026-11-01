@@ -119,26 +119,23 @@ func (r *Resolver) resolveModule(ctx context.Context, manifest progress.Manifest
 
 // ResolveWorkspace resolves dependencies across all modules in a Go workspace.
 // A single go mod vendor pass from the workspace root replaces the per-platform
-// go list fan-out. existingMods is the parsed existing manifest's module map;
-// pass nil for a cold run.
-func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
+// go list fan-out. members are goWork's parsed members (see
+// GoWorkFile.ParseMembers), passed in so each go.mod is read once per run.
+// existingMods is the parsed existing manifest's module map; pass nil for a
+// cold run.
+func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, members []mod.WorkspaceMember, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
 	manifest := progress.Manifest(filepath.Join(goWork.Dir, mod.GoWorkFilename))
 	r.reporter.Report(progress.Started{Manifest: manifest})
 
-	modules, err := r.resolveWorkspace(ctx, manifest, goWork, existingMods)
+	modules, err := r.resolveWorkspace(ctx, manifest, goWork, members, existingMods)
 	r.reporter.Report(progress.Finished{Manifest: manifest, Err: err})
 	return modules, err
 }
 
-func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manifest, goWork *mod.GoWorkFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
-	members, err := goWork.ParseMembers()
-	if err != nil {
-		return nil, err
-	}
-
+func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manifest, goWork *mod.GoWorkFile, members []mod.WorkspaceMember, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
 	workspaceMembers := make(map[string]string, len(members))
 	for _, m := range members {
-		workspaceMembers[m.ModulePath] = m.Dir
+		workspaceMembers[m.ModulePath] = m.RelDir
 	}
 
 	cache := newModuleCache(r.exec, goWork.Dir)
@@ -152,24 +149,12 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 
 	pkgsByMod, remoteModules := splitVendored(vendored)
 
-	// Parse each member go.mod once up front so both local replacement
-	// passes can reuse the result without duplicate file I/O.
-	memberGoMods := make(map[string]*mod.GoModFile, len(goWork.Modules))
-	for _, modDir := range goWork.Modules {
-		goModPath := filepath.Join(goWork.Dir, modDir, mod.GoModFilename)
-		goMod, err := mod.ParseGoModFile(goModPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse %s: %w", goModPath, err)
-		}
-		memberGoMods[modDir] = goMod
-	}
-
-	// Merge member replace directives, then apply go.work's on top — go.work
-	// replacements take precedence over member go.mod replacements (see
-	// GoWorkFile.RemoteReplacements).
+	// Merge member replace directives, then apply go.work's on top so a
+	// go.work replacement overwrites any member go.mod replacement of the
+	// same module path.
 	replacements := make(map[string]mod.Replacement)
-	for _, modDir := range goWork.Modules {
-		for path, repl := range memberGoMods[modDir].Replacements {
+	for _, m := range members {
+		for path, repl := range m.Replacements {
 			replacements[path] = repl
 		}
 	}
@@ -190,9 +175,8 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 	// Resolve local replacements per member, preserving each member's base
 	// directory for relative path resolution.
 	var memberLocals []localModule
-	for _, modDir := range goWork.Modules {
-		goMod := memberGoMods[modDir]
-		memberLocals = append(memberLocals, localModulesOf(goMod, goMod.Dir, goMod.Requires)...)
+	for _, m := range members {
+		memberLocals = append(memberLocals, localModulesOf(m, m.Dir, m.Requires)...)
 	}
 	localDeps, err := r.resolveLocalModules(ctx, memberLocals, pkgsByMod)
 	if err != nil {
@@ -206,7 +190,7 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 		}
 	}
 
-	memberVersions := workspaceVersions(goWork, memberGoMods, vendored)
+	memberVersions := workspaceVersions(members, vendored)
 
 	workspaceLocalDeps, err := r.resolveLocalModules(ctx,
 		localModulesOf(goWork, goWork.Dir, memberVersions), pkgsByMod)
@@ -282,7 +266,7 @@ func localModulesOf(src localReplacer, baseDir string, versions map[string]strin
 // reports its correct, real version. Highest wins on either source when
 // more than one candidate exists, matching modules.txt's own semantics for
 // a path multiple members request at different versions.
-func workspaceVersions(goWork *mod.GoWorkFile, memberGoMods map[string]*mod.GoModFile, vendored []modulestxt.Module) map[string]string {
+func workspaceVersions(members []mod.WorkspaceMember, vendored []modulestxt.Module) map[string]string {
 	versions := make(map[string]string)
 	merge := func(path, version string) {
 		if version == "" {
@@ -292,8 +276,8 @@ func workspaceVersions(goWork *mod.GoWorkFile, memberGoMods map[string]*mod.GoMo
 			versions[path] = version
 		}
 	}
-	for _, modDir := range goWork.Modules {
-		for path, version := range memberGoMods[modDir].Requires {
+	for _, m := range members {
+		for path, version := range m.Requires {
 			merge(path, version)
 		}
 	}

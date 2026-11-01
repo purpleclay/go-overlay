@@ -12,15 +12,12 @@ import (
 
 const GoWorkFilename = "go.work"
 
-// WorkspaceMember holds the parsed metadata for a single workspace
-// member's go.mod.
+// WorkspaceMember is a workspace member's parsed go.mod, plus its directory
+// as listed in go.work.
 type WorkspaceMember struct {
-	Dir          string
-	ModulePath   string
-	Requires     map[string]string
-	Tools        []string
-	Replacements map[string]Replacement
-	Excludes     map[string][]string
+	*GoModFile
+	// RelDir is the member directory relative to go.work, normalised to "./…".
+	RelDir string
 }
 
 // GoWorkFile is a parsed go.work file. All fields are extracted at
@@ -101,26 +98,6 @@ func (w *GoWorkFile) LocalReplacements() []Replacement {
 	return local
 }
 
-// RemoteReplacements returns workspace-level remote replace directives keyed by
-// the replacement target path. These take precedence over member go.mod replaces.
-func (w *GoWorkFile) RemoteReplacements() map[string]Replacement {
-	remote := make(map[string]Replacement)
-	for _, repl := range w.Replacements {
-		if !repl.IsLocal {
-			remote[repl.NewPath] = repl
-		}
-	}
-	return remote
-}
-
-func (w *GoWorkFile) ModulePaths() []string {
-	paths := make([]string, len(w.Modules))
-	for i, mod := range w.Modules {
-		paths[i] = filepath.Join(w.Dir, mod)
-	}
-	return paths
-}
-
 func (w *GoWorkFile) WorkspaceConfig() *WorkspaceConfig {
 	modules := make([]string, len(w.Modules))
 	for i, mod := range w.Modules {
@@ -135,48 +112,25 @@ func (w *GoWorkFile) WorkspaceConfig() *WorkspaceConfig {
 	}
 }
 
-// ParseMembers reads and parses each workspace member's go.mod in one
-// pass, returning the module path, relative directory, and requires for
-// each member.
+// ParseMembers reads and parses each workspace member's go.mod, in go.work
+// order.
 func (w *GoWorkFile) ParseMembers() ([]WorkspaceMember, error) {
 	members := make([]WorkspaceMember, 0, len(w.Modules))
 
 	for _, mod := range w.Modules {
 		modFilePath := filepath.Join(w.Dir, mod, GoModFilename)
-		content, err := os.ReadFile(modFilePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read workspace member %s: %w", modFilePath, err)
-		}
-
-		mf, err := modfile.Parse(modFilePath, content, nil)
+		goMod, err := ParseGoModFile(modFilePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse workspace member %s: %w", modFilePath, err)
 		}
 
-		if mf.Module == nil || mf.Module.Mod.Path == "" {
+		if goMod.ModulePath == "" {
 			return nil, fmt.Errorf("workspace member %s is missing a module directive", modFilePath)
 		}
 
-		requires := make(map[string]string, len(mf.Require))
-		for _, req := range mf.Require {
-			requires[req.Mod.Path] = req.Mod.Version
-		}
-
-		tools := make([]string, len(mf.Tool))
-		for i, t := range mf.Tool {
-			tools[i] = t.Path
-		}
-
-		replacements := parseReplacements(mf.Replace)
-		excludes := parseExcludes(mf.Exclude)
-
 		members = append(members, WorkspaceMember{
-			Dir:          normalizeWorkspaceMemberPath(mod),
-			ModulePath:   mf.Module.Mod.Path,
-			Requires:     requires,
-			Tools:        tools,
-			Replacements: replacements,
-			Excludes:     excludes,
+			GoModFile: goMod,
+			RelDir:    normalizeWorkspaceMemberPath(mod),
 		})
 	}
 

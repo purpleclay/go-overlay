@@ -152,16 +152,15 @@ func TestWorkspaceVersionsFindsAVersionVendoredExposesButNoMemberDirectlyRequire
 	// vendor pass's own per-member output still reports its true,
 	// pruning-aware resolved version. Confirmed against the real Go
 	// toolchain with a deliberately old (go 1.16) intermediate dependency.
-	goWork := &mod.GoWorkFile{Modules: []string{"cli"}}
-	memberGoMods := map[string]*mod.GoModFile{
-		"cli": {Requires: map[string]string{"example.com/mid": "v0.0.0"}},
+	members := []mod.WorkspaceMember{
+		{GoModFile: &mod.GoModFile{Requires: map[string]string{"example.com/mid": "v0.0.0"}}, RelDir: "./cli"},
 	}
 	vendored := []modulestxt.Module{
 		{Path: "example.com/mid", Version: "v0.0.0"},
 		{Path: "example.com/leaf", Version: "v1.0.0", Replace: &modulestxt.Replace{Local: "./local-leaf"}},
 	}
 
-	versions := workspaceVersions(goWork, memberGoMods, vendored)
+	versions := workspaceVersions(members, vendored)
 
 	assert.Equal(t, "v1.0.0", versions["example.com/leaf"])
 }
@@ -614,8 +613,11 @@ github.com/mattn/go-isatty`,
 		},
 	}
 
+	members, err := goWork.ParseMembers()
+	require.NoError(t, err)
+
 	r := New(exec)
-	deps, err := r.ResolveWorkspace(context.Background(), goWork, nil)
+	deps, err := r.ResolveWorkspace(context.Background(), goWork, members, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 3)
 
@@ -661,8 +663,11 @@ go 1.25.4
 		},
 	}
 
+	members, err := goWork.ParseMembers()
+	require.NoError(t, err)
+
 	r := New(exec)
-	deps, err := r.ResolveWorkspace(context.Background(), goWork, nil)
+	deps, err := r.ResolveWorkspace(context.Background(), goWork, members, nil)
 	require.NoError(t, err)
 	require.Len(t, deps, 1)
 
@@ -671,7 +676,59 @@ go 1.25.4
 	assert.Empty(t, deps[0].Packages)
 }
 
-func dirResolverFromDownloads(downloads []ModuleDownload) dirResolver {
+func TestResolveWorkspaceDoesNotReReadMemberGoModFiles(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, dir, "go.work", `
+go 1.25.4
+
+use (
+	./cli
+	./core
+)
+`)
+	writeTestFile(t, dir, "cli/go.mod", `
+module github.com/purpleclay/example/cli
+
+go 1.25.4
+
+require github.com/purpleclay/example/core v1.0.0
+`)
+	writeTestFile(t, dir, "core/go.mod", `
+module github.com/purpleclay/example/core
+
+go 1.25.4
+`)
+
+	goWork, err := mod.ParseGoWorkFile(filepath.Join(dir, "go.work"))
+	require.NoError(t, err)
+
+	members, err := goWork.ParseMembers()
+	require.NoError(t, err)
+
+	require.NoError(t, os.Remove(filepath.Join(dir, "cli", "go.mod")))
+	require.NoError(t, os.Remove(filepath.Join(dir, "core", "go.mod")))
+
+	exec := &fakeExecutor{
+		responses: map[string]string{
+			"go work vendor": `## workspace`,
+		},
+	}
+
+	r := New(exec)
+	deps, err := r.ResolveWorkspace(context.Background(), goWork, members, nil)
+	require.NoError(t, err)
+	require.Len(t, deps, 1)
+	assert.Equal(t, "github.com/purpleclay/example/core", deps[0].Path)
+	assert.Equal(t, "./core", deps[0].Local)
+}
+
+type moduleDownload struct {
+	Path    string
+	Version string
+	Dir     string
+}
+
+func dirResolverFromDownloads(downloads []moduleDownload) dirResolver {
 	byPath := make(map[string]string, len(downloads))
 	for _, dl := range downloads {
 		byPath[dl.Path] = dl.Dir
@@ -686,8 +743,8 @@ func dirResolverFromDownloads(downloads []ModuleDownload) dirResolver {
 }
 
 func TestResolveRemoteModulesHashReuse(t *testing.T) {
-	fooDownload := ModuleDownload{Path: "example.com/foo", Version: "v1.2.3", Dir: "/cache/foo"}
-	barDownload := ModuleDownload{Path: "example.com/bar", Version: "v2.0.0", Dir: "/cache/bar"}
+	fooDownload := moduleDownload{Path: "example.com/foo", Version: "v1.2.3", Dir: "/cache/foo"}
+	barDownload := moduleDownload{Path: "example.com/bar", Version: "v2.0.0", Dir: "/cache/bar"}
 
 	fooExisting := mod.ModuleConfig{
 		Path:      "example.com/foo",
@@ -705,7 +762,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 	tests := []struct {
 		name                string
 		modules             []modulestxt.Module // nil → derived from downloads with no replacements
-		downloads           []ModuleDownload
+		downloads           []moduleDownload
 		existingMods        map[string]mod.ModuleConfig
 		replacements        map[string]mod.Replacement
 		wantHashCalls       int64
@@ -729,7 +786,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 	}{
 		{
 			name:          "ReusesHashWhenVersionMatches",
-			downloads:     []ModuleDownload{fooDownload},
+			downloads:     []moduleDownload{fooDownload},
 			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": fooExisting},
 			wantHashCalls: 0,
 			wantHash:      "sha256-cached-foo",
@@ -738,7 +795,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 		},
 		{
 			name:          "HashesWhenVersionDiffers",
-			downloads:     []ModuleDownload{fooDownload},
+			downloads:     []moduleDownload{fooDownload},
 			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": {Path: "example.com/foo", Version: "v1.0.0", Hash: "sha256-old"}},
 			wantHashCalls: 1,
 			wantHash:      "sha256-fresh",
@@ -746,7 +803,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 		},
 		{
 			name:          "HashesNewModuleNotInExisting",
-			downloads:     []ModuleDownload{barDownload},
+			downloads:     []moduleDownload{barDownload},
 			existingMods:  map[string]mod.ModuleConfig{"example.com/foo": fooExisting},
 			wantHashCalls: 1,
 			wantHash:      "sha256-fresh",
@@ -754,7 +811,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 		},
 		{
 			name:           "HashesAllWhenExistingModsIsNil",
-			downloads:      []ModuleDownload{fooDownload, barDownload},
+			downloads:      []moduleDownload{fooDownload, barDownload},
 			existingMods:   nil,
 			wantHashCalls:  2,
 			wantHash:       "sha256-fresh",
@@ -765,7 +822,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 		},
 		{
 			name:           "ReusesBothWhenAllMatch",
-			downloads:      []ModuleDownload{fooDownload, barDownload},
+			downloads:      []moduleDownload{fooDownload, barDownload},
 			existingMods:   map[string]mod.ModuleConfig{"example.com/foo": fooExisting, "example.com/bar": barExisting},
 			wantHashCalls:  0,
 			wantHash:       "sha256-cached-foo",
@@ -777,7 +834,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 		},
 		{
 			name:      "HashesWhenCachedHashIsEmpty",
-			downloads: []ModuleDownload{fooDownload},
+			downloads: []moduleDownload{fooDownload},
 			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
 				Path: "example.com/foo", Version: "v1.2.3", Hash: "",
 			}},
@@ -787,7 +844,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 		},
 		{
 			name:      "NeverReusesLocalEntryEvenIfVersionMatches",
-			downloads: []ModuleDownload{fooDownload},
+			downloads: []moduleDownload{fooDownload},
 			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
 				Path: "example.com/foo", Version: "v1.2.3", Hash: "sha256-local", Local: "./local/foo",
 			}},
@@ -806,7 +863,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 				Explicit: true,
 				Replace:  &modulestxt.Replace{Path: "example.com/foo-fork", Version: "v1.2.3"},
 			}},
-			downloads: []ModuleDownload{{Path: "example.com/foo-fork", Version: "v1.2.3", Dir: "/cache/fork"}},
+			downloads: []moduleDownload{{Path: "example.com/foo-fork", Version: "v1.2.3", Dir: "/cache/fork"}},
 			replacements: map[string]mod.Replacement{
 				"example.com/foo": {OldPath: "example.com/foo", OldVersion: "v1.2.3", NewPath: "example.com/foo-fork"},
 			},
@@ -826,7 +883,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 				Explicit: true,
 				Replace:  &modulestxt.Replace{Path: "example.com/foo-fork", Version: "v1.2.3"},
 			}},
-			downloads: []ModuleDownload{{Path: "example.com/foo-fork", Version: "v1.2.3", Dir: "/cache/fork"}},
+			downloads: []moduleDownload{{Path: "example.com/foo-fork", Version: "v1.2.3", Dir: "/cache/fork"}},
 			replacements: map[string]mod.Replacement{
 				"example.com/foo": {OldPath: "example.com/foo", NewPath: "example.com/foo-fork"},
 			},
@@ -895,7 +952,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 					Packages:  []string{"example.com/foo-fork"},
 				},
 			},
-			downloads:        []ModuleDownload{{Path: "example.com/foo-fork", Version: "v9.9.9", Dir: "/cache/fork"}},
+			downloads:        []moduleDownload{{Path: "example.com/foo-fork", Version: "v9.9.9", Dir: "/cache/fork"}},
 			wantHashCalls:    1, // only for the second, genuinely-used module entry
 			wantUnused:       true,
 			wantVersion:      "v9.9.9",
@@ -914,7 +971,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 				Explicit: true,
 				Replace:  &modulestxt.Replace{Path: "example.com/foo-fork", Version: "v1.2.3"},
 			}},
-			downloads: []ModuleDownload{{Path: "example.com/foo-fork", Version: "v1.2.3", Dir: "/cache/fork"}},
+			downloads: []moduleDownload{{Path: "example.com/foo-fork", Version: "v1.2.3", Dir: "/cache/fork"}},
 			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
 				Path: "example.com/foo", Version: "v1.2.3",
 				Hash: "sha256-replace-cached", GoVersion: "1.22",
@@ -930,7 +987,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 			// Cached entry has no GoVersion (e.g. schema 3 manifest). Hash is still
 			// reused; GoVersion stays empty when the modules.txt annotation has none.
 			name:      "GoVersionStaysEmptyWhenCachedEntryAndModulesTxtBothLackIt",
-			downloads: []ModuleDownload{fooDownload},
+			downloads: []moduleDownload{fooDownload},
 			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
 				Path: "example.com/foo", Version: "v1.2.3", Hash: "sha256-cached-foo",
 			}},
@@ -945,7 +1002,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 			modules: []modulestxt.Module{
 				{Path: "example.com/foo", Version: "v1.2.3", Explicit: true, GoVersion: "1.26.0", Packages: []string{"example.com/foo"}},
 			},
-			downloads: []ModuleDownload{fooDownload},
+			downloads: []moduleDownload{fooDownload},
 			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
 				Path: "example.com/foo", Version: "v1.2.3", Hash: "sha256-cached-foo",
 			}},
@@ -966,7 +1023,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 				Explicit: true,
 				Replace:  &modulestxt.Replace{Path: "example.com/foo-fork2", Version: "v1.2.3"},
 			}},
-			downloads: []ModuleDownload{{Path: "example.com/foo-fork2", Version: "v1.2.3", Dir: "/cache/fork2"}},
+			downloads: []moduleDownload{{Path: "example.com/foo-fork2", Version: "v1.2.3", Dir: "/cache/fork2"}},
 			existingMods: map[string]mod.ModuleConfig{"example.com/foo": {
 				Path: "example.com/foo", Version: "v1.2.3",
 				Hash: "sha256-replace-cached", ReplacedPath: "example.com/foo-fork",
@@ -987,7 +1044,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 			modules: []modulestxt.Module{
 				{Path: "example.com/foo", Version: "v1.2.3", Explicit: false},
 			},
-			downloads:     []ModuleDownload{fooDownload},
+			downloads:     []moduleDownload{fooDownload},
 			wantHashCalls: 1,
 			wantHash:      "sha256-fresh",
 			wantVersion:   "v1.2.3",
@@ -1008,7 +1065,7 @@ func TestResolveRemoteModulesHashReuse(t *testing.T) {
 			// the pool goroutine returns a wrapped error, and p.Wait() must
 			// propagate it.
 			name:      "ReturnsErrorWhenHashFails",
-			downloads: []ModuleDownload{fooDownload},
+			downloads: []moduleDownload{fooDownload},
 			hasherErr: errors.New("boom"),
 			wantErr:   "failed to hash downloaded module example.com/foo@v1.2.3: boom",
 		},

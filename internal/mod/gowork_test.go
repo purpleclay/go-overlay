@@ -88,8 +88,8 @@ go 1.25.4
 		byPath[m.ModulePath] = m
 	}
 
-	assert.Equal(t, "./cli", byPath["github.com/purpleclay/example/cli"].Dir)
-	assert.Equal(t, "./core", byPath["github.com/purpleclay/example/core"].Dir)
+	assert.Equal(t, "./cli", byPath["github.com/purpleclay/example/cli"].RelDir)
+	assert.Equal(t, "./core", byPath["github.com/purpleclay/example/core"].RelDir)
 }
 
 func TestParseGoWorkFileReplacements(t *testing.T) {
@@ -115,11 +115,9 @@ go 1.25.4
 
 	require.Len(t, gw.Replacements, 2)
 
-	remote := gw.RemoteReplacements()
-	require.Len(t, remote, 1)
-	assert.Equal(t, "github.com/old/pkg", remote["github.com/new/pkg"].OldPath)
-	assert.Equal(t, "github.com/new/pkg", remote["github.com/new/pkg"].NewPath)
-	assert.False(t, remote["github.com/new/pkg"].IsLocal)
+	remote := gw.Replacements["github.com/old/pkg"]
+	assert.Equal(t, "github.com/new/pkg", remote.NewPath)
+	assert.False(t, remote.IsLocal)
 
 	local := gw.LocalReplacements()
 	require.Len(t, local, 1)
