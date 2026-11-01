@@ -213,9 +213,7 @@ func (s *hashScheduler) resolveAsync(key contentKey) {
 
 	dir, err := s.dirFor(s.ctx, key)
 	if err != nil {
-		result := hashResult{err: err}
-		s.reportHashed(key, result, time.Since(start))
-		s.store(key, result)
+		s.store(key, hashResult{err: err})
 		return
 	}
 
@@ -247,7 +245,10 @@ func (s *hashScheduler) resolveAsync(key contentKey) {
 		result = <-hashed
 	}
 
-	s.reportHashed(key, result, time.Since(start))
+	// A failed hash surfaces through the resolve's error, never as Hashed.
+	if result.err == nil {
+		s.reportHashed(key, result, time.Since(start))
+	}
 	s.store(key, result)
 }
 

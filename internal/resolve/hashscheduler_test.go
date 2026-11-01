@@ -378,3 +378,38 @@ func TestHashSchedulerSubmitNeverBlocksWaitingOnDirFor(t *testing.T) {
 		assert.Equal(t, "sha256-test", result.hash)
 	}
 }
+
+func TestFailedHashIsNotReportedAsHashed(t *testing.T) {
+	key := contentKey{path: "example.com/foo", version: "v1.0.0"}
+
+	tests := []struct {
+		name   string
+		hasher *countingHasher
+		dirFor dirResolver
+	}{
+		{
+			name:   "hasher fails",
+			hasher: &countingHasher{err: errors.New("disk on fire")},
+			dirFor: fakeDirResolver(map[contentKey]string{key: "/cache/foo"}),
+		},
+		{
+			name:   "module dir lookup fails",
+			hasher: &countingHasher{hash: "sha256-fresh"},
+			dirFor: fakeDirResolver(nil),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reporter := &recordingReporter{}
+			s := newHashScheduler(context.Background(), pool.New(), tt.hasher, reporter, "go.mod", nil, tt.dirFor)
+			s.submit(key)
+			s.wait()
+
+			result, ok := s.result(key)
+			require.True(t, ok)
+			require.Error(t, result.err)
+			assert.Equal(t, []string{"progress.HashStarted"}, reporter.kinds())
+		})
+	}
+}

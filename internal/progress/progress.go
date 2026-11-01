@@ -103,7 +103,8 @@ type HashStarted struct {
 }
 
 // Hashed reports that a module's hash is available, either freshly computed
-// or reused from an existing manifest/cache.
+// or reused from an existing manifest/cache. It is only reported on success;
+// a failed hash surfaces through Finished.Err instead.
 type Hashed struct {
 	Manifest
 	Path    string
