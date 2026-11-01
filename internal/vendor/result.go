@@ -18,10 +18,6 @@ const (
 	StatusError     Status = "error"
 )
 
-func (s Status) IsSuccess() bool {
-	return s == StatusOK || s == StatusGenerated
-}
-
 func (s Status) IsFailure() bool {
 	return s == StatusDrift || s == StatusMissing || s == StatusError
 }

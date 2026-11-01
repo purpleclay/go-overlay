@@ -89,10 +89,10 @@ func TestVendorWorkspace(t *testing.T) {
 			goWork, err := mod.ParseGoWorkFile(goWorkPath)
 			require.NoError(t, err)
 
-			deps, err := resolver.ResolveWorkspace(context.Background(), goWork, nil)
+			members, err := goWork.ParseMembers()
 			require.NoError(t, err)
 
-			members, err := goWork.ParseMembers()
+			deps, err := resolver.ResolveWorkspace(context.Background(), goWork, members, nil)
 			require.NoError(t, err)
 
 			var allTools []string
@@ -149,7 +149,7 @@ func (f *fakeResolver) ResolveModule(_ context.Context, _ *mod.GoModFile, _ map[
 	return f.deps, nil
 }
 
-func (f *fakeResolver) ResolveWorkspace(_ context.Context, _ *mod.GoWorkFile, _ map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
+func (f *fakeResolver) ResolveWorkspace(_ context.Context, _ *mod.GoWorkFile, _ []mod.WorkspaceMember, _ map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
 	return f.deps, nil
 }
 

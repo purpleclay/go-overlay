@@ -62,7 +62,7 @@ func WithWorkspace() Option {
 // and allows the orchestrator to be exercised against fake resolvers.
 type Resolver interface {
 	ResolveModule(ctx context.Context, goMod *mod.GoModFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error)
-	ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error)
+	ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, members []mod.WorkspaceMember, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error)
 }
 
 type Vendor struct {
@@ -215,13 +215,13 @@ func (v *Vendor) resolveSource(ctx context.Context, src dependencySource, existi
 			excludes = s.Excludes
 		}
 	case *mod.GoWorkFile:
-		deps, err = v.resolver.ResolveWorkspace(ctx, s, existingMods)
+		var members []mod.WorkspaceMember
+		members, err = s.ParseMembers()
 		if err != nil {
 			return
 		}
-		members, merr := s.ParseMembers()
-		if merr != nil {
-			err = merr
+		deps, err = v.resolver.ResolveWorkspace(ctx, s, members, existingMods)
+		if err != nil {
 			return
 		}
 		merged := make(map[string][]string)
