@@ -92,26 +92,43 @@ func (v *Vendor) VendorFiles(ctx context.Context) ([]Result, error) {
 		return v.processWorkspaceMode(ctx)
 	}
 
-	if !v.opts.recursive {
-		path := "."
-		if len(v.opts.paths) > 0 {
-			path = v.opts.paths[0]
-		}
-		goWork, err := v.findWorkspaceAt(path)
-		if err != nil {
-			return nil, err
-		}
-		if goWork != nil {
-			return v.toResults(v.processSource(ctx, goWork, filepath.Join(goWork.Dir, mod.GoWorkFilename), goWork.WorkspaceConfig()))
-		}
+	paths := v.opts.paths
+	if len(paths) == 0 {
+		paths = []string{"."}
 	}
 
-	modFiles, missingResults, err := v.findModFiles()
+	// Without --recursive, every path is checked for a workspace in its own
+	// right. A path that fails to load gets an error row rather than
+	// aborting the run, so it can't hide the other paths.
+	var workspaces []*mod.GoWorkFile
+	var failed []Result
+	if !v.opts.recursive {
+		modPaths := make([]string, 0, len(paths))
+		for _, path := range paths {
+			goWork, err := v.findWorkspaceAt(path)
+			switch {
+			case err != nil:
+				failed = append(failed, resultError(workspaceFileAt(path), err))
+			case goWork != nil:
+				workspaces = append(workspaces, goWork)
+			default:
+				modPaths = append(modPaths, path)
+			}
+		}
+		paths = modPaths
+	}
+
+	modFiles, missingResults, err := v.findModFiles(paths)
 	if err != nil {
 		return nil, err
 	}
 
 	p := pool.NewWithResults[Result]().WithContext(ctx)
+	for _, goWork := range workspaces {
+		p.Go(func(ctx context.Context) (Result, error) {
+			return v.processSource(ctx, goWork, filepath.Join(goWork.Dir, mod.GoWorkFilename), goWork.WorkspaceConfig()), nil
+		})
+	}
 	for _, modFile := range modFiles {
 		p.Go(func(ctx context.Context) (Result, error) {
 			goMod, err := mod.ParseGoModFile(modFile)
@@ -123,7 +140,7 @@ func (v *Vendor) VendorFiles(ctx context.Context) ([]Result, error) {
 	}
 
 	processed, _ := p.Wait()
-	results := append(missingResults, processed...)
+	results := append(append(failed, missingResults...), processed...)
 
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].Path < results[j].Path
@@ -275,12 +292,7 @@ func (v *Vendor) generate(deps []mod.ModuleConfig, rawTools []string, excludes m
 	return buf.Bytes(), len(m.Mod), nil
 }
 
-func (v *Vendor) findModFiles() (modFiles []string, missing []Result, err error) {
-	paths := v.opts.paths
-	if len(paths) == 0 {
-		paths = []string{"."}
-	}
-
+func (v *Vendor) findModFiles(paths []string) (modFiles []string, missing []Result, err error) {
 	if v.opts.recursive {
 		type scanResult struct {
 			path  string
@@ -355,6 +367,16 @@ func (v *Vendor) processWorkspaceMode(ctx context.Context) ([]Result, error) {
 	}
 
 	return v.toResults(result)
+}
+
+// workspaceFileAt names the file findWorkspaceAt read from path: go.work if
+// present, otherwise govendor.toml.
+func workspaceFileAt(path string) string {
+	workPath := filepath.Join(path, mod.GoWorkFilename)
+	if _, err := os.Stat(workPath); err == nil {
+		return workPath
+	}
+	return filepath.Join(path, vendorFile)
 }
 
 func (v *Vendor) findWorkspaceAt(path string) (*mod.GoWorkFile, error) {
