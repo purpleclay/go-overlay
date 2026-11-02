@@ -39,6 +39,15 @@
       importManifest = path: throw "go-overlay test: imported ${baseNameOf path}";
     };
   };
+  # mkGoToolchain for a host system other than the one running the checks,
+  # to reach the "not available" throw without a riscv64-linux builder.
+  toolchainFor = system:
+    import ../lib/mk-go-toolchain.nix {
+      inherit (pkgs) lib fetchurl symlinkJoin;
+      inherit (goManifestsLib) unavailableMessage;
+      stdenv = pkgs.stdenv // {hostPlatform = pkgs.stdenv.hostPlatform // {inherit system;};};
+    };
+
   toolInfoRecord = tool: version: pkgs.lib.findFirst (r: r.version == version) null toolInfo.${tool};
 
   # Asserts that evaluating expr throws, rather than silently producing a
@@ -117,6 +126,32 @@ in {
   lazy-manifests-guard-rejects-another-version =
     assertEq "lazy-manifests-guard-rejects-another-version" false
     (evaluates lazyGoBin.versions.${pkgs.lib.last goManifestsLib.sortedVersions}.drvPath);
+
+  # earliestStableFor
+  earliestStableFor-riscv64-linux = assertEq "earliestStableFor-riscv64-linux" "1.21.0" (goManifestsLib.earliestStableFor "riscv64-linux");
+  # Before 1.21, a minor's first release was tagged go1.17 rather than go1.17.0
+  earliestStableFor-x86_64-linux = assertEq "earliestStableFor-x86_64-linux" "1.17" (goManifestsLib.earliestStableFor "x86_64-linux");
+  earliestStableFor-unknown-system = assertEq "earliestStableFor-unknown-system" null (goManifestsLib.earliestStableFor "sparc64-linux");
+
+  # unavailableMessage
+  unavailableMessage-names-earliest-release =
+    assertEq "unavailableMessage-names-earliest-release"
+    "go-overlay: Go 1.20.14 is not available for riscv64-linux; the earliest release with a riscv64-linux build is 1.21.0"
+    (goManifestsLib.unavailableMessage "1.20.14" "riscv64-linux");
+  unavailableMessage-no-release-for-system =
+    assertEq "unavailableMessage-no-release-for-system"
+    "go-overlay: Go 1.20.14 is not available for sparc64-linux; no release in go-overlay has a sparc64-linux build"
+    (goManifestsLib.unavailableMessage "1.20.14" "sparc64-linux");
+  # tryEval can't see the message, so the two checks above pin its text and
+  # these prove mkGoToolchain throws only when the host has no build.
+  mkGoToolchain-throws-without-host-build =
+    assertEq "mkGoToolchain-throws-without-host-build" {
+      riscv64-linux = false;
+      x86_64-linux = true;
+    } {
+      riscv64-linux = evaluates (toolchainFor "riscv64-linux" goManifests."1.20.14").drvPath;
+      x86_64-linux = evaluates (toolchainFor "x86_64-linux" goManifests."1.20.14").drvPath;
+    };
 
   # versionInfo
   versionInfo-lists-every-version = assertEq "versionInfo-lists-every-version" goManifestsLib.sortedVersions (map (r: r.version) versionInfo);
