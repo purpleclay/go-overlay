@@ -2,12 +2,14 @@ package resolve
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/purpleclay/conker/pool"
 	"github.com/purpleclay/go-overlay/internal/progress"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/golden"
@@ -70,6 +72,24 @@ func TestPlainProgressRateLimitedOutput(t *testing.T) {
 	reporter.Report(progress.Finished{Manifest: m})
 
 	golden.Assert(t, buf.String(), "stream/cold-download-ratelimited.golden")
+}
+
+func TestPlainProgressOutputForAHashFailure(t *testing.T) {
+	var buf bytes.Buffer
+	reporter := progress.NewPlainReporter(&buf, progress.WithInterval(0))
+
+	const m progress.Manifest = "go.mod"
+	key := contentKey{path: "example.com/foo", version: "v1.0.0"}
+	hasher := &countingHasher{err: errors.New("disk on fire")}
+	s := newHashScheduler(context.Background(), pool.New(), hasher, reporter, m, nil, fakeDirResolver(map[contentKey]string{key: "/cache/foo"}))
+
+	reporter.Report(progress.Started{Manifest: m})
+	s.submit(key)
+	s.wait()
+	result, _ := s.result(key)
+	reporter.Report(progress.Finished{Manifest: m, Err: result.err})
+
+	golden.Assert(t, buf.String(), "stream/hash-failure.golden")
 }
 
 func readLines(t *testing.T, fixture string) []string {
