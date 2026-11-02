@@ -5,12 +5,14 @@
   fetchurl,
   symlinkJoin,
   mkToolSet ? null,
+  # version: system: error message for a version with no build for system
+  unavailableMessage,
 }: manifest: let
   platform = manifest.${stdenv.hostPlatform.system} or null;
 
   self =
     if platform == null
-    then throw "go-overlay: Go ${manifest.version} is not available for ${stdenv.hostPlatform.system}"
+    then throw (unavailableMessage manifest.version stdenv.hostPlatform.system)
     else
       stdenv.mkDerivation {
         pname = "go";

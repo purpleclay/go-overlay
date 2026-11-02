@@ -40,6 +40,22 @@
   stableVersions = builtins.filter (v: builtins.match ".*(rc|beta)[0-9]+" v == null) sortedVersions;
   latestStable = builtins.head stableVersions;
 
+  # Oldest stable release with a build for `system`, or null. Reads every
+  # manifest, so only call it on a failure path.
+  earliestStableFor = system:
+    lib.findFirst (v: manifests.${v} ? ${system}) null
+    (lib.reverseList stableVersions);
+
+  # The error for a version with no build for `system`, naming the earliest
+  # stable release that does have one.
+  unavailableMessage = version: system: let
+    earliest = earliestStableFor system;
+    hint =
+      if earliest == null
+      then "no release in go-overlay has a ${system} build"
+      else "the earliest release with a ${system} build is ${earliest}";
+  in "go-overlay: Go ${version} is not available for ${system}; ${hint}";
+
   # Get the latest patch version for a given minor version (e.g., "1.21" -> "1.21.13")
   latestPatch = minorVersion: let
     matching = builtins.filter (v: lib.hasPrefix "${minorVersion}." v) sortedVersions;
@@ -75,5 +91,5 @@
   in
     matching;
 in {
-  inherit manifests sortedVersions latest latestStable latestPatch isDeprecated versionsForMinor;
+  inherit manifests sortedVersions latest latestStable latestPatch isDeprecated versionsForMinor earliestStableFor unavailableMessage;
 }

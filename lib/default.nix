@@ -25,6 +25,7 @@
 
   mkGoToolchain = import ./mk-go-toolchain.nix {
     inherit lib mkToolSet;
+    inherit (manifestsLib) unavailableMessage;
     inherit (pkgs) stdenv fetchurl symlinkJoin;
   };
 
