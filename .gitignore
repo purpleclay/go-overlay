@@ -26,6 +26,7 @@
 !README.md
 !scripts/goversions.awk
 !scripts/goversions-tools.awk
+!SECURITY.md
 !test/fixtures/*
 !typos.toml
 
