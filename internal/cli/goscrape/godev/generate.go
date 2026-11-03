@@ -93,14 +93,15 @@ func parse(page string, version string, date time.Time) (*Scrape, error) {
 		Version: strings.TrimPrefix(version, "go"),
 	}
 
-	var ext []string
+	var row chomp.Tuple2[string, []string]
 	var err error
 
 	rem := page
 	for {
-		if rem, ext, err = chomp.Pair(scrape.Href(version), scrape.Target())(rem); err != nil {
+		if rem, row, err = chomp.Pair(scrape.Href(version), scrape.Target()).Run(rem); err != nil {
 			break
 		}
+		ext := append([]string{row.First}, row.Second...)
 
 		// ext[0] = URL path (e.g., "/dl/go1.22.4.linux-amd64.tar.gz")
 		// ext[1] = Kind (Archive, Installer, Source)
@@ -222,7 +223,7 @@ func newGenerateCmd() *cobra.Command {
 
 			for _, ver := range versions {
 				p.Go(func(_ context.Context) (*Scrape, error) {
-					downloadSection, _, err := scrape.SeekDownloadSection(ver)(page)
+					downloadSection, _, err := scrape.SeekDownloadSection(ver).Run(page)
 					if err != nil {
 						return nil, fmt.Errorf("failed to find download section for %s: %w", ver, err)
 					}
