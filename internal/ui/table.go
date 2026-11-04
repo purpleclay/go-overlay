@@ -1,14 +1,14 @@
 package ui
 
 import (
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/muesli/reflow/wordwrap"
 	"github.com/purpleclay/go-overlay/internal/vendor"
 )
 
 // ANSI color codes matching the standard palette used by the theme package.
-const (
+var (
 	colorGreen = lipgloss.Color("2")
 	colorRed   = lipgloss.Color("1")
 	colorGray  = lipgloss.Color("8")

@@ -100,3 +100,21 @@ func TestExecuteExitCodes(t *testing.T) {
 		require.Equal(t, 2, code)
 	})
 }
+
+func TestExecuteWritesNoEscapeSequencesWhenStdoutIsNotATerminal(t *testing.T) {
+	out, err := os.CreateTemp(t.TempDir(), "stdout")
+	require.NoError(t, err)
+
+	stdout := os.Stdout
+	os.Stdout = out
+	t.Cleanup(func() { os.Stdout = stdout })
+
+	_, err = govendor.Execute(t.Context(), cli.VersionInfo{}, []string{"--check", filepath.Join(t.TempDir(), "missing")})
+	require.Error(t, err)
+	os.Stdout = stdout
+
+	data, err := os.ReadFile(out.Name())
+	require.NoError(t, err)
+	require.Contains(t, string(data), "does not exist, check path")
+	require.NotContains(t, string(data), "\x1b[")
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"charm.land/lipgloss/v2"
 	"github.com/purpleclay/go-overlay/internal/progress"
 	"github.com/purpleclay/go-overlay/internal/resolve"
 	"github.com/purpleclay/go-overlay/internal/ui"
@@ -139,7 +140,9 @@ func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, 
 			results, err := v.VendorFiles(cmd.Context())
 			if len(results) > 0 {
 				tableRendered = true
-				fmt.Fprintln(cmd.OutOrStdout(), ui.RenderResultsTable(results))
+				// lipgloss v2 always emits colour; the writer downsamples it to
+				// what stdout supports, stripping it when stdout isn't a terminal.
+				lipgloss.Fprintln(cmd.OutOrStdout(), ui.RenderResultsTable(results))
 			}
 			if err != nil {
 				exitCode = resultsExitCode(results)
