@@ -1,6 +1,6 @@
 module testdata/with-excludes
 
-go 1.22
+go 1.27.3
 
 exclude (
 	github.com/davecgh/go-spew v1.1.0

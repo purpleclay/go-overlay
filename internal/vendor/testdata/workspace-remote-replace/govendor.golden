@@ -3,7 +3,7 @@
 schema = 4
 
 [workspace]
-  go = "1.22"
+  go = "1.27.3"
   modules = ["./app"]
 
 [mod]

@@ -1,6 +1,6 @@
 module github.com/purpleclay/go-overlay/examples/cobra-cli
 
-go 1.27.1
+go 1.27.3
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0

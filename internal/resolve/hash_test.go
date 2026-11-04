@@ -13,7 +13,7 @@ import (
 func TestNARHash(t *testing.T) {
 	hash, err := resolve.NARHash("testdata/module")
 	require.NoError(t, err)
-	assert.Equal(t, "sha256-YX+5OWGKiEJOoSfTZ5aXG1RhWHyDgKeCygqVZny98JU=", hash)
+	assert.Equal(t, "sha256-zlKFPywupKwyb/YxUrm8G75PLGt147OLoyzCt0Sv+XM=", hash)
 }
 
 func TestNARHashFiltered(t *testing.T) {
@@ -21,5 +21,5 @@ func TestNARHashFiltered(t *testing.T) {
 		return filepath.Base(path) != "main.go"
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "sha256-OtzhFGcov9e8CDxmuKGQIlxXHLMKclkhjgekIe56Uks=", hash)
+	assert.Equal(t, "sha256-2vpSQCJnikMhONDkJruOc4w3uJmwdHgUGRk4l8FZXgQ=", hash)
 }

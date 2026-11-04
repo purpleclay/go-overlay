@@ -3,7 +3,7 @@
 schema = 4
 
 [workspace]
-  go = "1.22"
+  go = "1.27.3"
   modules = ["./api", "./shared"]
 
 [exclude]
@@ -13,8 +13,8 @@ schema = 4
 [mod]
   [mod."example.com/shared"]
     version = "v0.0.0"
-    hash = "sha256-Y03kL/3Wbf+jeExlxs0BFnsbMHz/pArfoZgElV3m4Mg="
-    go = "1.22"
+    hash = "sha256-Jz/lnLG6tZmO2OE6pN08DcIO7DCUNoRwi23T3jOJwuk="
+    go = "1.27.3"
     local = "./shared"
   [mod."github.com/davecgh/go-spew"]
     version = "v1.1.1"
@@ -45,9 +45,9 @@ schema = 4
     go = "1.17"
     packages = ["github.com/stretchr/testify/assert", "github.com/stretchr/testify/assert/yaml"]
   [mod."golang.org/x/sys"]
-    version = "v0.25.0"
-    hash = "sha256-PXZ9EQZ7SFpcL7d3E1+KGTxziYlHEIZPfoXEbnaVD3I="
-    go = "1.18"
+    version = "v0.45.0"
+    hash = "sha256-hkBoNazrDA67ER6sWhb+EKxx9nJ24+nz3zGy+zT5Hvw="
+    go = "1.25.0"
     packages = ["golang.org/x/sys/unix", "golang.org/x/sys/windows"]
   [mod."gopkg.in/yaml.v3"]
     version = "v3.0.1"

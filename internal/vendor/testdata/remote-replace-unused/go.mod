@@ -1,6 +1,6 @@
 module example.com/remote-replace-unused
 
-go 1.25.4
+go 1.27.3
 
 require gopkg.in/ini.v1 v1.67.3
 

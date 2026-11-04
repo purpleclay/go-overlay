@@ -1,6 +1,6 @@
 module example/api
 
-go 1.27.1
+go 1.27.3
 
 require example/shared v0.0.0
 

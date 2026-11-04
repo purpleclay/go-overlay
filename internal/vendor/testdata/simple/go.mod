@@ -1,6 +1,6 @@
 module testdata/simple
 
-go 1.22
+go 1.27.3
 
 require (
 	github.com/aymanbagabas/go-udiff v0.2.0

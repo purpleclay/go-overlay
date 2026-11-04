@@ -3,14 +3,14 @@
 schema = 4
 
 [workspace]
-  go = "1.27.1"
+  go = "1.27.3"
   modules = ["./api", "./shared"]
 
 [mod]
   [mod."example/shared"]
     version = "v0.0.0"
-    hash = "sha256-axzJ1rtU1V46ZL2YZkJP0jDkBT/yZ+wDKJBJNjhle24="
-    go = "1.27.1"
+    hash = "sha256-cu9D7QbX0H3GIoGZ0R8ULZekZUwVyovb5fdQww4iM/I="
+    go = "1.27.3"
     local = "./shared"
   [mod."github.com/stretchr/testify"]
     version = "v1.12.1"
