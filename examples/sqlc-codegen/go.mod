@@ -1,6 +1,6 @@
 module github.com/purpleclay/go-overlay/examples/sqlc-codegen
 
-go 1.27.1
+go 1.27.3
 
 require modernc.org/sqlite v1.58.0
 

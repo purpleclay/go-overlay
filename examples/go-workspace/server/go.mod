@@ -1,6 +1,6 @@
 module github.com/purpleclay/go-overlay/examples/go-workspace/server
 
-go 1.27.1
+go 1.27.3
 
 require github.com/purpleclay/go-overlay/examples/go-workspace/mood v0.0.0
 

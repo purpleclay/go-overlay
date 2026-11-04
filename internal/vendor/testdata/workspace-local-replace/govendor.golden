@@ -3,13 +3,13 @@
 schema = 4
 
 [workspace]
-  go = "1.26.0"
+  go = "1.27.3"
   modules = ["./api"]
 
 [mod]
   [mod."example.com/util"]
     version = "v0.0.0"
-    hash = "sha256-kunljZwvwXfsCJIJYJ+ttZPXJgGKZ0EIVNBQfADDlQI="
-    go = "1.26.0"
+    hash = "sha256-kK86ff1sOYhepBO3pAv/7IlLfRmL5RWR8n2vC81q4Eo="
+    go = "1.27.3"
     packages = ["example.com/util"]
     local = "./util"

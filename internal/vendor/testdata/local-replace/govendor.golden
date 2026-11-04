@@ -5,7 +5,7 @@ schema = 4
 [mod]
   [mod."example.com/localmod"]
     version = "v0.0.0"
-    hash = "sha256-mwLCSagiaVDJvWqDCueCsSrqY/A9Rm7kRMHhn8ewq0Y="
-    go = "1.22"
+    hash = "sha256-w+Txh6QzSXYKUQxHGZw2yvHgyY1vEC+XRM3wV5+Pt+Q="
+    go = "1.27.3"
     packages = ["example.com/localmod"]
     local = "./localmod"

@@ -1,5 +1,5 @@
 module github.com/purpleclay/go-overlay/examples/http-chi-server
 
-go 1.27.1
+go 1.27.3
 
 require github.com/go-chi/chi/v5 v5.5.0
