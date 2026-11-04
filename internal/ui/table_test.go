@@ -1,9 +1,11 @@
 package ui_test
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 
+	"charm.land/lipgloss/v2"
 	"github.com/purpleclay/go-overlay/internal/ui"
 	"github.com/purpleclay/go-overlay/internal/vendor"
 	"gotest.tools/v3/golden"
@@ -26,7 +28,7 @@ func TestRenderResultsTableForGoMod(t *testing.T) {
 		{Path: "path/to/schema-mismatch/go.mod", Status: vendor.StatusDrift, Message: "govendor.toml uses schema v1, current govendor requires schema v3 — run 'govendor' to regenerate"},
 	}
 
-	got := ui.RenderResultsTable(results)
+	got := renderPlain(t, results)
 	golden.Assert(t, got, "table_gomod.golden")
 }
 
@@ -41,6 +43,15 @@ func TestRenderResultsTableForGoWork(t *testing.T) {
 		{Path: "path/to/schema-mismatch/go.work", Status: vendor.StatusDrift, Message: "govendor.toml uses schema v1, current govendor requires schema v3 — run 'govendor' to regenerate"},
 	}
 
-	got := ui.RenderResultsTable(results)
+	got := renderPlain(t, results)
 	golden.Assert(t, got, "table_gowork.golden")
+}
+
+func renderPlain(t *testing.T, results []vendor.Result) string {
+	t.Helper()
+	var buf bytes.Buffer
+	if _, err := lipgloss.Fprint(&buf, ui.RenderResultsTable(results)); err != nil {
+		t.Fatal(err)
+	}
+	return buf.String()
 }
