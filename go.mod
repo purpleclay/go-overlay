@@ -3,7 +3,7 @@ module github.com/purpleclay/go-overlay
 go 1.27.3
 
 require (
-	charm.land/lipgloss/v2 v2.0.6
+	charm.land/lipgloss/v2 v2.1.0
 	github.com/BurntSushi/toml v1.6.0
 	github.com/charlievieth/fastwalk v1.0.14
 	github.com/google/licensecheck v0.3.1
