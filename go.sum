@@ -56,8 +56,8 @@ github.com/nix-community/go-nix v0.0.0-20250101154619-4bdde671e0a1 h1:kpt9ZfKcm+
 github.com/nix-community/go-nix v0.0.0-20250101154619-4bdde671e0a1/go.mod h1:qgCw4bBKZX8qMgGeEZzGFVT3notl42dBjNqO2jut0M0=
 github.com/purpleclay/chomp v0.8.0 h1:zErN6MMl4UjtqcGyX/izJ4VG7ZyZSf6g247xm7C2vs8=
 github.com/purpleclay/chomp v0.8.0/go.mod h1:LFdzw8cqsEPc1W9KtjhcmlKBWI4t3XTve4iSw5IH22c=
-github.com/purpleclay/conker v0.6.0 h1:BPoQvYGvqrLbCgwcJd3XyrNXu93wmlFU3jl+NWRn+3A=
-github.com/purpleclay/conker v0.6.0/go.mod h1:tON1gZpbFAMKvItwIwFdatRlGgZyH0Mw/z1inMLtL4c=
+github.com/purpleclay/conker v0.7.0 h1:EkmKUec4E5vYADk+hwQmPGrDCQZp+mR9t594XyF3u8M=
+github.com/purpleclay/conker v0.7.0/go.mod h1:42p3ZXs8Il07cILQxyngvDUzOdrXpYYl9k9NsiyizQA=
 github.com/purpleclay/x/cli v0.8.0 h1:CPN8HwplhMx6F00WgcuHKen0KZtEHukf/+MSxyZyUU0=
 github.com/purpleclay/x/cli v0.8.0/go.mod h1:GO5pcijRCVMt9Z0uXwSnoL8w0JLQak/C/y+hSya0gMo=
 github.com/purpleclay/x/theme v0.4.1 h1:Wb57HiBRzpPl2s51mwF/xbbPCVSKjcXTgZsmnEuIh74=
@@ -95,3 +95,5 @@ gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 gotest.tools/v3 v3.5.2 h1:7koQfIKdy+I8UTetycgUqXWSDwpgv193Ka+qRsmBY8Q=
 gotest.tools/v3 v3.5.2/go.mod h1:LtdLGcnqToBH83WByAAi/wiwSFCArdFIUV/xxN4pcjA=
+pgregory.net/rapid v1.3.0 h1:vBvO0VSqti75J1jjYqpgPNBLKMd1+gxa9fYo7vk/Exc=
+pgregory.net/rapid v1.3.0/go.mod h1:dPlE4OBBxgXPqkP79flB6sJL1dx5azpI7HQ9MY9Z7uk=
