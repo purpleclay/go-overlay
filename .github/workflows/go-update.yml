@@ -18,7 +18,7 @@ jobs:
       contents: read # writes go through secrets.GH_NSV, not GITHUB_TOKEN; this only covers setup_nix's API calls
     steps:
       - name: harden_runner
-        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: audit
 
