@@ -8,6 +8,7 @@
 !*.nix
 !*.stderr
 !.envrc
+!.claude-plugin/*
 !.github/**/*
 !.gitignore
 !.golangci.yaml
@@ -23,6 +24,7 @@
 !go.work.sum
 !govendor.toml
 !LICENSE
+!plugin/**/*
 !README.md
 !scripts/goversions.awk
 !scripts/goversions-tools.awk
