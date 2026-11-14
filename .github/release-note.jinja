@@ -68,6 +68,7 @@
   {"scope": "govendor", "title": "govendor", "summary": "Generates and maintains `govendor.toml`, the per-module dependency manifest used during builds."},
   {"scope": "goscrape", "title": "goscrape", "summary": "Scrapes Go and tool releases and generates the Nix manifests that keep go-overlay up to date."},
   {"scope": "goversions", "title": "goversions", "summary": "Lists the Go versions go-overlay provides, with release dates, support status and package names."},
+  {"scope": "skill", "title": "go-overlay skill", "summary": "Teaches AI coding agents such as Claude Code and Codex to build and maintain Go projects with go-overlay."},
 ] -%}
 {%- set breaking = commits | selectattr("breaking") -%}
 {%- set non_breaking = commits | rejectattr("breaking") -%}

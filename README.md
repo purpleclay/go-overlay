@@ -303,6 +303,25 @@ nix build --impure
 > [!CAUTION]
 > The `.netrc` contents are embedded in the derivation, which is stored in the Nix store. The Nix store is world-readable by default.
 
+## AI Coding Agents
+
+Coding agents tend to reach for `buildGoModule` and `vendorHash`, and they often miss the steps go-overlay depends on, such as regenerating `govendor.toml` after an import changes. The go-overlay plugin gives them a skill covering the regenerate loop, picking a builder and toolchain, workspaces, and a table of build errors with their fixes.
+
+In Claude Code:
+
+```
+/plugin install go-overlay --marketplace purpleclay/go-overlay
+```
+
+In Codex:
+
+```sh
+codex plugin marketplace add purpleclay/go-overlay
+codex plugin add go-overlay@go-overlay
+```
+
+The agent loads the skill on its own when it works in a go-overlay project.
+
 ## Further Reading
 
 - [how-it-works.md](docs/how-it-works.md) — Why go-overlay builds on an unpatched toolchain, and how single-pass platform-independent resolution works.

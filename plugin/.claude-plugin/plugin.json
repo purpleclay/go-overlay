@@ -1,0 +1,23 @@
+{
+  "name": "go-overlay",
+  "version": "0.1.0",
+  "description": "Build Go projects with Nix and go-overlay: keep govendor.toml in step with go.mod, pick the right builder and Go toolchain, and fix vendoring and hash errors",
+  "author": {
+    "name": "purpleclay",
+    "url": "https://github.com/purpleclay"
+  },
+  "homepage": "https://github.com/purpleclay/go-overlay",
+  "repository": "https://github.com/purpleclay/go-overlay",
+  "license": "MIT",
+  "keywords": [
+    "nix",
+    "nix-flakes",
+    "go",
+    "golang",
+    "go-overlay",
+    "govendor",
+    "vendoring",
+    "go-modules",
+    "go-workspaces"
+  ]
+}

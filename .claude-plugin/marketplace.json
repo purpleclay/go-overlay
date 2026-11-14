@@ -1,0 +1,15 @@
+{
+  "name": "go-overlay",
+  "description": "Agent plugins for Go projects built with Nix and go-overlay",
+  "owner": {
+    "name": "purpleclay",
+    "url": "https://github.com/purpleclay"
+  },
+  "plugins": [
+    {
+      "name": "go-overlay",
+      "source": "./plugin",
+      "category": "development"
+    }
+  ]
+}
