@@ -4,9 +4,9 @@ schema = 4
 
 [mod]
   [mod."charm.land/lipgloss/v2"]
-    version = "v2.0.6"
-    hash = "sha256-w9yU+7P0lEcTshjZbhOfaHIaZkL3YdM+vS7e1J8lALE="
-    go = "1.25.0"
+    version = "v2.1.0"
+    hash = "sha256-huDdFYTMKfmC2aYN0x8YGfnKH9lXt/7HGjwImPO1Zww="
+    go = "1.26.7"
     packages = ["charm.land/lipgloss/v2", "charm.land/lipgloss/v2/compat", "charm.land/lipgloss/v2/table"]
   [mod."github.com/BurntSushi/toml"]
     version = "v1.6.0"
