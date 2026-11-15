@@ -179,8 +179,8 @@ schema = 4
     go = "1.16"
     packages = ["go.yaml.in/yaml/v3"]
   [mod."golang.org/x/mod"]
-    version = "v0.42.0"
-    hash = "sha256-jgjKlIzteE99u8/TbuZTk4cLAwDOVZePXaRwqEpYvPk="
+    version = "v0.43.0"
+    hash = "sha256-JwZNuiZrkAScZmQqEvmF0mDzhgyJuf5H31YjeaZWshU="
     go = "1.26.0"
     packages = ["golang.org/x/mod/internal/lazyregexp", "golang.org/x/mod/modfile", "golang.org/x/mod/module", "golang.org/x/mod/semver"]
   [mod."golang.org/x/sync"]
