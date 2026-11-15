@@ -1,0 +1,50 @@
+name: workers
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "workers/**"
+      - ".github/workflows/tools-update.yml"
+      - ".github/workflows/workers.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "workers/**"
+      - ".github/workflows/tools-update.yml"
+      - ".github/workflows/workers.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  manifest_dispatch:
+    runs-on: ubuntu-26.04
+    if: github.actor != 'renovate[bot]'
+    name: manifest_dispatch
+    permissions:
+      contents: read
+    steps:
+      - name: harden_runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: setup_nix
+        uses: $/.github/actions/setup-nix
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cachix-token: ${{ secrets.GH_CACHIX }}
+
+      - name: test
+        working-directory: workers/manifest-dispatch
+        run: nix run --inputs-from ../.. nixpkgs#nodejs -- --test

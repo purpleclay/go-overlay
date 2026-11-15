@@ -31,6 +31,11 @@
 !SECURITY.md
 !test/fixtures/*
 !typos.toml
+!workers/**/*
 
 # Recurse through sub-directories applying the same patterns
 !*/
+
+# Local wrangler state and secrets
+.wrangler/
+.dev.vars*

@@ -1,0 +1,11 @@
+{
+  "name": "go-overlay-manifest-dispatch",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-10",
+  // Cron only, so no public URL.
+  "workers_dev": false,
+  "triggers": { "crons": ["*/15 * * * *", "7-59/15 * * * *"] },
+  // Per-run CPU and wall time in Workers Logs.
+  "observability": { "enabled": true },
+  "kv_namespaces": [{ "binding": "STATE", "id": "7e0c2c115b1b474dbe5766a88f7c6b5d" }]
+}

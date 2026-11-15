@@ -1,0 +1,266 @@
+[
+ {
+  "version": "go1.27.4",
+  "stable": true,
+  "files": [
+   {
+    "filename": "go1.27.4.src.tar.gz",
+    "os": "",
+    "arch": "",
+    "version": "go1.27.4",
+    "sha256": "73cfb8571aec0c01177687db87163d46aa20e9779672772891aa17654d9a6099",
+    "size": 35153471,
+    "kind": "source"
+   },
+   {
+    "filename": "go1.27.4.aix-ppc64.tar.gz",
+    "os": "aix",
+    "arch": "ppc64",
+    "version": "go1.27.4",
+    "sha256": "338a4830bfb09dcfc89d5ec80610d39f50305490ee0402826519cb3f5e3f783b",
+    "size": 69094228,
+    "kind": "archive"
+   }
+  ]
+ },
+ {
+  "version": "go1.27.3",
+  "stable": true,
+  "files": [
+   {
+    "filename": "go1.27.3.src.tar.gz",
+    "os": "",
+    "arch": "",
+    "version": "go1.27.3",
+    "sha256": "6e7749035cf360f06b2575d162ea79df9fda8ef671889e5c375f8e50777f26bb",
+    "size": 35134035,
+    "kind": "source"
+   },
+   {
+    "filename": "go1.27.3.aix-ppc64.tar.gz",
+    "os": "aix",
+    "arch": "ppc64",
+    "version": "go1.27.3",
+    "sha256": "4c8a6bf25678e2b5706185951c3b39782c490ee4f56f19be03c447a0fde551fc",
+    "size": 69047435,
+    "kind": "archive"
+   }
+  ]
+ },
+ {
+  "version": "go1.27.2",
+  "stable": true,
+  "files": [
+   {
+    "filename": "go1.27.2.src.tar.gz",
+    "os": "",
+    "arch": "",
+    "version": "go1.27.2",
+    "sha256": "03495da2ba64894d40f5c4992e49454fa78b50690604ff92b6afff5081b76e62",
+    "size": 35134614,
+    "kind": "source"
+   },
+   {
+    "filename": "go1.27.2.aix-ppc64.tar.gz",
+    "os": "aix",
+    "arch": "ppc64",
+    "version": "go1.27.2",
+    "sha256": "8b3032f55f4deee212dd5c4b8fcb605c47d60f57d4d2218670dd1372c2a66edc",
+    "size": 69044080,
+    "kind": "archive"
+   }
+  ]
+ },
+ {
+  "version": "go1.27.1",
+  "stable": true,
+  "files": [
+   {
+    "filename": "go1.27.1.src.tar.gz",
+    "os": "",
+    "arch": "",
+    "version": "go1.27.1",
+    "sha256": "4e408abae126d916b6164627193f2c54f0e3ca1312d693b86db45f862ab238b1",
+    "size": 35109201,
+    "kind": "source"
+   },
+   {
+    "filename": "go1.27.1.aix-ppc64.tar.gz",
+    "os": "aix",
+    "arch": "ppc64",
+    "version": "go1.27.1",
+    "sha256": "43b4827f082b94b7b6de28a49dd80df268e06935fd82a1b57aab3a772343bf6c",
+    "size": 68957987,
+    "kind": "archive"
+   }
+  ]
+ },
+ {
+  "version": "go1.27.0",
+  "stable": true,
+  "files": [
+   {
+    "filename": "go1.27.0.src.tar.gz",
+    "os": "",
+    "arch": "",
+    "version": "go1.27.0",
+    "sha256": "7002403d7cc44529ef6d26f69a44818263395ead7c16c05a5808ae047ebeb0e5",
+    "size": 35080395,
+    "kind": "source"
+   },
+   {
+    "filename": "go1.27.0.aix-ppc64.tar.gz",
+    "os": "aix",
+    "arch": "ppc64",
+    "version": "go1.27.0",
+    "sha256": "5066984959bdbec093042582c72c62ebf8f788e6ecc90a55483698b1c87e84a0",
+    "size": 68937049,
+    "kind": "archive"
+   }
+  ]
+ },
+ {
+  "version": "go1.27rc3",
+  "stable": false,
+  "files": [
+   {
+    "filename": "go1.27rc3.src.tar.gz",
+    "os": "",
+    "arch": "",
+    "version": "go1.27rc3",
+    "sha256": "e9e20edd1720095f9109696e963a66069d3f6d48d00eb9388c888ce06631df5c",
+    "size": 35077555,
+    "kind": "source"
+   },
+   {
+    "filename": "go1.27rc3.aix-ppc64.tar.gz",
+    "os": "aix",
+    "arch": "ppc64",
+    "version": "go1.27rc3",
+    "sha256": "e273a55cc1d167be406d388730c4c4419244059908526df4fea24643c81ceaa5",
+    "size": 68935760,
+    "kind": "archive"
+   }
+  ]
+ },
+ {
+  "version": "go1.27rc2",
+  "stable": false,
+  "files": [
+   {
+    "filename": "go1.27rc2.src.tar.gz",
+    "os": "",
+    "arch": "",
+    "version": "go1.27rc2",
+    "sha256": "860fd7a30b285ee16a2ae0ec5d4441cb47c48872a0a30cb60cae348947f48a25",
+    "size": 35062886,
+    "kind": "source"
+   },
+   {
+    "filename": "go1.27rc2.aix-ppc64.tar.gz",
+    "os": "aix",
+    "arch": "ppc64",
+    "version": "go1.27rc2",
+    "sha256": "d345e8f6ce0c293d101ff1c508bcb964cff1c683aa391a01afcfd9f671a98c3a",
+    "size": 68914397,
+    "kind": "archive"
+   }
+  ]
+ },
+ {
+  "version": "go1.27rc1",
+  "stable": false,
+  "files": [
+   {
+    "filename": "go1.27rc1.src.tar.gz",
+    "os": "",
+    "arch": "",
+    "version": "go1.27rc1",
+    "sha256": "338f51f557c6db1235a3eeb89a0936af6f4e0d4116291ef3b8e41186bc655334",
+    "size": 35025205,
+    "kind": "source"
+   },
+   {
+    "filename": "go1.27rc1.aix-ppc64.tar.gz",
+    "os": "aix",
+    "arch": "ppc64",
+    "version": "go1.27rc1",
+    "sha256": "f6a96fce2f6b02600fc20f9095ac5f6d4073ebcf566b423c3532d53f6164be4b",
+    "size": 68895855,
+    "kind": "archive"
+   }
+  ]
+ },
+ {
+  "version": "go1.26.11",
+  "stable": true,
+  "files": [
+   {
+    "filename": "go1.26.11.src.tar.gz",
+    "os": "",
+    "arch": "",
+    "version": "go1.26.11",
+    "sha256": "d44101b0ff27ed2a4c75ad46c17b9c74359209e2eb2ca7c9df6cb4fdb68e1969",
+    "size": 34192889,
+    "kind": "source"
+   },
+   {
+    "filename": "go1.26.11.aix-ppc64.tar.gz",
+    "os": "aix",
+    "arch": "ppc64",
+    "version": "go1.26.11",
+    "sha256": "ee574ab57ad2d44c5b796d6e4b45f1227a862b9c28146a9d2c8edae9570a1474",
+    "size": 65608462,
+    "kind": "archive"
+   }
+  ]
+ },
+ {
+  "version": "go1.26.10",
+  "stable": true,
+  "files": [
+   {
+    "filename": "go1.26.10.src.tar.gz",
+    "os": "",
+    "arch": "",
+    "version": "go1.26.10",
+    "sha256": "fd63e883ba2f2bfca93c1646b31ebef63e2b1e4d2b317c9789d976a68d81f36f",
+    "size": 34164741,
+    "kind": "source"
+   },
+   {
+    "filename": "go1.26.10.aix-ppc64.tar.gz",
+    "os": "aix",
+    "arch": "ppc64",
+    "version": "go1.26.10",
+    "sha256": "0be98b6c6ca9ca7978b3f3d867a9cbe57553ddfed2c8d8cfb1267caf397cdf6e",
+    "size": 65544410,
+    "kind": "archive"
+   }
+  ]
+ },
+ {
+  "version": "go1.26.9",
+  "stable": true,
+  "files": [
+   {
+    "filename": "go1.26.9.src.tar.gz",
+    "os": "",
+    "arch": "",
+    "version": "go1.26.9",
+    "sha256": "9735d7dcdb65b35d3fa577f04064737c03b89cf1a2b71e6e69fe2f3c6f9fd4ca",
+    "size": 34162146,
+    "kind": "source"
+   },
+   {
+    "filename": "go1.26.9.aix-ppc64.tar.gz",
+    "os": "aix",
+    "arch": "ppc64",
+    "version": "go1.26.9",
+    "sha256": "98bc0ccd3b9b1e91483b2690016a116be90f11da8c5722574fae4a67c325c4c3",
+    "size": 65544858,
+    "kind": "archive"
+   }
+  ]
+ }
+]
