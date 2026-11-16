@@ -1,0 +1,31 @@
+schema = 4
+
+[workspace]
+  go = "1.24.0"
+  modules = ["./app"]
+
+[mod."github.com/go-ini/ini"]
+  version = "v1.67.3"
+  hash = "sha256-5IJdzJ11xCVYvto/qX/ktx/vI9Sa6UhdkpXeoQRpntU="
+  required = "v1.66.6"
+  replaced = "gopkg.in/ini.v1"
+  go = "1.13"
+  packages = ["github.com/go-ini/ini"]
+
+[mod."github.com/go-ini/ini/testdata"]
+  version = "v0.0.0"
+  go = "1.24.0"
+  local = "./child"
+  packages = ["github.com/go-ini/ini/testdata"]
+
+[mod."example.com/nested"]
+  version = "v0.0.0"
+  go = "1.24.0"
+  local = "./parent"
+  packages = ["example.com/nested", "example.com/nested/api/legacy", "example.com/nested/apiclient"]
+
+[mod."example.com/nested/api"]
+  version = "v0.0.0"
+  go = "1.24.0"
+  local = "./api"
+  packages = ["example.com/nested/api"]

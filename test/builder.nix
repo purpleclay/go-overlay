@@ -63,6 +63,226 @@
       fi
       touch $out
     '';
+
+  inherit (import ../builder/modules-txt.nix {inherit (pkgs) lib;}) mkAnnotation mkRemoteModuleEntry mkRemoteReplaceTrailers isUnusedReplace;
+  inherit
+    (import ../builder/vendor-env.nix {
+      inherit (pkgs) lib runCommand fetchGoModule;
+      inherit mkAnnotation mkRemoteModuleEntry mkRemoteReplaceTrailers isUnusedReplace;
+    })
+    mkModuleCopyCommands
+    ;
+
+  linkedLegacy = pkgs.runCommand "nested-module-linked-legacy" {} ''
+    mkdir -p $out
+    echo 'package linkedlegacy' > $out/package.go
+  '';
+  nestedParent = pkgs.runCommand "nested-module-parent" {} ''
+    mkdir -p $out/api/legacy $out/apiclient
+    touch $out/parent $out/.hidden $out/api/placeholder $out/apiclient/retained
+    echo 'package parentapi' > $out/api/parent.go
+    echo 'package legacy' > $out/api/legacy/legacy.go
+    ln -s ${linkedLegacy} $out/api/linkedlegacy
+    touch $out/executable $out/readonly
+    chmod 0555 $out/executable
+    chmod 0444 $out/readonly
+    ln -s parent $out/link
+    ln -s missing $out/dangling
+  '';
+  nestedChild = pkgs.runCommand "nested-module-child" {} ''
+    mkdir -p $out
+    touch $out/child
+    ln -s child $out/link
+    ln -s missing $out/dangling
+  '';
+
+  nestedChecks =
+    pkgs.lib.listToAttrs (map (useSymlinks: let
+      name = "mkModuleCopyCommands-nested-${
+        if useSymlinks
+        then "symlink"
+        else "copy"
+      }";
+    in {
+      inherit name;
+      value = pkgs.runCommand "test-${name}" {} (
+        "mkdir -p $out\n"
+        + mkModuleCopyCommands {
+          inherit useSymlinks;
+          sources = {
+            "example.com/parent" = nestedParent;
+            "example.com/parent/api" = nestedChild;
+          };
+          packages = {"example.com/parent/api" = ["example.com/parent/api"];};
+        }
+        + ''
+          fail() { echo "Test '${name}' failed: $*"; exit 1; }
+          parent="$out/example.com/parent"
+          for file in parent .hidden apiclient/retained api/child api/legacy/legacy.go; do
+            [ -f "$parent/$file" ] || fail "missing $file"
+          done
+          [ ! -e "$parent/api/placeholder" ] || fail "parent placeholder leaked into child"
+          [ ! -e "$parent/api/parent.go" ] || fail "parent Go package mixed with child"
+          [ -L "$parent/api/linkedlegacy" ] && [ -f "$parent/api/linkedlegacy/package.go" ] || fail "parent-only linked subpackage lost"
+          for path in "$parent" "$parent/api"; do
+            [ -L "$path/link" ] && [ -f "$path/link" ] || fail "nested source symlink lost at $path/link"
+            [ -L "$path/dangling" ] && [ ! -e "$path/dangling" ] || fail "nested dangling symlink lost at $path"
+          done
+          ${pkgs.lib.optionalString (!useSymlinks) ''
+            [ ! -L "$parent/parent" ] && [ ! -L "$parent/api/child" ] || fail "copy mode linked regular files"
+            [ "$(readlink "$parent/dangling")" = missing ] && [ "$(readlink "$parent/api/dangling")" = missing ] || fail "copy mode changed dangling symlink targets"
+          ''}
+          ${pkgs.lib.optionalString useSymlinks ''
+            [ -L "$parent/parent" ] && [ -L "$parent/api/child" ] || fail "symlink mode copied unshared files"
+          ''}
+        ''
+      );
+    }) [false true])
+    // {
+      mkModuleCopyCommands-copy-preserves-source-symlinks = pkgs.runCommand "test-mkModuleCopyCommands-copy-preserves-source-symlinks" {} (
+        "mkdir -p $out\n"
+        + mkModuleCopyCommands {
+          sources = {
+            "example.com/parent" = nestedParent;
+            "example.com/child" = nestedChild;
+          };
+          useSymlinks = false;
+        }
+        + ''
+          fail() { echo "Test 'mkModuleCopyCommands-copy-preserves-source-symlinks' failed: $*"; exit 1; }
+          for path in "$out/example.com/parent" "$out/example.com/child"; do
+            [ -L "$path/link" ] && [ -f "$path/link" ] || fail "source symlink lost at $path/link"
+            [ -L "$path/dangling" ] && [ "$(readlink "$path/dangling")" = missing ] || fail "dangling symlink changed at $path"
+          done
+          [ "$(readlink "$out/example.com/parent/link")" = parent ] && [ "$(readlink "$out/example.com/child/link")" = child ] || fail "relative symlink targets changed"
+        ''
+      );
+      mkModuleCopyCommands-copy-preserves-file-modes = pkgs.runCommand "test-mkModuleCopyCommands-copy-preserves-file-modes" {} (
+        "mkdir -p $out\n"
+        + mkModuleCopyCommands {
+          sources = {
+            "example.com/parent" = nestedParent;
+            "example.com/parent/api" = nestedChild;
+          };
+          packages = {"example.com/parent/api" = ["example.com/parent/api"];};
+          useSymlinks = false;
+        }
+        + ''
+          for file in executable readonly; do
+            expected=$(stat -c %a ${nestedParent}/"$file")
+            actual=$(stat -c %a "$out/example.com/parent/$file")
+            if [ "$actual" != "$expected" ]; then
+              echo "Test 'mkModuleCopyCommands-copy-preserves-file-modes' failed: $file mode $actual, expected $expected"
+              exit 1
+            fi
+          done
+        ''
+      );
+    }
+    // pkgs.lib.genAttrs [
+      "nestedModules-application-builds-copy"
+      "nestedModules-application-builds-symlink"
+      "nestedModules-workspace-builds-copy"
+      "nestedModules-workspace-builds-symlink"
+    ] (name: let
+      workspace = pkgs.lib.hasInfix "-workspace-" name;
+      copy = pkgs.lib.hasSuffix "-copy" name;
+      fixture = ./fixtures/nested-modules;
+      drv =
+        (
+          if workspace
+          then pkgs.buildGoWorkspace
+          else pkgs.buildGoApplication
+        ) {
+          pname = "nested-app";
+          version = "0.1.0";
+          src =
+            if workspace
+            then fixture
+            else fixture + "/app";
+          subPackages =
+            if workspace
+            then ["app"]
+            else ["."];
+          go = go-bin.fromGoMod (
+            if copy
+            then fixture + "/app/go.mod"
+            else ./fixtures/host-tool-app/go.mod
+          );
+          localReplaces = {
+            "example.com/nested" = fixture + "/parent";
+            "example.com/nested/api" = fixture + "/api";
+            "github.com/go-ini/ini/testdata" = fixture + "/child";
+          };
+        };
+    in
+      pkgs.runCommand "test-${name}" {} ''
+        actual=$(${drv}/bin/nested-app)
+        [ "$actual" = "DEFAULT local-child parent child-api retained-legacy retained-apiclient" ] || {
+          echo "Test '${name}' failed: unexpected compiled module output: $actual"
+          exit 1
+        }
+        touch $out
+      '')
+    // pkgs.lib.genAttrs [
+      "mkModuleCopyCommands-intermediate-symlink-copy"
+      "mkModuleCopyCommands-intermediate-symlink-symlink"
+      "mkModuleCopyCommands-intermediate-dangling-copy"
+      "mkModuleCopyCommands-intermediate-dangling-symlink"
+      "mkModuleCopyCommands-intermediate-ancestor-copy"
+      "mkModuleCopyCommands-intermediate-ancestor-symlink"
+    ] (name: let
+      dangling = pkgs.lib.hasInfix "-dangling-" name;
+      ancestor = pkgs.lib.hasInfix "-ancestor-" name;
+      target = pkgs.runCommand "intermediate-symlink-target" {} ''
+        mkdir -p $out/api
+        echo sibling > $out/sibling
+        echo placeholder > $out/api/placeholder
+      '';
+      linkTarget =
+        if ancestor
+        then "."
+        else "${target}${pkgs.lib.optionalString dangling "/missing"}";
+      source =
+        pkgs.runCommand "intermediate-symlink-parent-${
+          if ancestor
+          then "ancestor"
+          else if dangling
+          then "dangling"
+          else "valid"
+        }" {} ''
+          mkdir -p $out
+          ${pkgs.lib.optionalString ancestor "cp -r ${target}/. $out/"}
+          ln -s ${linkTarget} $out/internal
+        '';
+      originalTarget =
+        if ancestor
+        then source
+        else target;
+    in
+      pkgs.runCommand "test-${name}" {} (
+        "mkdir -p $out\n"
+        + mkModuleCopyCommands {
+          sources = {
+            "example.com/parent" = source;
+            "example.com/parent/internal/api" = nestedChild;
+          };
+          packages = {"example.com/parent/internal/api" = ["example.com/parent/internal/api"];};
+          useSymlinks = pkgs.lib.hasSuffix "-symlink" name;
+        }
+        + ''
+          fail() { echo "Test '${name}' failed: $*"; exit 1; }
+          internal="$out/example.com/parent/internal"
+          [ -f "$internal/api/child" ] || fail "nested child missing"
+          [ ! -e "$internal/api/placeholder" ] || fail "parent placeholder leaked into child"
+          [ "$(readlink ${source}/internal)" = ${pkgs.lib.escapeShellArg linkTarget} ] || fail "original parent symlink changed"
+          [ "$(cat ${originalTarget}/sibling)" = sibling ] && [ "$(cat ${originalTarget}/api/placeholder)" = placeholder ] || fail "original target files changed"
+          [ ! -e ${originalTarget}/api/child ] && [ ! -e ${originalTarget}/missing ] || fail "wrote into original target"
+          ${pkgs.lib.optionalString (!dangling) ''
+            [ "$(cat "$internal/sibling")" = sibling ] || fail "intermediate symlink target's sibling lost"
+          ''}
+        ''
+      ));
 in {
   # excludedPackages - no exclusions returns basePackages unchanged
   testPackages-no-exclusions = testTestPackages "testPackages-no-exclusions" {
@@ -360,4 +580,21 @@ in {
         fi
       ''
     );
+  inherit
+    (nestedChecks)
+    mkModuleCopyCommands-nested-copy
+    mkModuleCopyCommands-nested-symlink
+    mkModuleCopyCommands-copy-preserves-source-symlinks
+    mkModuleCopyCommands-copy-preserves-file-modes
+    nestedModules-application-builds-copy
+    nestedModules-application-builds-symlink
+    nestedModules-workspace-builds-copy
+    nestedModules-workspace-builds-symlink
+    mkModuleCopyCommands-intermediate-symlink-copy
+    mkModuleCopyCommands-intermediate-symlink-symlink
+    mkModuleCopyCommands-intermediate-dangling-copy
+    mkModuleCopyCommands-intermediate-dangling-symlink
+    mkModuleCopyCommands-intermediate-ancestor-copy
+    mkModuleCopyCommands-intermediate-ancestor-symlink
+    ;
 }

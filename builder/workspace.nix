@@ -208,11 +208,8 @@ in {
           mkdir -p $out
         ''
         + mkModuleCopyCommands {
-          sources = externalSources;
-          inherit useSymlinks;
-        }
-        + mkModuleCopyCommands {
-          sources = localModuleSources;
+          sources = externalSources // localModuleSources;
+          packages = builtins.mapAttrs (_: meta: meta.packages or []) allModules;
           inherit useSymlinks;
         }
         + ''
