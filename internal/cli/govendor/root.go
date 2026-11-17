@@ -7,10 +7,10 @@ import (
 	"io"
 
 	"charm.land/lipgloss/v2"
+	"github.com/purpleclay/go-overlay/internal/generate"
 	"github.com/purpleclay/go-overlay/internal/progress"
 	"github.com/purpleclay/go-overlay/internal/resolve"
 	"github.com/purpleclay/go-overlay/internal/ui"
-	"github.com/purpleclay/go-overlay/internal/vendor"
 	"github.com/purpleclay/x/cli"
 	"github.com/purpleclay/x/theme"
 	"github.com/spf13/cobra"
@@ -34,13 +34,13 @@ const (
 // error, which it only does when at least one result is a failure — the
 // exitError fallback below guards that invariant rather than mislabelling an
 // unexpected all-success set as drift.
-func resultsExitCode(results []vendor.Result) int {
+func resultsExitCode(results []generate.Result) int {
 	sawDrift := false
 	for _, r := range results {
-		if r.Status == vendor.StatusError {
+		if r.Status == generate.StatusError {
 			return exitError
 		}
-		if r.Status == vendor.StatusDrift || r.Status == vendor.StatusMissing {
+		if r.Status == generate.StatusDrift || r.Status == generate.StatusMissing {
 			sawDrift = true
 		}
 	}
@@ -108,22 +108,22 @@ func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, 
 				return fmt.Errorf("--workspace requires --check")
 			}
 
-			var opts []vendor.Option
+			var opts []generate.Option
 
 			if len(args) > 0 {
-				opts = append(opts, vendor.WithPaths(args...))
+				opts = append(opts, generate.WithPaths(args...))
 			}
 
 			if check {
-				opts = append(opts, vendor.WithDriftDetection())
+				opts = append(opts, generate.WithDriftDetection())
 			}
 
 			if recursive {
-				opts = append(opts, vendor.WithRecursive(depth))
+				opts = append(opts, generate.WithRecursive(depth))
 			}
 
 			if workspace {
-				opts = append(opts, vendor.WithWorkspace())
+				opts = append(opts, generate.WithWorkspace())
 			}
 
 			if len(includePlatforms) > 0 {
@@ -136,7 +136,7 @@ func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, 
 			}
 
 			resolver := resolve.New(resolve.OSExecutor{}, resolve.WithReporter(reporter))
-			v := vendor.NewVendor(resolver, opts...)
+			v := generate.NewVendor(resolver, opts...)
 			results, err := v.VendorFiles(cmd.Context())
 			if len(results) > 0 {
 				tableRendered = true
@@ -178,7 +178,7 @@ func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, 
 		cli.WithErrorHandler(func(w io.Writer, t cli.Theme, err error) {
 			// The results table already reports per-result failures; printing
 			// the generic sentinel underneath it adds nothing new.
-			if tableRendered && errors.Is(err, vendor.ErrVendorFailed) {
+			if tableRendered && errors.Is(err, generate.ErrVendorFailed) {
 				return
 			}
 			cli.DefaultErrorHandler(w, t, err)
