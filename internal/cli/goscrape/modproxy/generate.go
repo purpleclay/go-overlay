@@ -17,8 +17,8 @@ import (
 
 	"github.com/nix-community/go-nix/pkg/nar"
 	"github.com/purpleclay/conker/pool"
-	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/nixfile"
 	"github.com/purpleclay/go-overlay/internal/proxy"
 	"github.com/purpleclay/go-overlay/internal/resolve"
 	"github.com/purpleclay/go-overlay/internal/version"
@@ -292,7 +292,7 @@ func newGenerateCmd() *cobra.Command {
 			})
 
 			for _, m := range results {
-				if err := manifest.Write(m, outputDir, cmd.OutOrStdout()); err != nil {
+				if err := nixfile.Write(m, outputDir, cmd.OutOrStdout()); err != nil {
 					return err
 				}
 			}

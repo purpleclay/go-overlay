@@ -15,7 +15,7 @@ import (
 	"github.com/purpleclay/chomp"
 	"github.com/purpleclay/conker/pool"
 	"github.com/purpleclay/go-overlay/internal/github"
-	"github.com/purpleclay/go-overlay/internal/manifest"
+	"github.com/purpleclay/go-overlay/internal/nixfile"
 	"github.com/purpleclay/go-overlay/internal/scrape"
 	"github.com/purpleclay/go-overlay/internal/version"
 	"github.com/spf13/cobra"
@@ -147,7 +147,7 @@ func writeManifests(results []*Scrape, outputDir string, w io.Writer) error {
 	}
 
 	for _, s := range results {
-		if err := manifest.Write(s, outputDir, w); err != nil {
+		if err := nixfile.Write(s, outputDir, w); err != nil {
 			return err
 		}
 	}
