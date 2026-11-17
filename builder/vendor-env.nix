@@ -28,54 +28,84 @@
       + optionalString (packages != "") ("\n" + packages)
     else mkRemoteModuleEntry goPackagePath meta;
 
-  # Generate shell commands to copy fetched modules into $out directory.
-  # Handles overlapping module paths by processing deepest paths first and
-  # using symlinks where possible for performance.
+  # Each module supplies the files in its declared packages. A child replaces
+  # parent files in shared package directories, retaining parent-only subpackages.
   mkModuleCopyCommands = {
     sources,
+    packages ? {},
     useSymlinks ? true,
   }: let
+    # attrNames orders parents before children; reversing it selects the deepest
+    # declared ancestor first when looking up a child's parent module.
     pkgPaths = builtins.attrNames sources;
-    # Lexicographic sort puts prefix paths before longer paths within the same domain.
-    # Reversing ensures deeper paths (e.g. foo/bar/v2) are placed before their parent
-    # (foo/bar), so the symlink for the parent is never created before its children
-    # need to write into it.
-    pkgPathsSortedByDepth = lib.lists.reverseList (lib.lists.sort (p: q: p < q) pkgPaths);
-  in ''
-    shopt -s dotglob
+    reversedPaths = lib.reverseList pkgPaths;
+    copyFlags =
+      if useSymlinks
+      then "-s"
+      else "--reflink=auto";
 
-    ${concatMapStringsSep "\n" (
-        goPackagePath: let
-          modSrc = sources.${goPackagePath};
+    clearParentPackages = packagePaths:
+      concatMapStringsSep "\n" (package: ''
+        package_dir="$out"/${escapeShellArg package}
+        if [ -d "$package_dir" ]; then
+          find "$package_dir" -mindepth 1 -maxdepth 1 ! -xtype d -delete
+        fi
+      '')
+      packagePaths;
 
-          pkgPath = escapeShellArg goPackagePath;
-        in
-          if useSymlinks
-          then ''
-            pkg_path=${pkgPath}
-
-            if [ -d "$out/$pkg_path" ]; then
-                cp -rs --update=none ${modSrc}/* "$out/$pkg_path/"
-            else
-                mkdir -p "$out/$(dirname "$pkg_path")"
-                ln -s ${modSrc} "$out/$pkg_path"
+    prepareParentDirectories = parentModule: packagePaths:
+      concatMapStringsSep "\n" (package: let
+        parts = lib.splitString "/" (lib.removePrefix "${parentModule}/" package);
+      in ''
+        parent_dir="$out"/${escapeShellArg parentModule}
+        parent_src=${sources.${parentModule}}
+        # Source directory links need real output directories before merging.
+        for path_part in ${concatMapStringsSep " " escapeShellArg parts}; do
+          parent_dir="$parent_dir/$path_part"
+          parent_src="$parent_src/$path_part"
+          if [ -L "$parent_dir" ]; then
+            source_dir=$(readlink -m "$parent_src")
+            rm "$parent_dir"
+            mkdir "$parent_dir"
+            if [ -d "$source_dir" ]; then
+              cp -r ${copyFlags} "$source_dir/." "$parent_dir"
+              find "$parent_dir" -type d -exec chmod u+w {} +
             fi
+          fi
+        done
+      '')
+      packagePaths;
+  in
+    concatMapStringsSep "\n" (
+      goPackagePath: let
+        modSrc = sources.${goPackagePath};
+        pkgPath = escapeShellArg goPackagePath;
+        hasChildren = builtins.any (lib.hasPrefix "${goPackagePath}/") pkgPaths;
+        parentModule = lib.findFirst (path: lib.hasPrefix "${path}/" goPackagePath) null reversedPaths;
+        modulePackages = packages.${goPackagePath} or [];
+      in ''
+        pkg_path=${pkgPath}
+        ${optionalString (parentModule != null) (
+          prepareParentDirectories parentModule (lib.unique ([goPackagePath] ++ modulePackages))
+          + clearParentPackages modulePackages
+        )}
+        ${
+          if useSymlinks && !hasChildren && parentModule == null
+          then ''
+            mkdir -p "$out/$(dirname "$pkg_path")"
+            ln -s ${modSrc} "$out/$pkg_path"
           ''
           else ''
-            pkg_path=${pkgPath}
-
-            if [ -d "$out/$pkg_path" ]; then
-                cp -r --reflink=auto --update=none ${modSrc}/* "$out/$pkg_path/"
-            else
-                mkdir -p "$out/$(dirname "$pkg_path")"
-                cp -r --reflink=auto ${modSrc} "$out/$pkg_path"
-            fi
+            mkdir -p "$out/$pkg_path"
+            cp -r --remove-destination ${copyFlags} ${modSrc}/. "$out/$pkg_path/"
+            ${optionalString (hasChildren || parentModule != null) ''
+              find "$out/$pkg_path" -type d -exec chmod u+w {} +
+            ''}
           ''
-      )
-      pkgPathsSortedByDepth}
-
-    shopt -u dotglob
-  '';
+        }
+      ''
+    )
+    pkgPaths;
 in {
   inherit mkModuleCopyCommands;
 
@@ -133,8 +163,6 @@ in {
       + optionalString (localTrailers != "") ("\n" + localTrailers)
       + optionalString (remoteTrailers != "") ("\n" + remoteTrailers);
 
-    remoteCopyCommands = mkModuleCopyCommands {inherit sources useSymlinks;};
-
     localModuleSources =
       builtins.mapAttrs (
         goPackagePath: meta:
@@ -159,12 +187,9 @@ in {
     ''
       mkdir -p $out
 
-      # Copy remote modules
-      ${remoteCopyCommands}
-
-      # Copy local modules from source tree
       ${mkModuleCopyCommands {
-        sources = localModuleSources;
+        sources = sources // localModuleSources;
+        packages = builtins.mapAttrs (_: meta: meta.packages or []) modules;
         inherit useSymlinks;
       }}
 
