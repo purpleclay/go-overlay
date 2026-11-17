@@ -1,11 +1,11 @@
-package vendor_test
+package generate_test
 
 import (
 	"bytes"
 	"testing"
 
+	"github.com/purpleclay/go-overlay/internal/generate"
 	"github.com/purpleclay/go-overlay/internal/mod"
-	"github.com/purpleclay/go-overlay/internal/vendor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +20,7 @@ func TestParse(t *testing.T) {
     go = "1.18"
     packages = ["github.com/BurntSushi/toml"]`)
 
-	m, err := vendor.Parse(data)
+	m, err := generate.Parse(data)
 	require.NoError(t, err)
 
 	assert.Equal(t, 3, m.Schema)
@@ -50,7 +50,7 @@ func TestParseWithWorkspace(t *testing.T) {
     go = "1.17"
     packages = ["github.com/fatih/color"]`)
 
-	m, err := vendor.Parse(data)
+	m, err := generate.Parse(data)
 	require.NoError(t, err)
 
 	assert.Equal(t, 3, m.Schema)
@@ -117,7 +117,7 @@ func TestParseValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := vendor.Parse([]byte(tt.data))
+			_, err := generate.Parse([]byte(tt.data))
 			require.Error(t, err)
 			assert.ErrorContains(t, err, tt.wantErr)
 		})
@@ -125,7 +125,7 @@ func TestParseValidation(t *testing.T) {
 }
 
 func TestWriteTo(t *testing.T) {
-	manifest := vendor.New(
+	manifest := generate.New(
 		[]mod.ModuleConfig{
 			{
 				Path:      "github.com/BurntSushi/toml",
@@ -149,7 +149,7 @@ func TestWriteTo(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(buf.Len()), n)
 
-	parsed, err := vendor.Parse(buf.Bytes())
+	parsed, err := generate.Parse(buf.Bytes())
 	require.NoError(t, err)
 	assert.Equal(t, manifest.Schema, parsed.Schema)
 	assert.Equal(t, manifest.Workspace, parsed.Workspace)

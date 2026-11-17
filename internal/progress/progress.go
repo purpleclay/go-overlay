@@ -33,7 +33,7 @@ const (
 	Hash
 	Local
 	// Write covers manifest writing, which happens in the vendor package
-	// rather than the resolver. Nothing reports it yet: vendor.Vendor has
+	// rather than the resolver. Nothing reports it yet: generate.Vendor has
 	// no Reporter plumbed through to it.
 	Write
 )

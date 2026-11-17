@@ -4,7 +4,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/muesli/reflow/wordwrap"
-	"github.com/purpleclay/go-overlay/internal/vendor"
+	"github.com/purpleclay/go-overlay/internal/generate"
 )
 
 // ANSI color codes matching the standard palette used by the theme package.
@@ -27,11 +27,11 @@ var (
 const messageWrapWidth = 90
 
 // StatusSymbol returns a coloured symbol for the given status.
-func StatusSymbol(s vendor.Status) string {
+func StatusSymbol(s generate.Status) string {
 	switch s {
-	case vendor.StatusOK, vendor.StatusGenerated:
+	case generate.StatusOK, generate.StatusGenerated:
 		return greenStyle.Render("✓")
-	case vendor.StatusDrift, vendor.StatusMissing, vendor.StatusError:
+	case generate.StatusDrift, generate.StatusMissing, generate.StatusError:
 		return redStyle.Render("✗")
 	default:
 		return " "
@@ -39,11 +39,11 @@ func StatusSymbol(s vendor.Status) string {
 }
 
 // StatusLabel returns a coloured label for the given status.
-func StatusLabel(s vendor.Status) string {
+func StatusLabel(s generate.Status) string {
 	switch s {
-	case vendor.StatusOK, vendor.StatusGenerated:
+	case generate.StatusOK, generate.StatusGenerated:
 		return greenStyle.Render(string(s))
-	case vendor.StatusDrift, vendor.StatusMissing, vendor.StatusError:
+	case generate.StatusDrift, generate.StatusMissing, generate.StatusError:
 		return redStyle.Render(string(s))
 	default:
 		return string(s)
@@ -52,7 +52,7 @@ func StatusLabel(s vendor.Status) string {
 
 // RenderResultsTable formats a slice of results as a bordered terminal table
 // with coloured status indicators.
-func RenderResultsTable(results []vendor.Result) string {
+func RenderResultsTable(results []generate.Result) string {
 	var rows [][]string
 	for _, r := range results {
 		status := StatusSymbol(r.Status) + " " + StatusLabel(r.Status)
