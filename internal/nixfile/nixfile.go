@@ -1,4 +1,4 @@
-package manifest
+package nixfile
 
 import (
 	"fmt"
@@ -7,15 +7,15 @@ import (
 	"path/filepath"
 )
 
-// Manifest is implemented by any type that can render itself as a Nix file.
-type Manifest interface {
+// File is implemented by any type that can render itself as a Nix file.
+type File interface {
 	Filename() string
 	String() string
 }
 
 // Write writes m to a file under outputDir if set, otherwise prints to w.
 // If outputDir does not exist it is created automatically.
-func Write(m Manifest, outputDir string, w io.Writer) error {
+func Write(m File, outputDir string, w io.Writer) error {
 	if outputDir == "" {
 		fmt.Fprint(w, m.String())
 		return nil
