@@ -15,6 +15,7 @@
 in {
   # Build a single-module Go application from a govendor.toml manifest.
   # Defaults to src + "/govendor.toml" — run `govendor` to generate it.
+  # Builds that share a manifest and go can share one mkVendorEnv result as vendorEnv.
   # For projects using `go mod vendor`, use buildGoVendoredApplication instead.
   buildGoApplication = {
     pname,
@@ -22,6 +23,7 @@ in {
     src,
     modules ? src + "/govendor.toml", # Path to govendor.toml manifest
     go,
+    vendorEnv ? null, # mkVendorEnv result for modules and go; assembled here when null
     subPackages ? ["."],
     ldflags ? [],
     tags ? [],
@@ -55,9 +57,18 @@ in {
               }
         '';
 
-    vendorEnv = mkVendorEnv {
-      inherit go manifest src localReplaces netrcFile GOPRIVATE GONOSUMDB GONOPROXY;
-    };
+    # These options only shape the vendor environment. Ignoring one beside a
+    # prebuilt environment would build something other than what was asked
+    # for, so one set to anything but its default of {}, null or "" is refused.
+    vendorOptions = {inherit localReplaces netrcFile GOPRIVATE GONOSUMDB GONOPROXY;};
+    refusedOptions = builtins.attrNames (lib.filterAttrs (_: value: !builtins.elem value [{} null ""]) vendorOptions);
+
+    vendor =
+      if vendorEnv == null
+      then mkVendorEnv ({inherit go manifest src;} // vendorOptions)
+      else if refusedOptions == []
+      then vendorEnv
+      else throw "go-overlay: vendorEnv cannot be combined with ${lib.concatStringsSep ", " refusedOptions}; pass them to mkVendorEnv instead";
 
     configurePhase =
       attrs.configurePhase or ''
@@ -68,9 +79,9 @@ in {
 
         rm -rf vendor
         ${
-          if vendorEnv.useSymlinks
-          then "cp --no-preserve=mode -rs ${vendorEnv} vendor"
-          else "cp -r --reflink=auto ${vendorEnv} vendor"
+          if vendor.useSymlinks
+          then "cp --no-preserve=mode -rs ${vendor} vendor"
+          else "cp -r --reflink=auto ${vendor} vendor"
         }
         chmod -R u+w vendor
 
@@ -86,14 +97,17 @@ in {
     hostTools = map (pkg:
       mkHostTool {
         inherit src go pkg;
-        inherit (vendorEnv) useSymlinks;
-        vendorEnv = vendorEnv;
+        inherit (vendor) useSymlinks;
+        vendorEnv = vendor;
         version = manifest.tool.${pkg}.version;
         GOWORK = "off";
       })
     (builtins.attrNames (manifest.tool or {}));
 
-    passthru = {inherit go vendorEnv hostTools;};
+    passthru = {
+      inherit go hostTools;
+      vendorEnv = vendor;
+    };
   in
     stdenv.mkDerivation (
       builtins.removeAttrs attrs commonRemovedAttrs
