@@ -264,6 +264,8 @@
         "mkdir -p $out\n"
         + mkModuleCopyCommands {
           sources = {
+            # A shallower declared prefix: the child's parent is still example.com/parent.
+            "example.com" = pkgs.emptyDirectory;
             "example.com/parent" = source;
             "example.com/parent/internal/api" = nestedChild;
           };

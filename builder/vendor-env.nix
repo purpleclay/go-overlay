@@ -35,14 +35,24 @@
     packages ? {},
     useSymlinks ? true,
   }: let
-    # attrNames orders parents before children; reversing it selects the deepest
-    # declared ancestor first when looking up a child's parent module.
+    # attrNames orders parents before children, so a parent's files are in
+    # place before its children merge into its directories.
     pkgPaths = builtins.attrNames sources;
-    reversedPaths = lib.reverseList pkgPaths;
     copyFlags =
       if useSymlinks
       then "-s"
       else "--reflink=auto";
+
+    # A module path's proper prefixes, deepest first: example.com/a/b gives
+    # example.com/a, then example.com. Walking them costs the depth of one
+    # path; scanning every module path would cost the size of the manifest.
+    prefixesOf = goPackagePath: let
+      parts = lib.splitString "/" goPackagePath;
+    in
+      map (n: lib.concatStringsSep "/" (lib.take n parts)) (lib.reverseList (lib.range 1 (builtins.length parts - 1)));
+
+    # Every proper prefix of every module path; a module with children is one of them.
+    allPrefixes = lib.genAttrs (builtins.concatMap prefixesOf pkgPaths) (_: null);
 
     clearParentPackages = packagePaths:
       concatMapStringsSep "\n" (package: ''
@@ -80,8 +90,10 @@
       goPackagePath: let
         modSrc = sources.${goPackagePath};
         pkgPath = escapeShellArg goPackagePath;
-        hasChildren = builtins.any (lib.hasPrefix "${goPackagePath}/") pkgPaths;
-        parentModule = lib.findFirst (path: lib.hasPrefix "${path}/" goPackagePath) null reversedPaths;
+        hasChildren = allPrefixes ? ${goPackagePath};
+        # The deepest declared prefix; the paths between it and this module
+        # need not be modules.
+        parentModule = lib.findFirst (path: sources ? ${path}) null (prefixesOf goPackagePath);
         modulePackages = packages.${goPackagePath} or [];
       in ''
         pkg_path=${pkgPath}
