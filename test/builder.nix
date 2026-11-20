@@ -283,6 +283,25 @@
           ''}
         ''
       ));
+
+  # The host-tool-app fixture and the vendor environment the builder would
+  # assemble for it, shared by the vendorEnv checks below.
+  vendorEnvApp = let
+    src = ./fixtures/host-tool-app;
+    go = go-bin.fromGoMod (src + "/go.mod");
+    args = {
+      pname = "host-tool-app";
+      version = "0.1.0";
+      inherit src go;
+    };
+  in {
+    inherit src;
+    vendorEnv = pkgs.mkVendorEnv {
+      inherit go src;
+      manifest = builtins.fromTOML (builtins.readFile (src + "/govendor.toml"));
+    };
+    build = extra: pkgs.buildGoApplication (args // extra);
+  };
 in {
   # excludedPackages - no exclusions returns basePackages unchanged
   testPackages-no-exclusions = testTestPackages "testPackages-no-exclusions" {
@@ -518,6 +537,87 @@ in {
       };
   in
     assertHostToolDrvPathStable "hostTool-workspace-drvpath-stable-across-unrelated-changes" mkDrv baseSrc touchedSrc;
+
+  # Builds of one manifest and go may share one mkVendorEnv result as vendorEnv.
+  # An environment equal to the one the builder would assemble leaves the
+  # program, its vendor environment and its host tools unchanged.
+  vendorEnv-application-shared-unchanged = let
+    inherit (vendorEnvApp) vendorEnv build;
+    drvPaths = drv: [drv.drvPath drv.vendorEnv.drvPath (builtins.head drv.hostTools).drvPath];
+  in
+    assertEq "vendorEnv-application-shared-unchanged" (drvPaths (build {})) (drvPaths (build {inherit vendorEnv;}));
+
+  # A null vendorEnv is the default: the builder assembles its own environment.
+  vendorEnv-application-null-assembles =
+    assertEq "vendorEnv-application-null-assembles" (vendorEnvApp.build {}).drvPath (vendorEnvApp.build {vendorEnv = null;}).drvPath;
+
+  # A different environment reaches the configure phase of the program and of
+  # its host tool, and is the one the build reports, so the builder uses the
+  # environment it is given instead of assembling its own.
+  vendorEnv-application-uses-given-environment = let
+    vendorEnv = pkgs.runCommand "given-vendor-env" {passthru.useSymlinks = true;} "mkdir $out";
+    given = vendorEnvApp.build {inherit vendorEnv;};
+    own = vendorEnvApp.build {};
+    hostTool = drv: builtins.head drv.hostTools;
+  in
+    assertEq "vendorEnv-application-uses-given-environment" {
+      program = true;
+      hostTool = true;
+      passthru = true;
+    } {
+      program = given.configurePhase != own.configurePhase;
+      hostTool = (hostTool given).configurePhase != (hostTool own).configurePhase;
+      passthru = given.vendorEnv == vendorEnv;
+    };
+
+  # The options that only shape a vendor environment cannot change a prebuilt
+  # one, so the builder refuses each of them beside it. At their defaults they
+  # ask for nothing, so a caller may still pass them.
+  vendorEnv-application-refuses-vendor-options = let
+    inherit (vendorEnvApp) src vendorEnv build;
+    refused = options: !(builtins.tryEval (build ({inherit vendorEnv;} // options)).drvPath).success;
+  in
+    assertEq "vendorEnv-application-refuses-vendor-options" {
+      defaults = false;
+      localReplaces = true;
+      netrcFile = true;
+      GOPRIVATE = true;
+      GONOSUMDB = true;
+      GONOPROXY = true;
+    } {
+      defaults = refused {
+        localReplaces = {};
+        netrcFile = null;
+        GOPRIVATE = "";
+        GONOSUMDB = "";
+        GONOPROXY = "";
+      };
+      localReplaces = refused {localReplaces."example.com/local" = src;};
+      netrcFile = refused {netrcFile = src + "/go.mod";};
+      GOPRIVATE = refused {GOPRIVATE = "example.com";};
+      GONOSUMDB = refused {GONOSUMDB = "example.com";};
+      GONOPROXY = refused {GONOPROXY = "example.com";};
+    };
+
+  vendorEnv-application-refuses-incompatible-mode = let
+    check = version: useSymlinks:
+      (builtins.tryEval
+        (vendorEnvApp.build {
+          go = (go-bin.fromGoMod (./fixtures/host-tool-app + "/go.mod")) // {inherit version;};
+          vendorEnv = pkgs.runCommand "mode-vendor-env" {passthru = {inherit useSymlinks;};} "mkdir $out";
+        }).drvPath).success;
+  in
+    assertEq "vendorEnv-application-refuses-incompatible-mode" {
+      copies = true;
+      symlinks = true;
+      copiesWithNewGo = false;
+      symlinksWithOldGo = false;
+    } {
+      copies = check "1.24.13" false;
+      symlinks = check "1.27.4" true;
+      copiesWithNewGo = check "1.27.4" false;
+      symlinksWithOldGo = check "1.24.13" true;
+    };
 
   mkModuleCopyCommands-works-with-tildes-symlink = let
     inherit (import ../builder/modules-txt.nix {inherit (pkgs) lib;}) mkAnnotation mkRemoteModuleEntry mkRemoteReplaceTrailers isUnusedReplace;
