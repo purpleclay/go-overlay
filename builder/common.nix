@@ -7,6 +7,7 @@ in {
   # Builder-owned parameters stripped from attrs before passing to stdenv.mkDerivation.
   commonRemovedAttrs = [
     "modules"
+    "vendorEnv"
     "subPackages"
     "ldflags"
     "tags"

@@ -180,6 +180,7 @@ Build a single-module Go application using vendored dependencies.
 | `src`              | required                 | Source directory                                                                 |
 | `go`               | required                 | Go derivation from go-overlay                                                    |
 | `modules`          | `src + "/govendor.toml"` | Path to govendor.toml manifest                                                   |
+| `vendorEnv`        | `null`                   | `mkVendorEnv` result for `modules` and `go`; built from them when `null`         |
 | `subPackages`      | `["."]`                  | Packages to build (relative to src). Does not affect test scope.                 |
 | `ldflags`          | `[]`                     | Linker flags                                                                     |
 | `tags`             | `[]`                     | Build tags                                                                       |
@@ -289,6 +290,36 @@ Create a vendor directory with `modules.txt` from a parsed `govendor.toml` manif
 | `GOPRIVATE`     | `""`     | Module path prefixes to bypass the proxy and checksum DB   |
 | `GONOSUMDB`     | `""`     | Module path prefixes to bypass the checksum DB only        |
 | `GONOPROXY`     | `""`     | Module path prefixes to bypass the proxy only              |
+
+Builds of one manifest and `go` can share a single environment. Pass the result to each build as `buildGoApplication`'s `vendorEnv`, and evaluation assembles it once instead of once per build:
+
+```nix
+let
+  vendorEnv = pkgs.mkVendorEnv {
+    inherit go;
+    manifest = builtins.fromTOML (builtins.readFile ./govendor.toml);
+  };
+in {
+  api = pkgs.buildGoApplication {
+    inherit go vendorEnv;
+    pname = "api";
+    version = "0.1.0";
+    src = ./.;
+    subPackages = ["cmd/api"];
+  };
+  worker = pkgs.buildGoApplication {
+    inherit go vendorEnv;
+    pname = "worker";
+    version = "0.1.0";
+    src = ./.;
+    subPackages = ["cmd/worker"];
+  };
+}
+```
+
+A build's environment is its `vendorEnv` attribute, so a second build can also take the first one's: `vendorEnv = api.vendorEnv`.
+
+A build given `vendorEnv` refuses `localReplaces`, `netrcFile`, `GOPRIVATE`, `GONOSUMDB` and `GONOPROXY` set to anything but their defaults, because they only shape the environment. Pass them to `mkVendorEnv` instead.
 
 ## Go Module Tool Directives
 
