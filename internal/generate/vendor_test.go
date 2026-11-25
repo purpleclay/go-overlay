@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/purpleclay/go-overlay/internal/generate"
-	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/gocmd"
+	"github.com/purpleclay/go-overlay/internal/gomod"
+	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/purpleclay/go-overlay/internal/resolve"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,18 +35,18 @@ func TestVendor(t *testing.T) {
 		{name: "with-excludes", dir: "testdata/with-excludes"},
 	}
 
-	resolver := resolve.New(resolve.OSExecutor{})
+	resolver := resolve.New(gocmd.OSExecutor{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			goModPath := filepath.Join(tt.dir, "go.mod")
-			goMod, err := mod.ParseGoModFile(goModPath)
+			goMod, err := gomod.Parse(goModPath)
 			require.NoError(t, err)
 
 			deps, err := resolver.ResolveModule(context.Background(), goMod, nil)
 			require.NoError(t, err)
 
-			var tool mod.ToolConfig
+			var tool manifest.Tools
 			if len(goMod.Tools) > 0 {
 				pkgToVersion := make(map[string]string)
 				for _, dep := range deps {
@@ -52,15 +54,15 @@ func TestVendor(t *testing.T) {
 						pkgToVersion[pkg] = dep.Version
 					}
 				}
-				tool = make(mod.ToolConfig, len(goMod.Tools))
+				tool = make(manifest.Tools, len(goMod.Tools))
 				for _, pkg := range goMod.Tools {
-					tool[pkg] = mod.ToolEntry{Version: pkgToVersion[pkg]}
+					tool[pkg] = manifest.Tool{Version: pkgToVersion[pkg]}
 				}
 			}
-			manifest := generate.New(deps, nil, tool, goMod.Excludes)
+			m := manifest.New(deps, nil, tool, goMod.Excludes)
 
 			var buf bytes.Buffer
-			_, err = manifest.WriteTo(&buf)
+			_, err = m.WriteTo(&buf)
 			require.NoError(t, err)
 
 			golden.Assert(t, buf.String(), tt.name+"/govendor.golden")
@@ -81,12 +83,12 @@ func TestVendorWorkspace(t *testing.T) {
 		{name: "workspace-local-replace", dir: "testdata/workspace-local-replace"},
 	}
 
-	resolver := resolve.New(resolve.OSExecutor{})
+	resolver := resolve.New(gocmd.OSExecutor{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			goWorkPath := filepath.Join(tt.dir, "go.work")
-			goWork, err := mod.ParseGoWorkFile(goWorkPath)
+			goWork, err := gomod.ParseWork(goWorkPath)
 			require.NoError(t, err)
 
 			members, err := goWork.ParseMembers()
@@ -111,7 +113,7 @@ func TestVendorWorkspace(t *testing.T) {
 			if len(merged) > 0 {
 				excludes = merged
 			}
-			var tool mod.ToolConfig
+			var tool manifest.Tools
 			if len(allTools) > 0 {
 				pkgToVersion := make(map[string]string)
 				for _, dep := range deps {
@@ -121,16 +123,16 @@ func TestVendorWorkspace(t *testing.T) {
 				}
 				slices.Sort(allTools)
 				allTools = slices.Compact(allTools)
-				tool = make(mod.ToolConfig, len(allTools))
+				tool = make(manifest.Tools, len(allTools))
 				for _, pkg := range allTools {
-					tool[pkg] = mod.ToolEntry{Version: pkgToVersion[pkg]}
+					tool[pkg] = manifest.Tool{Version: pkgToVersion[pkg]}
 				}
 			}
 
-			manifest := generate.New(deps, goWork.WorkspaceConfig(), tool, excludes)
+			m := manifest.New(deps, goWork.WorkspaceConfig(), tool, excludes)
 
 			var buf bytes.Buffer
-			_, err = manifest.WriteTo(&buf)
+			_, err = m.WriteTo(&buf)
 			require.NoError(t, err)
 
 			golden.Assert(t, buf.String(), tt.name+"/govendor.golden")
@@ -142,14 +144,14 @@ func TestVendorWorkspace(t *testing.T) {
 // dependencies, ignoring the actual go.mod/go.work content. This lets
 // processSource and VendorFiles be exercised without network calls.
 type fakeResolver struct {
-	deps []mod.ModuleConfig
+	deps []manifest.Module
 }
 
-func (f *fakeResolver) ResolveModule(_ context.Context, _ *mod.GoModFile, _ map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
+func (f *fakeResolver) ResolveModule(_ context.Context, _ *gomod.File, _ map[string]manifest.Module) ([]manifest.Module, error) {
 	return f.deps, nil
 }
 
-func (f *fakeResolver) ResolveWorkspace(_ context.Context, _ *mod.GoWorkFile, _ []mod.WorkspaceMember, _ map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
+func (f *fakeResolver) ResolveWorkspace(_ context.Context, _ *gomod.WorkFile, _ []gomod.WorkspaceMember, _ map[string]manifest.Module) ([]manifest.Module, error) {
 	return f.deps, nil
 }
 
@@ -171,7 +173,7 @@ func vendorResults(t *testing.T, dir string, r generate.Resolver, opts ...genera
 	return results
 }
 
-var chiDep = mod.ModuleConfig{
+var chiDep = manifest.Module{
 	Path:      "github.com/go-chi/chi/v5",
 	Version:   "v5.2.2",
 	Hash:      "sha256-F+KxLJNRQxkjQCDlJ72MT/YS8cybKPsLeWOjo6HqJHU=",
@@ -179,7 +181,7 @@ var chiDep = mod.ModuleConfig{
 	Packages:  []string{"github.com/go-chi/chi/v5"},
 }
 
-var chiDepWithMiddleware = mod.ModuleConfig{
+var chiDepWithMiddleware = manifest.Module{
 	Path:      "github.com/go-chi/chi/v5",
 	Version:   "v5.2.2",
 	Hash:      "sha256-F+KxLJNRQxkjQCDlJ72MT/YS8cybKPsLeWOjo6HqJHU=",
@@ -197,24 +199,24 @@ func TestVendorWithCheck_MissingManifest(t *testing.T) {
 
 func TestVendorWithCheck_UnchangedManifest(t *testing.T) {
 	dir := setupModDir(t, nil)
-	vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDep}})
+	vendorResults(t, dir, &fakeResolver{deps: []manifest.Module{chiDep}})
 
-	results := vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDep}}, generate.WithDriftDetection())
+	results := vendorResults(t, dir, &fakeResolver{deps: []manifest.Module{chiDep}}, generate.WithDriftDetection())
 	require.Len(t, results, 1)
 	assert.Equal(t, generate.StatusOK, results[0].Status)
 }
 
 func TestVendorWithCheck_DriftPackageListChanged(t *testing.T) {
 	dir := setupModDir(t, nil)
-	vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDep}})
+	vendorResults(t, dir, &fakeResolver{deps: []manifest.Module{chiDep}})
 
-	results := vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDepWithMiddleware}}, generate.WithDriftDetection())
+	results := vendorResults(t, dir, &fakeResolver{deps: []manifest.Module{chiDepWithMiddleware}}, generate.WithDriftDetection())
 	require.Len(t, results, 1)
 	assert.Equal(t, generate.StatusDrift, results[0].Status)
 }
 
 func TestVendorWithCheck_DriftVersionChanged(t *testing.T) {
-	older := mod.ModuleConfig{
+	older := manifest.Module{
 		Path:      "github.com/go-chi/chi/v5",
 		Version:   "v5.2.1",
 		Hash:      "sha256-oldHash=",
@@ -223,9 +225,9 @@ func TestVendorWithCheck_DriftVersionChanged(t *testing.T) {
 	}
 
 	dir := setupModDir(t, nil)
-	vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{older}})
+	vendorResults(t, dir, &fakeResolver{deps: []manifest.Module{older}})
 
-	results := vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDep}}, generate.WithDriftDetection())
+	results := vendorResults(t, dir, &fakeResolver{deps: []manifest.Module{chiDep}}, generate.WithDriftDetection())
 	require.Len(t, results, 1)
 	assert.Equal(t, generate.StatusDrift, results[0].Status)
 }
@@ -253,7 +255,7 @@ func TestVendor_Schema3ManifestUpgradedToSchema4(t *testing.T) {
 
 	dir := setupModDir(t, map[string]string{"govendor.toml": schema3})
 
-	results := vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDep}})
+	results := vendorResults(t, dir, &fakeResolver{deps: []manifest.Module{chiDep}})
 	require.Len(t, results, 1)
 	assert.Equal(t, generate.StatusGenerated, results[0].Status)
 
@@ -264,23 +266,23 @@ func TestVendor_Schema3ManifestUpgradedToSchema4(t *testing.T) {
 
 func TestVendor_PackageListChangedRegenerates(t *testing.T) {
 	dir := setupModDir(t, nil)
-	vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDep}})
+	vendorResults(t, dir, &fakeResolver{deps: []manifest.Module{chiDep}})
 
-	results := vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDepWithMiddleware}})
+	results := vendorResults(t, dir, &fakeResolver{deps: []manifest.Module{chiDepWithMiddleware}})
 	require.Len(t, results, 1)
 	assert.Equal(t, generate.StatusGenerated, results[0].Status)
 
 	// Subsequent check confirms the manifest is now up to date.
-	results = vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDepWithMiddleware}}, generate.WithDriftDetection())
+	results = vendorResults(t, dir, &fakeResolver{deps: []manifest.Module{chiDepWithMiddleware}}, generate.WithDriftDetection())
 	require.Len(t, results, 1)
 	assert.Equal(t, generate.StatusOK, results[0].Status)
 }
 
 func TestVendor_UnchangedManifestSkipsWrite(t *testing.T) {
 	dir := setupModDir(t, nil)
-	vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDep}})
+	vendorResults(t, dir, &fakeResolver{deps: []manifest.Module{chiDep}})
 
-	results := vendorResults(t, dir, &fakeResolver{deps: []mod.ModuleConfig{chiDep}})
+	results := vendorResults(t, dir, &fakeResolver{deps: []manifest.Module{chiDep}})
 	require.Len(t, results, 1)
 	assert.Equal(t, generate.StatusOK, results[0].Status)
 }

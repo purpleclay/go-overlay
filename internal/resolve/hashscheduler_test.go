@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/purpleclay/conker/pool"
-	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/purpleclay/go-overlay/internal/modulestxt"
 	"github.com/purpleclay/go-overlay/internal/progress"
 	"github.com/stretchr/testify/assert"
@@ -117,7 +117,7 @@ func TestHashSchedulerHashesEachDistinctKeyOnce(t *testing.T) {
 func TestHashSchedulerReusesExistingManifestEntryByContentKey(t *testing.T) {
 	hasher := &countingHasher{hash: "sha256-fresh"}
 	key := contentKey{path: "example.com/foo", version: "v1.2.3"}
-	existingMods := map[string]mod.ModuleConfig{
+	existingMods := map[string]manifest.Module{
 		"example.com/foo": {Path: "example.com/foo", Version: "v1.2.3", Hash: "sha256-cached"},
 	}
 
@@ -133,7 +133,7 @@ func TestHashSchedulerReusesExistingManifestEntryByContentKey(t *testing.T) {
 }
 
 func TestHashSchedulerReuseAppliesAcrossDifferentAliasesOfTheSameContent(t *testing.T) {
-	existingMods := map[string]mod.ModuleConfig{
+	existingMods := map[string]manifest.Module{
 		"example.com/old": {
 			Path: "example.com/old", Version: "v1.0.0",
 			ReplacedPath: "example.com/fork", Hash: "sha256-cached",
@@ -157,7 +157,7 @@ func TestHashSchedulerIgnoresExistingEntryWithNoHashOrLocalOnly(t *testing.T) {
 	key := contentKey{path: "example.com/foo", version: "v1.0.0"}
 	dirFor := fakeDirResolver(map[contentKey]string{key: "/cache/foo"})
 
-	existingMods := map[string]mod.ModuleConfig{
+	existingMods := map[string]manifest.Module{
 		"example.com/foo":   {Path: "example.com/foo", Version: "v1.0.0", Hash: ""},
 		"example.com/local": {Path: "example.com/local", Version: "v1.0.0", Hash: "sha256-cached", Local: "./local"},
 	}

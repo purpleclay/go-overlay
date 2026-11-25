@@ -8,6 +8,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/purpleclay/go-overlay/internal/generate"
+	"github.com/purpleclay/go-overlay/internal/gocmd"
 	"github.com/purpleclay/go-overlay/internal/progress"
 	"github.com/purpleclay/go-overlay/internal/resolve"
 	"github.com/purpleclay/go-overlay/internal/ui"
@@ -135,7 +136,7 @@ func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, 
 				reporter = progress.NopReporter{}
 			}
 
-			resolver := resolve.New(resolve.OSExecutor{}, resolve.WithReporter(reporter))
+			resolver := resolve.New(gocmd.OSExecutor{}, resolve.WithReporter(reporter))
 			v := generate.NewVendor(resolver, opts...)
 			results, err := v.VendorFiles(cmd.Context())
 			if len(results) > 0 {

@@ -24,7 +24,7 @@ in {
   inherit mkAnnotation;
 
   # Whether a module entry is a wildcard remote replace that nothing in the
-  # build actually requires (mod.ModuleConfig.Unused). Such an entry has no
+  # build actually requires (manifest.Module.Unused). Such an entry has no
   # version, hash, or packages of its own — it must be excluded from both
   # module-entry generation and fetching, and only contributes a trailer line.
   isUnusedReplace = meta: meta.unused or false;

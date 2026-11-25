@@ -1,8 +1,8 @@
-package mod
+package manifest
 
-// ModuleConfig represents a single Go module dependency, both as the result
+// Module represents a single Go module dependency, both as the result
 // of dependency resolution and as a row in the generated manifest.
-type ModuleConfig struct {
+type Module struct {
 	Path string `toml:"-"`
 	// Version is the version that was fetched and hashed: the replacement's
 	// version for a remote replace, or the plain required version otherwise.
@@ -36,20 +36,20 @@ type ModuleConfig struct {
 	Unused bool `toml:"unused,omitempty"`
 }
 
-// WorkspaceConfig holds Go workspace metadata recorded in the manifest. It is
-// also used to reconstruct a GoWorkFile when go.work is not committed.
-type WorkspaceConfig struct {
+// Workspace holds Go workspace metadata recorded in the manifest. It is
+// also used to reconstruct a gomod.WorkFile when go.work is not committed.
+type Workspace struct {
 	Go        string   `toml:"go"`
 	Toolchain string   `toml:"toolchain,omitempty"`
 	Modules   []string `toml:"modules"`
 }
 
-// ToolEntry records the resolved version of a single Go tool directive.
-type ToolEntry struct {
+// Tool records the resolved version of a single Go tool directive.
+type Tool struct {
 	Version string `toml:"version"`
 }
 
-// ToolConfig records Go tool directive packages in the manifest, keyed by
+// Tools records Go tool directive packages in the manifest, keyed by
 // package path. The Nix builder uses this to compile each tool for the host
 // platform, labelling each derivation with the tool's own module version.
-type ToolConfig map[string]ToolEntry
+type Tools map[string]Tool

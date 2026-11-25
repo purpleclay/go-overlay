@@ -1,23 +1,23 @@
-package resolve_test
+package narhash_test
 
 import (
 	"path/filepath"
 	"testing"
 
 	"github.com/nix-community/go-nix/pkg/nar"
-	"github.com/purpleclay/go-overlay/internal/resolve"
+	"github.com/purpleclay/go-overlay/internal/narhash"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestNARHash(t *testing.T) {
-	hash, err := resolve.NARHash("testdata/module")
+func TestDir(t *testing.T) {
+	hash, err := narhash.Dir("testdata/module")
 	require.NoError(t, err)
 	assert.Equal(t, "sha256-zlKFPywupKwyb/YxUrm8G75PLGt147OLoyzCt0Sv+XM=", hash)
 }
 
-func TestNARHashFiltered(t *testing.T) {
-	hash, err := resolve.NARHashFiltered("testdata/module", func(path string, _ nar.NodeType) bool {
+func TestDirFiltered(t *testing.T) {
+	hash, err := narhash.DirFiltered("testdata/module", func(path string, _ nar.NodeType) bool {
 		return filepath.Base(path) != "main.go"
 	})
 	require.NoError(t, err)

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/purpleclay/go-overlay/internal/gocmd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -74,7 +75,7 @@ func TestGitTrackedFilesHandlesQuotedNames(t *testing.T) {
 	runGit("init", "-q")
 	runGit("add", "-A")
 
-	tracked, err := GitTrackedFiles(context.Background(), OSExecutor{}, dir)
+	tracked, err := GitTrackedFiles(context.Background(), gocmd.OSExecutor{}, dir)
 	require.NoError(t, err)
 
 	for _, n := range names {
@@ -85,7 +86,7 @@ func TestGitTrackedFilesHandlesQuotedNames(t *testing.T) {
 func TestGitTrackedFilesWrapsNonGitError(t *testing.T) {
 	dir := t.TempDir()
 
-	_, err := GitTrackedFiles(context.Background(), OSExecutor{}, dir)
+	_, err := GitTrackedFiles(context.Background(), gocmd.OSExecutor{}, dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), dir)
 	assert.Contains(t, err.Error(), "git-tracked")
@@ -98,7 +99,7 @@ func TestGitTrackedFilesWrapsNonGitErrorRegardlessOfLocale(t *testing.T) {
 
 	dir := t.TempDir()
 
-	_, err := GitTrackedFiles(context.Background(), OSExecutor{}, dir)
+	_, err := GitTrackedFiles(context.Background(), gocmd.OSExecutor{}, dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is not inside a git repository")
 }
@@ -110,7 +111,7 @@ type erroringExecutor struct {
 	err error
 }
 
-func (e erroringExecutor) Run(context.Context, Command) (string, error) {
+func (e erroringExecutor) Run(context.Context, gocmd.Command) (string, error) {
 	return "", e.err
 }
 
@@ -122,8 +123,8 @@ func TestGitTrackedFilesDoesNotMisdiagnoseUnrelatedFailures(t *testing.T) {
 		err  error
 	}{
 		{name: "cancellation", err: context.Canceled},
-		{name: "missing git binary", err: &ExecError{Err: errors.New(`exec: "git": executable file not found in $PATH`)}},
-		{name: "permission denied", err: &ExecError{Err: errors.New("exit status 128"), Stderr: "fatal: could not open directory: Permission denied"}},
+		{name: "missing git binary", err: &gocmd.ExecError{Err: errors.New(`exec: "git": executable file not found in $PATH`)}},
+		{name: "permission denied", err: &gocmd.ExecError{Err: errors.New("exit status 128"), Stderr: "fatal: could not open directory: Permission denied"}},
 	}
 
 	for _, tt := range tests {

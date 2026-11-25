@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/purpleclay/conker/pool"
+	"github.com/purpleclay/go-overlay/internal/gocmd"
 	"github.com/purpleclay/go-overlay/internal/progress"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/golden"
@@ -36,7 +37,7 @@ func TestPlainProgressOutput(t *testing.T) {
 			// line as Note events above. Using that real shape here, rather
 			// than a short synthetic error, is what exposed the duplicated,
 			// unprefixed second dump of it that PlainReporter used to print.
-			err: &ExecError{Err: errors.New("exit status 1"), Stderr: mustReadFile(t, "failure.stderr")},
+			err: &gocmd.ExecError{Err: errors.New("exit status 1"), Stderr: mustReadFile(t, "failure.stderr")},
 		},
 	}
 

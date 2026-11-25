@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -15,9 +13,10 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/nix-community/go-nix/pkg/nar"
 	"github.com/purpleclay/conker/pool"
-	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/gocmd"
+	"github.com/purpleclay/go-overlay/internal/gomod"
+	"github.com/purpleclay/go-overlay/internal/narhash"
 	"github.com/purpleclay/go-overlay/internal/nixfile"
 	"github.com/purpleclay/go-overlay/internal/proxy"
 	"github.com/purpleclay/go-overlay/internal/resolve"
@@ -81,14 +80,6 @@ func (m *toolManifest) Filename() string {
 	return m.Version + ".nix"
 }
 
-func narHash(dir string) (string, error) {
-	h := sha256.New()
-	if err := nar.DumpPath(h, dir); err != nil {
-		return "", err
-	}
-	return "sha256-" + base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
-}
-
 func downloadModule(module, ver string) (string, error) {
 	cmd := exec.Command("go", "mod", "download", "-json", module+"@"+ver)
 	var stdout, stderr bytes.Buffer
@@ -118,9 +109,9 @@ type modEnvExecutor struct {
 	baseEnv []string
 }
 
-func (e modEnvExecutor) Run(ctx context.Context, c resolve.Command) (string, error) {
+func (e modEnvExecutor) Run(ctx context.Context, c gocmd.Command) (string, error) {
 	c.Env = append(e.baseEnv, c.Env...)
-	return resolve.OSExecutor{}.Run(ctx, c)
+	return gocmd.OSExecutor{}.Run(ctx, c)
 }
 
 func generateManifest(ctx context.Context, module, ver string, subPackages []string) (*toolManifest, error) {
@@ -156,7 +147,7 @@ func generateManifest(ctx context.Context, module, ver string, subPackages []str
 		return nil, err
 	}
 
-	sourceHash, err := narHash(srcDir)
+	sourceHash, err := narhash.Dir(srcDir)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +157,7 @@ func generateManifest(ctx context.Context, module, ver string, subPackages []str
 		return nil, err
 	}
 
-	goModFile, err := mod.ParseGoModFile(filepath.Join(srcDir, mod.GoModFilename))
+	goModFile, err := gomod.Parse(filepath.Join(srcDir, gomod.Filename))
 	if err != nil {
 		return nil, err
 	}

@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"golang.org/x/mod/module"
+
+	"github.com/purpleclay/go-overlay/internal/gocmd"
 )
 
 // moduleCache computes a downloaded module's on-disk directory directly,
@@ -20,7 +22,7 @@ import (
 // environment directly, since an unset GOMODCACHE still resolves to a real
 // default (GOPATH/pkg/mod) that only `go env` knows how to compute.
 type moduleCache struct {
-	exec    Executor
+	exec    gocmd.Executor
 	workDir string // working directory `go env` is run from
 
 	once sync.Once
@@ -30,13 +32,13 @@ type moduleCache struct {
 
 // newModuleCache returns a moduleCache that runs `go env GOMODCACHE` from
 // workDir the first time its directory is needed.
-func newModuleCache(exec Executor, workDir string) *moduleCache {
+func newModuleCache(exec gocmd.Executor, workDir string) *moduleCache {
 	return &moduleCache{exec: exec, workDir: workDir}
 }
 
 func (c *moduleCache) resolveRoot(ctx context.Context) (string, error) {
 	c.once.Do(func() {
-		out, err := c.exec.Run(ctx, Command{Args: []string{"go", "env", "GOMODCACHE"}, Dir: c.workDir})
+		out, err := c.exec.Run(ctx, gocmd.Command{Args: []string{"go", "env", "GOMODCACHE"}, Dir: c.workDir})
 		if err != nil {
 			c.err = fmt.Errorf("failed to determine GOMODCACHE: %w", err)
 			return
@@ -75,7 +77,7 @@ func (c *moduleCache) dir(ctx context.Context, path, version string) (string, er
 // confirmed empirically against a real cold module cache — which is what
 // this package exists to avoid reintroducing.
 func (c *moduleCache) downloadOne(ctx context.Context, path, version string) error {
-	_, err := c.exec.Run(ctx, Command{
+	_, err := c.exec.Run(ctx, gocmd.Command{
 		Args: []string{"go", "mod", "download", path + "@" + version},
 		Dir:  c.workDir,
 	})

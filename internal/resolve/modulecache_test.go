@@ -9,18 +9,19 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/purpleclay/go-overlay/internal/gocmd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/mod/module"
 )
 
 type callCountingExecutor struct {
-	Executor
+	gocmd.Executor
 	mu    sync.Mutex
 	calls int
 }
 
-func (e *callCountingExecutor) Run(ctx context.Context, c Command) (string, error) {
+func (e *callCountingExecutor) Run(ctx context.Context, c gocmd.Command) (string, error) {
 	e.mu.Lock()
 	e.calls++
 	e.mu.Unlock()
@@ -98,7 +99,7 @@ type downloadExtractsExecutor struct {
 	gomodcache string
 }
 
-func (e *downloadExtractsExecutor) Run(_ context.Context, c Command) (string, error) {
+func (e *downloadExtractsExecutor) Run(_ context.Context, c gocmd.Command) (string, error) {
 	args := c.Args
 	if len(args) >= 2 && args[0] == "go" && args[1] == "env" {
 		return e.gomodcache + "\n", nil

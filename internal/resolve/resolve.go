@@ -10,7 +10,9 @@ import (
 	"sync"
 
 	"github.com/purpleclay/conker/pool"
-	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/gocmd"
+	"github.com/purpleclay/go-overlay/internal/gomod"
+	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/purpleclay/go-overlay/internal/modulestxt"
 	"github.com/purpleclay/go-overlay/internal/progress"
 	"golang.org/x/mod/semver"
@@ -20,7 +22,7 @@ import (
 // commands go through the Executor interface, making the resolver testable
 // with injected output.
 type Resolver struct {
-	exec     Executor
+	exec     gocmd.Executor
 	hasher   Hasher
 	reporter progress.Reporter
 
@@ -58,7 +60,7 @@ func WithHasher(hasher Hasher) Option {
 }
 
 // New creates a Resolver with the given executor.
-func New(exec Executor, opts ...Option) *Resolver {
+func New(exec gocmd.Executor, opts ...Option) *Resolver {
 	r := &Resolver{
 		exec:     exec,
 		hasher:   NARHasher{},
@@ -79,23 +81,23 @@ func New(exec Executor, opts ...Option) *Resolver {
 // downloading and hashing account for most of the wall time on a cold run,
 // and a Reporter that saw Finished before either began would stop reporting
 // exactly when the user most needs to know the process isn't wedged.
-func (r *Resolver) ResolveModule(ctx context.Context, goMod *mod.GoModFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
-	manifest := progress.Manifest(filepath.Join(goMod.Dir, mod.GoModFilename))
-	r.reporter.Report(progress.Started{Manifest: manifest})
+func (r *Resolver) ResolveModule(ctx context.Context, goMod *gomod.File, existingMods map[string]manifest.Module) ([]manifest.Module, error) {
+	manifestPath := progress.Manifest(filepath.Join(goMod.Dir, gomod.Filename))
+	r.reporter.Report(progress.Started{Manifest: manifestPath})
 
-	modules, err := r.resolveModule(ctx, manifest, goMod, existingMods)
-	r.reporter.Report(progress.Finished{Manifest: manifest, Err: err})
+	modules, err := r.resolveModule(ctx, manifestPath, goMod, existingMods)
+	r.reporter.Report(progress.Finished{Manifest: manifestPath, Err: err})
 	return modules, err
 }
 
-func (r *Resolver) resolveModule(ctx context.Context, manifest progress.Manifest, goMod *mod.GoModFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
+func (r *Resolver) resolveModule(ctx context.Context, manifestPath progress.Manifest, goMod *gomod.File, existingMods map[string]manifest.Module) ([]manifest.Module, error) {
 	// The hash scheduler resolves each module's cache directory directly
 	// (see moduleCache) rather than waiting on a concurrent `go mod
 	// download`, so nothing here runs before vendoring at all.
 	cache := newModuleCache(r.exec, goMod.Dir)
-	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, manifest, existingMods, cachedModuleDir(cache))
+	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, manifestPath, existingMods, cachedModuleDir(cache))
 
-	vendored, err := r.vendorModules(ctx, manifest, goMod.Dir, []string{"GOWORK=off"}, "mod", scheduler)
+	vendored, err := r.vendorModules(ctx, manifestPath, goMod.Dir, []string{"GOWORK=off"}, "mod", scheduler)
 	if err != nil {
 		return nil, err
 	}
@@ -120,29 +122,29 @@ func (r *Resolver) resolveModule(ctx context.Context, manifest progress.Manifest
 // ResolveWorkspace resolves dependencies across all modules in a Go workspace.
 // A single go mod vendor pass from the workspace root replaces the per-platform
 // go list fan-out. members are goWork's parsed members (see
-// GoWorkFile.ParseMembers), passed in so each go.mod is read once per run.
+// gomod.WorkFile.ParseMembers), passed in so each go.mod is read once per run.
 // existingMods is the parsed existing manifest's module map; pass nil for a
 // cold run.
-func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, members []mod.WorkspaceMember, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
-	manifest := progress.Manifest(filepath.Join(goWork.Dir, mod.GoWorkFilename))
-	r.reporter.Report(progress.Started{Manifest: manifest})
+func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *gomod.WorkFile, members []gomod.WorkspaceMember, existingMods map[string]manifest.Module) ([]manifest.Module, error) {
+	manifestPath := progress.Manifest(filepath.Join(goWork.Dir, gomod.WorkFilename))
+	r.reporter.Report(progress.Started{Manifest: manifestPath})
 
-	modules, err := r.resolveWorkspace(ctx, manifest, goWork, members, existingMods)
-	r.reporter.Report(progress.Finished{Manifest: manifest, Err: err})
+	modules, err := r.resolveWorkspace(ctx, manifestPath, goWork, members, existingMods)
+	r.reporter.Report(progress.Finished{Manifest: manifestPath, Err: err})
 	return modules, err
 }
 
-func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manifest, goWork *mod.GoWorkFile, members []mod.WorkspaceMember, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error) {
+func (r *Resolver) resolveWorkspace(ctx context.Context, manifestPath progress.Manifest, goWork *gomod.WorkFile, members []gomod.WorkspaceMember, existingMods map[string]manifest.Module) ([]manifest.Module, error) {
 	workspaceMembers := make(map[string]string, len(members))
 	for _, m := range members {
 		workspaceMembers[m.ModulePath] = m.RelDir
 	}
 
 	cache := newModuleCache(r.exec, goWork.Dir)
-	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, manifest, existingMods, cachedModuleDir(cache))
+	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, manifestPath, existingMods, cachedModuleDir(cache))
 
 	// Single vendor pass from the workspace root with GOWORK active.
-	vendored, err := r.vendorModules(ctx, manifest, goWork.Dir, nil, "work", scheduler)
+	vendored, err := r.vendorModules(ctx, manifestPath, goWork.Dir, nil, "work", scheduler)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +154,7 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 	// Merge member replace directives, then apply go.work's on top so a
 	// go.work replacement overwrites any member go.mod replacement of the
 	// same module path.
-	replacements := make(map[string]mod.Replacement)
+	replacements := make(map[string]gomod.Replacement)
 	for _, m := range members {
 		for path, repl := range m.Replacements {
 			replacements[path] = repl
@@ -167,7 +169,7 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 		return nil, err
 	}
 
-	allDeps := make(map[string]mod.ModuleConfig, len(remoteDeps))
+	allDeps := make(map[string]manifest.Module, len(remoteDeps))
 	for _, dep := range remoteDeps {
 		allDeps[dep.Path] = dep
 	}
@@ -216,7 +218,7 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 			existing.Local = localDir
 			allDeps[modulePath] = existing
 		} else if version, isDep := memberVersions[modulePath]; isDep {
-			allDeps[modulePath] = mod.ModuleConfig{
+			allDeps[modulePath] = manifest.Module{
 				Path:    modulePath,
 				Version: version,
 				Local:   localDir,
@@ -224,7 +226,7 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 		}
 	}
 
-	modules := make([]mod.ModuleConfig, 0, len(allDeps))
+	modules := make([]manifest.Module, 0, len(allDeps))
 	for _, m := range allDeps {
 		modules = append(modules, m)
 	}
@@ -232,10 +234,10 @@ func (r *Resolver) resolveWorkspace(ctx context.Context, manifest progress.Manif
 	return modules, nil
 }
 
-// localReplacer is the shared surface of GoModFile and GoWorkFile needed to
+// localReplacer is the shared surface of gomod.File and gomod.WorkFile needed to
 // enumerate local replace directives.
 type localReplacer interface {
-	LocalReplacements() []mod.Replacement
+	LocalReplacements() []gomod.Replacement
 }
 
 // localModulesOf pairs each local replace directive with the directory its
@@ -266,7 +268,7 @@ func localModulesOf(src localReplacer, baseDir string, versions map[string]strin
 // reports its correct, real version. Highest wins on either source when
 // more than one candidate exists, matching modules.txt's own semantics for
 // a path multiple members request at different versions.
-func workspaceVersions(members []mod.WorkspaceMember, vendored []modulestxt.Module) map[string]string {
+func workspaceVersions(members []gomod.WorkspaceMember, vendored []modulestxt.Module) map[string]string {
 	versions := make(map[string]string)
 	merge := func(path, version string) {
 		if version == "" {
@@ -317,7 +319,7 @@ func splitVendored(vendored []modulestxt.Module) (map[string][]string, []modules
 	return pkgsByMod, remote
 }
 
-func sortModules(modules []mod.ModuleConfig) {
+func sortModules(modules []manifest.Module) {
 	sort.Slice(modules, func(i, j int) bool { return modules[i].Path < modules[j].Path })
 }
 
@@ -343,15 +345,15 @@ func sortModules(modules []mod.ModuleConfig) {
 // task for a module the stream already saw may be blocked on a cache-miss
 // download (see cachedModuleDir) that would otherwise delay — or, if
 // stalled, withhold — the vendor error.
-func (r *Resolver) vendorModules(ctx context.Context, manifest progress.Manifest, dir string, env []string, verb string, scheduler *hashScheduler) ([]modulestxt.Module, error) {
+func (r *Resolver) vendorModules(ctx context.Context, manifestPath progress.Manifest, dir string, env []string, verb string, scheduler *hashScheduler) ([]modulestxt.Module, error) {
 	tmpdir, err := os.MkdirTemp("", "govendor-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp vendor dir: %w", err)
 	}
 	defer os.RemoveAll(tmpdir)
 
-	handler := newVendorStreamHandler(manifest, r.reporter, scheduler)
-	_, err = r.exec.Run(ctx, Command{
+	handler := newVendorStreamHandler(manifestPath, r.reporter, scheduler)
+	_, err = r.exec.Run(ctx, gocmd.Command{
 		Args:     []string{"go", verb, "vendor", "-v", "-o", tmpdir},
 		Dir:      dir,
 		Env:      env,
@@ -382,7 +384,7 @@ func (r *Resolver) vendorModules(ctx context.Context, manifest progress.Manifest
 
 // replacements is keyed by the original (left-hand) module path, sourced
 // directly from go.mod's/go.work's replace directives — the only reliable
-// way to know whether a directive was versioned (see mod.ModuleConfig.Versioned):
+// way to know whether a directive was versioned (see manifest.Module.Versioned):
 // modules.txt's header is byte-identical either way, so inferring this from
 // modules.txt output alone is not possible.
 //
@@ -390,12 +392,12 @@ func (r *Resolver) vendorModules(ctx context.Context, manifest progress.Manifest
 // the vendor stream and waited on before this runs (see vendorModules). This
 // is now pure, fast bookkeeping with no I/O left to parallelize, so it's a
 // plain sequential pass rather than a pool.
-func (r *Resolver) resolveRemoteModules(modules []modulestxt.Module, scheduler *hashScheduler, replacements map[string]mod.Replacement) ([]mod.ModuleConfig, error) {
+func (r *Resolver) resolveRemoteModules(modules []modulestxt.Module, scheduler *hashScheduler, replacements map[string]gomod.Replacement) ([]manifest.Module, error) {
 	if len(modules) == 0 {
 		return nil, nil
 	}
 
-	result := make([]mod.ModuleConfig, 0, len(modules))
+	result := make([]manifest.Module, 0, len(modules))
 	for _, m := range modules {
 		cfg, err := r.resolveRemoteModule(m, scheduler, replacements)
 		if err != nil {
@@ -406,7 +408,7 @@ func (r *Resolver) resolveRemoteModules(modules []modulestxt.Module, scheduler *
 	return result, nil
 }
 
-func (r *Resolver) resolveRemoteModule(m modulestxt.Module, scheduler *hashScheduler, replacements map[string]mod.Replacement) (mod.ModuleConfig, error) {
+func (r *Resolver) resolveRemoteModule(m modulestxt.Module, scheduler *hashScheduler, replacements map[string]gomod.Replacement) (manifest.Module, error) {
 	path := m.Path
 
 	// Unused replace: go.mod declares it, but nothing in the build
@@ -414,7 +416,7 @@ func (r *Resolver) resolveRemoteModule(m modulestxt.Module, scheduler *hashSched
 	// trailer-only summary for it — no packages, no annotation,
 	// whether or not modules.txt happens to show a version on the
 	// left (that depends on whether the directive was versioned; see
-	// mod.ModuleConfig.Versioned, sourced from go.mod directly below).
+	// manifest.Module.Versioned, sourced from go.mod directly below).
 	// This can't be detected by whether the replacement path was
 	// downloaded: it may have been anyway, coincidentally, because
 	// something else independently requires it too — pkgsByMod's
@@ -427,7 +429,7 @@ func (r *Resolver) resolveRemoteModule(m modulestxt.Module, scheduler *hashSched
 		if repl.OldVersion != "" && repl.OldVersion != m.Replace.Version {
 			requiredVersion = repl.OldVersion
 		}
-		return mod.ModuleConfig{
+		return manifest.Module{
 			Path:            path,
 			Version:         m.Replace.Version,
 			RequiredVersion: requiredVersion,
@@ -448,10 +450,10 @@ func (r *Resolver) resolveRemoteModule(m modulestxt.Module, scheduler *hashSched
 	key, _ := remoteContentKey(m)
 	result, ok := scheduler.result(key)
 	if !ok {
-		return mod.ModuleConfig{}, fmt.Errorf("internal error: no hash result submitted for module %s", path)
+		return manifest.Module{}, fmt.Errorf("internal error: no hash result submitted for module %s", path)
 	}
 	if result.err != nil {
-		return mod.ModuleConfig{}, result.err
+		return manifest.Module{}, result.err
 	}
 
 	// The version modules.txt reported as required, before the replace
@@ -463,7 +465,7 @@ func (r *Resolver) resolveRemoteModule(m modulestxt.Module, scheduler *hashSched
 	}
 
 	// Whether go.mod's replace directive named a version on the left of
-	// "=>" — see mod.ModuleConfig.Versioned. Read directly from the
+	// "=>" — see manifest.Module.Versioned. Read directly from the
 	// parsed replace directive rather than inferred from modules.txt.
 	var versioned bool
 	if replacedPath != "" {
@@ -475,7 +477,7 @@ func (r *Resolver) resolveRemoteModule(m modulestxt.Module, scheduler *hashSched
 		goVersion = result.goVersion
 	}
 
-	return mod.ModuleConfig{
+	return manifest.Module{
 		Path:            path,
 		Version:         version,
 		RequiredVersion: requiredVersion,
@@ -488,11 +490,11 @@ func (r *Resolver) resolveRemoteModule(m modulestxt.Module, scheduler *hashSched
 	}, nil
 }
 
-// resolveLocalModules hashes and builds ModuleConfig entries for a set of
+// resolveLocalModules hashes and builds manifest.Module entries for a set of
 // local replace directives. Callers supply the base directory and version
 // for each, so go.mod-level and go.work-level replacements share one code
 // path instead of two near-identical copies.
-func (r *Resolver) resolveLocalModules(ctx context.Context, locals []localModule, pkgsByMod map[string][]string) ([]mod.ModuleConfig, error) {
+func (r *Resolver) resolveLocalModules(ctx context.Context, locals []localModule, pkgsByMod map[string][]string) ([]manifest.Module, error) {
 	if len(locals) == 0 {
 		return nil, nil
 	}
@@ -506,7 +508,7 @@ func (r *Resolver) resolveLocalModules(ctx context.Context, locals []localModule
 	// provide. The recover mirrors pool.Pool's own panic-safety: without it,
 	// a panicking task would leave its result slot silently at the zero
 	// value instead of surfacing as an error.
-	results := make([]mod.ModuleConfig, len(locals))
+	results := make([]manifest.Module, len(locals))
 	errs := make([]error, len(locals))
 
 	var wg sync.WaitGroup

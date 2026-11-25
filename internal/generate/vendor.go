@@ -11,10 +11,9 @@ import (
 	"strings"
 
 	"github.com/purpleclay/conker/pool"
-	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/gomod"
+	"github.com/purpleclay/go-overlay/internal/manifest"
 )
-
-const vendorFile = "govendor.toml"
 
 type vendorOptions struct {
 	detectDrift bool
@@ -35,7 +34,7 @@ func WithDriftDetection() Option {
 func WithPaths(paths ...string) Option {
 	return func(opts *vendorOptions) {
 		for _, path := range paths {
-			if base := filepath.Base(path); base == mod.GoModFilename || base == mod.GoWorkFilename || base == vendorFile {
+			if base := filepath.Base(path); base == gomod.Filename || base == gomod.WorkFilename || base == manifest.Filename {
 				path = filepath.Dir(path)
 			}
 			opts.paths = append(opts.paths, path)
@@ -61,8 +60,8 @@ func WithWorkspace() Option {
 // time. This keeps the vendor package free of process-execution concerns
 // and allows the orchestrator to be exercised against fake resolvers.
 type Resolver interface {
-	ResolveModule(ctx context.Context, goMod *mod.GoModFile, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error)
-	ResolveWorkspace(ctx context.Context, goWork *mod.GoWorkFile, members []mod.WorkspaceMember, existingMods map[string]mod.ModuleConfig) ([]mod.ModuleConfig, error)
+	ResolveModule(ctx context.Context, goMod *gomod.File, existingMods map[string]manifest.Module) ([]manifest.Module, error)
+	ResolveWorkspace(ctx context.Context, goWork *gomod.WorkFile, members []gomod.WorkspaceMember, existingMods map[string]manifest.Module) ([]manifest.Module, error)
 }
 
 type Vendor struct {
@@ -83,7 +82,7 @@ func NewVendor(resolver Resolver, opts ...Option) *Vendor {
 // that have rendered the results table may choose to suppress its message.
 var ErrVendorFailed = fmt.Errorf("vendor failed")
 
-// dependencySource is satisfied by *mod.GoModFile and *mod.GoWorkFile.
+// dependencySource is satisfied by *gomod.File and *gomod.WorkFile.
 // Type switches on this value are used to dispatch to type-specific behaviour.
 type dependencySource = any
 
@@ -100,7 +99,7 @@ func (v *Vendor) VendorFiles(ctx context.Context) ([]Result, error) {
 	// Without --recursive, every path is checked for a workspace in its own
 	// right. A path that fails to load gets an error row rather than
 	// aborting the run, so it can't hide the other paths.
-	var workspaces []*mod.GoWorkFile
+	var workspaces []*gomod.WorkFile
 	var failed []Result
 	if !v.opts.recursive {
 		modPaths := make([]string, 0, len(paths))
@@ -126,12 +125,12 @@ func (v *Vendor) VendorFiles(ctx context.Context) ([]Result, error) {
 	p := pool.NewWithResults[Result]().WithContext(ctx)
 	for _, goWork := range workspaces {
 		p.Go(func(ctx context.Context) (Result, error) {
-			return v.processSource(ctx, goWork, filepath.Join(goWork.Dir, mod.GoWorkFilename), goWork.WorkspaceConfig()), nil
+			return v.processSource(ctx, goWork, filepath.Join(goWork.Dir, gomod.WorkFilename), goWork.WorkspaceConfig()), nil
 		})
 	}
 	for _, modFile := range modFiles {
 		p.Go(func(ctx context.Context) (Result, error) {
-			goMod, err := mod.ParseGoModFile(modFile)
+			goMod, err := gomod.Parse(modFile)
 			if err != nil {
 				return resultError(modFile, err), nil
 			}
@@ -163,16 +162,16 @@ func (v *Vendor) toResults(r Result) ([]Result, error) {
 }
 
 // processSource implements the common drift detection and generation algorithm
-// for both *mod.GoModFile and *mod.GoWorkFile sources. It always runs full
+// for both *gomod.File and *gomod.WorkFile sources. It always runs full
 // resolution and compares the resulting manifest against the existing one —
 // byte-for-byte equality is the drift signal. This catches all classes of
 // change including package list updates, not just go.mod-level directives.
-func (v *Vendor) processSource(ctx context.Context, src dependencySource, displayPath string, workspace *mod.WorkspaceConfig) Result {
+func (v *Vendor) processSource(ctx context.Context, src dependencySource, displayPath string, workspace *manifest.Workspace) Result {
 	dir := filepath.Dir(displayPath)
-	vendorPath := filepath.Join(dir, vendorFile)
+	vendorPath := filepath.Join(dir, manifest.Filename)
 
 	existingData, err := os.ReadFile(vendorPath)
-	var existingMods map[string]mod.ModuleConfig
+	var existingMods map[string]manifest.Module
 
 	if os.IsNotExist(err) {
 		if v.opts.detectDrift {
@@ -181,12 +180,12 @@ func (v *Vendor) processSource(ctx context.Context, src dependencySource, displa
 	} else if err != nil {
 		return resultError(displayPath, err)
 	} else {
-		existing, err := Parse(existingData)
+		existing, err := manifest.Parse(existingData)
 		if err != nil {
 			return resultError(displayPath, err)
 		}
-		if existing.Schema != SchemaVersion && v.opts.detectDrift {
-			return resultSchemaMismatch(displayPath, existing.Schema, SchemaVersion)
+		if existing.Schema != manifest.SchemaVersion && v.opts.detectDrift {
+			return resultSchemaMismatch(displayPath, existing.Schema, manifest.SchemaVersion)
 		}
 		existingMods = existing.Mod
 	}
@@ -223,16 +222,16 @@ func (v *Vendor) processSource(ctx context.Context, src dependencySource, displa
 
 // resolveSource dispatches to the appropriate resolver based on the source
 // type and returns the raw inputs needed to build a manifest.
-func (v *Vendor) resolveSource(ctx context.Context, src dependencySource, existingMods map[string]mod.ModuleConfig) (deps []mod.ModuleConfig, rawTools []string, excludes map[string][]string, err error) {
+func (v *Vendor) resolveSource(ctx context.Context, src dependencySource, existingMods map[string]manifest.Module) (deps []manifest.Module, rawTools []string, excludes map[string][]string, err error) {
 	switch s := src.(type) {
-	case *mod.GoModFile:
+	case *gomod.File:
 		deps, err = v.resolver.ResolveModule(ctx, s, existingMods)
 		rawTools = s.Tools
 		if len(s.Excludes) > 0 {
 			excludes = s.Excludes
 		}
-	case *mod.GoWorkFile:
-		var members []mod.WorkspaceMember
+	case *gomod.WorkFile:
+		var members []gomod.WorkspaceMember
 		members, err = s.ParseMembers()
 		if err != nil {
 			return
@@ -263,10 +262,10 @@ func (v *Vendor) resolveSource(ctx context.Context, src dependencySource, existi
 
 // generate builds and serialises a manifest from already-resolved dependency
 // data. It has no knowledge of the source type.
-func (v *Vendor) generate(deps []mod.ModuleConfig, rawTools []string, excludes map[string][]string, workspace *mod.WorkspaceConfig) ([]byte, int, error) {
+func (v *Vendor) generate(deps []manifest.Module, rawTools []string, excludes map[string][]string, workspace *manifest.Workspace) ([]byte, int, error) {
 	// Build a package→version lookup from resolved deps so each tool entry
 	// records its own module version rather than the application version.
-	var tool mod.ToolConfig
+	var tool manifest.Tools
 	if len(rawTools) > 0 {
 		pkgToVersion := make(map[string]string)
 		for _, dep := range deps {
@@ -276,13 +275,13 @@ func (v *Vendor) generate(deps []mod.ModuleConfig, rawTools []string, excludes m
 		}
 		slices.Sort(rawTools)
 		rawTools = slices.Compact(rawTools)
-		tool = make(mod.ToolConfig, len(rawTools))
+		tool = make(manifest.Tools, len(rawTools))
 		for _, pkg := range rawTools {
-			tool[pkg] = mod.ToolEntry{Version: pkgToVersion[pkg]}
+			tool[pkg] = manifest.Tool{Version: pkgToVersion[pkg]}
 		}
 	}
 
-	m := New(deps, workspace, tool, excludes)
+	m := manifest.New(deps, workspace, tool, excludes)
 
 	var buf bytes.Buffer
 	if _, err := m.WriteTo(&buf); err != nil {
@@ -315,7 +314,7 @@ func (v *Vendor) findModFiles(paths []string) (modFiles []string, missing []Resu
 
 		for _, scanned := range results {
 			if len(scanned.files) == 0 {
-				notFound := filepath.Join(scanned.path, mod.GoModFilename)
+				notFound := filepath.Join(scanned.path, gomod.Filename)
 				if strings.HasPrefix(scanned.path, "./") {
 					notFound = "./" + notFound
 				}
@@ -329,7 +328,7 @@ func (v *Vendor) findModFiles(paths []string) (modFiles []string, missing []Resu
 	}
 
 	for _, path := range paths {
-		modPath := filepath.Join(path, mod.GoModFilename)
+		modPath := filepath.Join(path, gomod.Filename)
 		if _, err := os.Stat(modPath); err != nil {
 			missing = append(missing, resultNotFound(modPath))
 		} else {
@@ -353,7 +352,7 @@ func (v *Vendor) processWorkspaceMode(ctx context.Context) ([]Result, error) {
 
 	var result Result
 	if manifestPath == "" {
-		result = resultMissing(filepath.Join(path, vendorFile))
+		result = resultMissing(filepath.Join(path, manifest.Filename))
 	} else {
 		manifestDir := filepath.Dir(manifestPath)
 		goWork, err := v.findWorkspaceAt(manifestDir)
@@ -362,7 +361,7 @@ func (v *Vendor) processWorkspaceMode(ctx context.Context) ([]Result, error) {
 		} else if goWork == nil {
 			result = resultError(manifestPath, fmt.Errorf("invalid workspace manifest"))
 		} else {
-			result = v.processSource(ctx, goWork, filepath.Join(manifestDir, mod.GoWorkFilename), goWork.WorkspaceConfig())
+			result = v.processSource(ctx, goWork, filepath.Join(manifestDir, gomod.WorkFilename), goWork.WorkspaceConfig())
 		}
 	}
 
@@ -372,24 +371,24 @@ func (v *Vendor) processWorkspaceMode(ctx context.Context) ([]Result, error) {
 // workspaceFileAt names the file findWorkspaceAt read from path: go.work if
 // present, otherwise govendor.toml.
 func workspaceFileAt(path string) string {
-	workPath := filepath.Join(path, mod.GoWorkFilename)
+	workPath := filepath.Join(path, gomod.WorkFilename)
 	if _, err := os.Stat(workPath); err == nil {
 		return workPath
 	}
-	return filepath.Join(path, vendorFile)
+	return filepath.Join(path, manifest.Filename)
 }
 
-func (v *Vendor) findWorkspaceAt(path string) (*mod.GoWorkFile, error) {
-	workPath := filepath.Join(path, mod.GoWorkFilename)
+func (v *Vendor) findWorkspaceAt(path string) (*gomod.WorkFile, error) {
+	workPath := filepath.Join(path, gomod.WorkFilename)
 	if _, err := os.Stat(workPath); err == nil {
-		goWork, err := mod.ParseGoWorkFile(workPath)
+		goWork, err := gomod.ParseWork(workPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse %s: %w", workPath, err)
 		}
 		return goWork, nil
 	}
 
-	vendorPath := filepath.Join(path, vendorFile)
+	vendorPath := filepath.Join(path, manifest.Filename)
 	data, err := os.ReadFile(vendorPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -398,7 +397,7 @@ func (v *Vendor) findWorkspaceAt(path string) (*mod.GoWorkFile, error) {
 		return nil, fmt.Errorf("failed to read %s: %w", vendorPath, err)
 	}
 
-	existing, err := Parse(data)
+	existing, err := manifest.Parse(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse %s: %w", vendorPath, err)
 	}
@@ -406,7 +405,7 @@ func (v *Vendor) findWorkspaceAt(path string) (*mod.GoWorkFile, error) {
 		return nil, nil
 	}
 
-	goWork, err := mod.NewGoWorkFileFromManifest(path, existing.Workspace)
+	goWork, err := gomod.NewWorkFileFromManifest(path, existing.Workspace)
 	if err != nil {
 		return nil, err
 	}

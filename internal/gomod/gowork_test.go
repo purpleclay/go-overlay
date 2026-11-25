@@ -1,17 +1,18 @@
-package mod_test
+package gomod_test
 
 import (
 	"path/filepath"
 	"testing"
 
-	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/gomod"
+	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 const goWorkFile = "go.work"
 
-func TestParseGoWorkFile(t *testing.T) {
+func TestParseWork(t *testing.T) {
 	goWork := `
 go 1.25.4
 
@@ -37,7 +38,7 @@ go 1.25.4
 	writeFile(t, dir, "cli/go.mod", cli)
 	writeFile(t, dir, "core/go.mod", core)
 
-	gw, err := mod.ParseGoWorkFile(filepath.Join(dir, goWorkFile))
+	gw, err := gomod.ParseWork(filepath.Join(dir, goWorkFile))
 	require.NoError(t, err)
 
 	assert.Equal(t, dir, gw.Dir)
@@ -52,7 +53,7 @@ go 1.25.4
 	assert.Equal(t, []string{"./cli", "./core"}, cfg.Modules)
 }
 
-func TestParseGoWorkFileMembers(t *testing.T) {
+func TestParseWorkMembers(t *testing.T) {
 	goWork := `
 go 1.25.4
 
@@ -76,14 +77,14 @@ go 1.25.4
 	writeFile(t, dir, "cli/go.mod", cli)
 	writeFile(t, dir, "core/go.mod", core)
 
-	gw, err := mod.ParseGoWorkFile(filepath.Join(dir, goWorkFile))
+	gw, err := gomod.ParseWork(filepath.Join(dir, goWorkFile))
 	require.NoError(t, err)
 
 	members, err := gw.ParseMembers()
 	require.NoError(t, err)
 	require.Len(t, members, 2)
 
-	byPath := make(map[string]mod.WorkspaceMember, len(members))
+	byPath := make(map[string]gomod.WorkspaceMember, len(members))
 	for _, m := range members {
 		byPath[m.ModulePath] = m
 	}
@@ -92,7 +93,7 @@ go 1.25.4
 	assert.Equal(t, "./core", byPath["github.com/purpleclay/example/core"].RelDir)
 }
 
-func TestParseGoWorkFileReplacements(t *testing.T) {
+func TestParseWorkReplacements(t *testing.T) {
 	goWork := `
 go 1.25.4
 
@@ -110,7 +111,7 @@ go 1.25.4
 	writeFile(t, dir, goWorkFile, goWork)
 	writeFile(t, dir, "cli/go.mod", cli)
 
-	gw, err := mod.ParseGoWorkFile(filepath.Join(dir, goWorkFile))
+	gw, err := gomod.ParseWork(filepath.Join(dir, goWorkFile))
 	require.NoError(t, err)
 
 	require.Len(t, gw.Replacements, 2)
@@ -138,7 +139,7 @@ use (
 	writeFile(t, dir, "cli/go.mod", `go 1.25.4
 `)
 
-	gw, err := mod.ParseGoWorkFile(filepath.Join(dir, goWorkFile))
+	gw, err := gomod.ParseWork(filepath.Join(dir, goWorkFile))
 	require.NoError(t, err)
 
 	_, err = gw.ParseMembers()
@@ -146,18 +147,18 @@ use (
 	assert.Contains(t, err.Error(), "missing a module directive")
 }
 
-func TestNewGoWorkFileFromManifest(t *testing.T) {
+func TestNewWorkFileFromManifest(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "cli/go.mod", "module github.com/purpleclay/example/cli\n\ngo 1.25.4\n")
 	writeFile(t, dir, "core/go.mod", "module github.com/purpleclay/example/core\n\ngo 1.25.4\n")
 
-	cfg := &mod.WorkspaceConfig{
+	cfg := &manifest.Workspace{
 		Go:        "1.25.4",
 		Toolchain: "go1.25.4",
 		Modules:   []string{"./cli", "./core"},
 	}
 
-	gw, err := mod.NewGoWorkFileFromManifest(dir, cfg)
+	gw, err := gomod.NewWorkFileFromManifest(dir, cfg)
 	require.NoError(t, err)
 	assert.Equal(t, dir, gw.Dir)
 	assert.Equal(t, cfg, gw.WorkspaceConfig())

@@ -133,7 +133,7 @@ in {
     # Local replaces — local path is NOT a workspace member path; copied from src.
     # Remote modules — no local field; fetched from the module proxy.
     remoteModules = lib.filterAttrs (_: meta: !(meta ? local) && !(isUnusedReplace meta)) allModules;
-    # Unused entries (mod.ModuleConfig.Unused) are excluded from remoteModules
+    # Unused entries (manifest.Module.Unused) are excluded from remoteModules
     # — correct for fetching/header generation, but the trailer
     # they contribute still needs to be included, so trailer generation reads
     # from this broader set instead.
