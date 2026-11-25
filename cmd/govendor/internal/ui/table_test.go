@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"charm.land/lipgloss/v2"
-	"github.com/purpleclay/go-overlay/internal/generate"
-	"github.com/purpleclay/go-overlay/internal/ui"
+	"github.com/purpleclay/go-overlay/cmd/govendor/internal/generate"
+	"github.com/purpleclay/go-overlay/cmd/govendor/internal/ui"
 	"gotest.tools/v3/golden"
 )
 

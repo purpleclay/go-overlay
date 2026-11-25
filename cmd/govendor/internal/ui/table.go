@@ -4,7 +4,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/muesli/reflow/wordwrap"
-	"github.com/purpleclay/go-overlay/internal/generate"
+	"github.com/purpleclay/go-overlay/cmd/govendor/internal/generate"
 )
 
 // ANSI color codes matching the standard palette used by the theme package.

@@ -14,9 +14,9 @@ in
     subPackages = ["cmd/goscrape"];
     CGO_ENABLED = 0;
 
-    # Integration tests in internal/generate shell out to `go mod download`,
-    # which needs network access. The Nix sandbox enforces GOPROXY=off,
-    # so these tests cannot run here. CI runs the full suite via
+    # Integration tests in cmd/goscrape/internal/modproxy shell out to
+    # `go mod download`, which needs network access. The Nix sandbox enforces
+    # GOPROXY=off, so these tests cannot run here. CI runs the full suite via
     # `go test` outside the sandbox.
     doCheck = false;
     ldflags = [

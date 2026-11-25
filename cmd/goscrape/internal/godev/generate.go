@@ -14,10 +14,10 @@ import (
 
 	"github.com/purpleclay/chomp"
 	"github.com/purpleclay/conker/pool"
-	"github.com/purpleclay/go-overlay/internal/github"
-	"github.com/purpleclay/go-overlay/internal/nixfile"
-	"github.com/purpleclay/go-overlay/internal/scrape"
-	"github.com/purpleclay/go-overlay/internal/version"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/github"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/nixfile"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/scrape"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/version"
 	"github.com/spf13/cobra"
 )
 
