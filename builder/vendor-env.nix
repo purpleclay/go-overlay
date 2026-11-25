@@ -134,7 +134,7 @@ in {
     useSymlinks = lib.versionAtLeast go.version "1.25";
     modules = manifest.mod or {};
 
-    # Unused entries (mod.ModuleConfig.Unused) have no version, hash, or
+    # Unused entries (manifest.Module.Unused) have no version, hash, or
     # packages of their own — nothing to fetch, and no header to render, only
     # a trailer (handled by mkRemoteReplaceTrailers against the full `modules`
     # set below, unfiltered).

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -12,7 +13,7 @@ import (
 func TestAtomicWriteLeavesNoOrphanedTempFile(t *testing.T) {
 	t.Run("OK", func(t *testing.T) {
 		dir := t.TempDir()
-		path := filepath.Join(dir, vendorFile)
+		path := filepath.Join(dir, manifest.Filename)
 
 		require.NoError(t, atomicWrite(path, []byte("hello")))
 
@@ -23,13 +24,13 @@ func TestAtomicWriteLeavesNoOrphanedTempFile(t *testing.T) {
 		entries, err := os.ReadDir(dir)
 		require.NoError(t, err)
 		require.Len(t, entries, 1)
-		assert.Equal(t, vendorFile, entries[0].Name())
+		assert.Equal(t, manifest.Filename, entries[0].Name())
 	})
 
 	t.Run("RenameFailure", func(t *testing.T) {
 		dir := t.TempDir()
 		// A directory at the target path makes the final rename fail.
-		path := filepath.Join(dir, vendorFile)
+		path := filepath.Join(dir, manifest.Filename)
 		require.NoError(t, os.Mkdir(path, 0o755))
 
 		require.Error(t, atomicWrite(path, []byte("hello")))
@@ -37,6 +38,6 @@ func TestAtomicWriteLeavesNoOrphanedTempFile(t *testing.T) {
 		entries, err := os.ReadDir(dir)
 		require.NoError(t, err)
 		require.Len(t, entries, 1, "temp file must be cleaned up after a rename failure")
-		assert.Equal(t, vendorFile, entries[0].Name())
+		assert.Equal(t, manifest.Filename, entries[0].Name())
 	})
 }

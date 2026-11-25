@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/gomod"
 )
 
 // Status represents the outcome of processing a single go.mod or go.work.
@@ -30,10 +30,10 @@ type Result struct {
 }
 
 func fileType(path string) string {
-	if filepath.Base(path) == mod.GoWorkFilename {
-		return mod.GoWorkFilename
+	if filepath.Base(path) == gomod.WorkFilename {
+		return gomod.WorkFilename
 	}
-	return mod.GoModFilename
+	return gomod.Filename
 }
 
 func resultOK(path string) Result {

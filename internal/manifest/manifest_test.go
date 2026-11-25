@@ -1,11 +1,10 @@
-package generate_test
+package manifest_test
 
 import (
 	"bytes"
 	"testing"
 
-	"github.com/purpleclay/go-overlay/internal/generate"
-	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +19,7 @@ func TestParse(t *testing.T) {
     go = "1.18"
     packages = ["github.com/BurntSushi/toml"]`)
 
-	m, err := generate.Parse(data)
+	m, err := manifest.Parse(data)
 	require.NoError(t, err)
 
 	assert.Equal(t, 3, m.Schema)
@@ -50,7 +49,7 @@ func TestParseWithWorkspace(t *testing.T) {
     go = "1.17"
     packages = ["github.com/fatih/color"]`)
 
-	m, err := generate.Parse(data)
+	m, err := manifest.Parse(data)
 	require.NoError(t, err)
 
 	assert.Equal(t, 3, m.Schema)
@@ -117,7 +116,7 @@ func TestParseValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := generate.Parse([]byte(tt.data))
+			_, err := manifest.Parse([]byte(tt.data))
 			require.Error(t, err)
 			assert.ErrorContains(t, err, tt.wantErr)
 		})
@@ -125,8 +124,8 @@ func TestParseValidation(t *testing.T) {
 }
 
 func TestWriteTo(t *testing.T) {
-	manifest := generate.New(
-		[]mod.ModuleConfig{
+	m := manifest.New(
+		[]manifest.Module{
 			{
 				Path:      "github.com/BurntSushi/toml",
 				Version:   "v1.6.0",
@@ -135,24 +134,24 @@ func TestWriteTo(t *testing.T) {
 				Packages:  []string{"github.com/BurntSushi/toml"},
 			},
 		},
-		&mod.WorkspaceConfig{
+		&manifest.Workspace{
 			Go:        "1.25.4",
 			Toolchain: "go1.25.4",
 			Modules:   []string{"./cli"},
 		},
-		mod.ToolConfig{"github.com/a-h/templ/cmd/templ": {Version: "v0.3.924"}},
+		manifest.Tools{"github.com/a-h/templ/cmd/templ": {Version: "v0.3.924"}},
 		nil,
 	)
 
 	var buf bytes.Buffer
-	n, err := manifest.WriteTo(&buf)
+	n, err := m.WriteTo(&buf)
 	require.NoError(t, err)
 	assert.Equal(t, int64(buf.Len()), n)
 
-	parsed, err := generate.Parse(buf.Bytes())
+	parsed, err := manifest.Parse(buf.Bytes())
 	require.NoError(t, err)
-	assert.Equal(t, manifest.Schema, parsed.Schema)
-	assert.Equal(t, manifest.Workspace, parsed.Workspace)
-	assert.Equal(t, manifest.Tool, parsed.Tool)
-	assert.Equal(t, manifest.Mod, parsed.Mod)
+	assert.Equal(t, m.Schema, parsed.Schema)
+	assert.Equal(t, m.Workspace, parsed.Workspace)
+	assert.Equal(t, m.Tool, parsed.Tool)
+	assert.Equal(t, m.Mod, parsed.Mod)
 }

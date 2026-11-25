@@ -1,11 +1,11 @@
-package mod_test
+package gomod_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/gomod"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +20,7 @@ func writeFile(t *testing.T, dir, name, content string) string {
 	return path
 }
 
-func TestParseGoModFile(t *testing.T) {
+func TestParse(t *testing.T) {
 	content := `
 module github.com/purpleclay/example/with-deps
 
@@ -37,7 +37,7 @@ require (
 	dir := t.TempDir()
 	path := writeFile(t, dir, goModFile, content)
 
-	goMod, err := mod.ParseGoModFile(path)
+	goMod, err := gomod.Parse(path)
 	require.NoError(t, err)
 
 	assert.Equal(t, dir, goMod.Dir)
@@ -52,16 +52,16 @@ require (
 	assert.Equal(t, "v0.25.0", reqs["golang.org/x/sys"])
 }
 
-func TestParseGoModFileReturnsErrorForMissingModuleDirective(t *testing.T) {
+func TestParseReturnsErrorForMissingModuleDirective(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, goModFile, "go 1.25.4\n")
 
-	_, err := mod.ParseGoModFile(path)
+	_, err := gomod.Parse(path)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing a module directive")
 }
 
-func TestParseGoModFileNoDeps(t *testing.T) {
+func TestParseNoDeps(t *testing.T) {
 	content := `
 module github.com/purpleclay/example/no-deps
 
@@ -70,7 +70,7 @@ go 1.25.4
 	dir := t.TempDir()
 	path := writeFile(t, dir, goModFile, content)
 
-	goMod, err := mod.ParseGoModFile(path)
+	goMod, err := gomod.Parse(path)
 	require.NoError(t, err)
 	assert.Empty(t, goMod.Requires)
 }
@@ -92,7 +92,7 @@ replace github.com/purpleclay/example/remote => github.com/fork/remote v1.0.0
 	dir := t.TempDir()
 	path := writeFile(t, dir, goModFile, content)
 
-	goMod, err := mod.ParseGoModFile(path)
+	goMod, err := gomod.Parse(path)
 	require.NoError(t, err)
 
 	local := goMod.LocalReplacements()

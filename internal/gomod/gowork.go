@@ -1,4 +1,4 @@
-package mod
+package gomod
 
 import (
 	"fmt"
@@ -8,21 +8,23 @@ import (
 	"strings"
 
 	"golang.org/x/mod/modfile"
+
+	"github.com/purpleclay/go-overlay/internal/manifest"
 )
 
-const GoWorkFilename = "go.work"
+const WorkFilename = "go.work"
 
 // WorkspaceMember is a workspace member's parsed go.mod, plus its directory
 // as listed in go.work.
 type WorkspaceMember struct {
-	*GoModFile
+	*File
 	// RelDir is the member directory relative to go.work, normalised to "./…".
 	RelDir string
 }
 
-// GoWorkFile is a parsed go.work file. All fields are extracted at
+// WorkFile is a parsed go.work file. All fields are extracted at
 // parse time. No methods shell out to external processes.
-type GoWorkFile struct {
+type WorkFile struct {
 	Dir          string
 	GoVersion    string
 	Toolchain    string
@@ -30,7 +32,7 @@ type GoWorkFile struct {
 	Replacements map[string]Replacement
 }
 
-func ParseGoWorkFile(path string) (*GoWorkFile, error) {
+func ParseWork(path string) (*WorkFile, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read go.work: %w", err)
@@ -56,7 +58,7 @@ func ParseGoWorkFile(path string) (*GoWorkFile, error) {
 		toolchain = wf.Toolchain.Name
 	}
 
-	return &GoWorkFile{
+	return &WorkFile{
 		Dir:          filepath.Dir(path),
 		GoVersion:    goVersion,
 		Toolchain:    toolchain,
@@ -65,7 +67,7 @@ func ParseGoWorkFile(path string) (*GoWorkFile, error) {
 	}, nil
 }
 
-func NewGoWorkFileFromManifest(dir string, config *WorkspaceConfig) (*GoWorkFile, error) {
+func NewWorkFileFromManifest(dir string, config *manifest.Workspace) (*WorkFile, error) {
 	if config == nil {
 		return nil, fmt.Errorf("workspace config is required")
 	}
@@ -75,7 +77,7 @@ func NewGoWorkFileFromManifest(dir string, config *WorkspaceConfig) (*GoWorkFile
 		modules[i] = strings.TrimPrefix(mod, "./")
 	}
 
-	return &GoWorkFile{
+	return &WorkFile{
 		Dir:       dir,
 		GoVersion: config.Go,
 		Toolchain: config.Toolchain,
@@ -85,7 +87,7 @@ func NewGoWorkFileFromManifest(dir string, config *WorkspaceConfig) (*GoWorkFile
 
 // LocalReplacements returns only workspace-level local replace directives,
 // sorted by original module path. These take precedence over member go.mod replaces.
-func (w *GoWorkFile) LocalReplacements() []Replacement {
+func (w *WorkFile) LocalReplacements() []Replacement {
 	var local []Replacement
 	for _, repl := range w.Replacements {
 		if repl.IsLocal {
@@ -98,14 +100,14 @@ func (w *GoWorkFile) LocalReplacements() []Replacement {
 	return local
 }
 
-func (w *GoWorkFile) WorkspaceConfig() *WorkspaceConfig {
+func (w *WorkFile) WorkspaceConfig() *manifest.Workspace {
 	modules := make([]string, len(w.Modules))
 	for i, mod := range w.Modules {
 		modules[i] = normalizeWorkspaceMemberPath(mod)
 	}
 	slices.Sort(modules)
 
-	return &WorkspaceConfig{
+	return &manifest.Workspace{
 		Go:        w.GoVersion,
 		Toolchain: w.Toolchain,
 		Modules:   modules,
@@ -114,12 +116,12 @@ func (w *GoWorkFile) WorkspaceConfig() *WorkspaceConfig {
 
 // ParseMembers reads and parses each workspace member's go.mod, in go.work
 // order.
-func (w *GoWorkFile) ParseMembers() ([]WorkspaceMember, error) {
+func (w *WorkFile) ParseMembers() ([]WorkspaceMember, error) {
 	members := make([]WorkspaceMember, 0, len(w.Modules))
 
 	for _, mod := range w.Modules {
-		modFilePath := filepath.Join(w.Dir, mod, GoModFilename)
-		goMod, err := ParseGoModFile(modFilePath)
+		modFilePath := filepath.Join(w.Dir, mod, Filename)
+		goMod, err := Parse(modFilePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse workspace member %s: %w", modFilePath, err)
 		}
@@ -129,8 +131,8 @@ func (w *GoWorkFile) ParseMembers() ([]WorkspaceMember, error) {
 		}
 
 		members = append(members, WorkspaceMember{
-			GoModFile: goMod,
-			RelDir:    normalizeWorkspaceMemberPath(mod),
+			File:   goMod,
+			RelDir: normalizeWorkspaceMemberPath(mod),
 		})
 	}
 

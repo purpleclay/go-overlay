@@ -1,4 +1,4 @@
-package mod
+package gomod
 
 import (
 	"fmt"
@@ -10,11 +10,11 @@ import (
 	"golang.org/x/mod/modfile"
 )
 
-const GoModFilename = "go.mod"
+const Filename = "go.mod"
 
-// GoModFile is a parsed go.mod file. All fields are extracted at parse
+// File is a parsed go.mod file. All fields are extracted at parse
 // time. No methods shell out to external processes.
-type GoModFile struct {
+type File struct {
 	Dir          string
 	ModulePath   string
 	GoVersion    string
@@ -24,7 +24,7 @@ type GoModFile struct {
 	Excludes     map[string][]string
 }
 
-func ParseGoModFile(path string) (*GoModFile, error) {
+func Parse(path string) (*File, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read go.mod: %w", err)
@@ -57,7 +57,7 @@ func ParseGoModFile(path string) (*GoModFile, error) {
 	replacements := parseReplacements(mf.Replace)
 	excludes := parseExcludes(mf.Exclude)
 
-	return &GoModFile{
+	return &File{
 		Dir:          filepath.Dir(path),
 		ModulePath:   mf.Module.Mod.Path,
 		GoVersion:    goVersion,
@@ -85,7 +85,7 @@ type Replacement struct {
 
 // LocalReplacements returns only local replace directives (those pointing to
 // relative or absolute paths), sorted by original module path.
-func (f *GoModFile) LocalReplacements() []Replacement {
+func (f *File) LocalReplacements() []Replacement {
 	var local []Replacement
 	for _, repl := range f.Replacements {
 		if repl.IsLocal {

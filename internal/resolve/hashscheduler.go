@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/purpleclay/conker/pool"
-	"github.com/purpleclay/go-overlay/internal/mod"
+	"github.com/purpleclay/go-overlay/internal/manifest"
 	"github.com/purpleclay/go-overlay/internal/modulestxt"
 	"github.com/purpleclay/go-overlay/internal/progress"
 )
@@ -35,7 +35,7 @@ type hashResult struct {
 // isUnusedReplace reports whether m is a replace directive go.mod declares
 // but nothing in the build actually requires: go mod vendor then records
 // only a trailer-only summary for it — no packages, no annotation. Such an
-// entry is never downloaded or hashed; its ModuleConfig comes entirely from
+// entry is never downloaded or hashed; its manifest.Module comes entirely from
 // the replace directive itself.
 func isUnusedReplace(m modulestxt.Module) bool {
 	return m.Replace != nil && m.Replace.Path != "" && len(m.Packages) == 0 && !m.Explicit && m.GoVersion == ""
@@ -94,7 +94,7 @@ type hashScheduler struct {
 	// rather than by declared path. The scheduler only ever has a
 	// contentKey to check reuse against, not the original module that
 	// requested it, so the index has to be keyed the same way.
-	existing map[contentKey]mod.ModuleConfig
+	existing map[contentKey]manifest.Module
 
 	mu        sync.Mutex
 	submitted map[contentKey]struct{}
@@ -105,8 +105,8 @@ type hashScheduler struct {
 // newHashScheduler indexes existingMods by content identity and returns a
 // scheduler ready to accept submissions. p is a shared pool owned by the
 // caller; the scheduler submits tasks to it but never waits on it directly.
-func newHashScheduler(ctx context.Context, p *pool.Pool, hasher Hasher, reporter progress.Reporter, manifest progress.Manifest, existingMods map[string]mod.ModuleConfig, dirFor dirResolver) *hashScheduler {
-	existing := make(map[contentKey]mod.ModuleConfig, len(existingMods))
+func newHashScheduler(ctx context.Context, p *pool.Pool, hasher Hasher, reporter progress.Reporter, manifestPath progress.Manifest, existingMods map[string]manifest.Module, dirFor dirResolver) *hashScheduler {
+	existing := make(map[contentKey]manifest.Module, len(existingMods))
 	for _, entry := range existingMods {
 		if entry.Local != "" || entry.Hash == "" {
 			continue
@@ -125,7 +125,7 @@ func newHashScheduler(ctx context.Context, p *pool.Pool, hasher Hasher, reporter
 		pool:      p,
 		hasher:    hasher,
 		reporter:  reporter,
-		manifest:  manifest,
+		manifest:  manifestPath,
 		dirFor:    dirFor,
 		existing:  existing,
 		submitted: make(map[contentKey]struct{}),
