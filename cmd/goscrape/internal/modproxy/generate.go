@@ -14,13 +14,13 @@ import (
 	"time"
 
 	"github.com/purpleclay/conker/pool"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/nixfile"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/proxy"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/version"
 	"github.com/purpleclay/go-overlay/internal/gocmd"
 	"github.com/purpleclay/go-overlay/internal/gomod"
 	"github.com/purpleclay/go-overlay/internal/narhash"
-	"github.com/purpleclay/go-overlay/internal/nixfile"
-	"github.com/purpleclay/go-overlay/internal/proxy"
 	"github.com/purpleclay/go-overlay/internal/resolve"
-	"github.com/purpleclay/go-overlay/internal/version"
 	"github.com/spf13/cobra"
 )
 

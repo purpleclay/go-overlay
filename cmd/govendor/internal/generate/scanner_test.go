@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/purpleclay/go-overlay/internal/generate"
+	"github.com/purpleclay/go-overlay/cmd/govendor/internal/generate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

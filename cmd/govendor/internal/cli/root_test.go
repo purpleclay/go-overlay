@@ -1,12 +1,12 @@
-package govendor_test
+package cli_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/purpleclay/go-overlay/internal/cli/govendor"
-	"github.com/purpleclay/x/cli"
+	"github.com/purpleclay/go-overlay/cmd/govendor/internal/cli"
+	xcli "github.com/purpleclay/x/cli"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,17 +26,17 @@ func induceDrift(t *testing.T, dir string) {
 }
 
 func TestExecuteExitCodes(t *testing.T) {
-	version := cli.VersionInfo{}
+	version := xcli.VersionInfo{}
 
 	t.Run("0_ManifestGenerated", func(t *testing.T) {
 		dir := t.TempDir()
 		writeGoMod(t, filepath.Join(dir, "go.mod"), "1.22")
 
-		code, err := govendor.Execute(t.Context(), version, []string{dir})
+		code, err := cli.Execute(t.Context(), version, []string{dir})
 		require.NoError(t, err)
 		require.Equal(t, 0, code)
 
-		code, err = govendor.Execute(t.Context(), version, []string{"--check", dir})
+		code, err = cli.Execute(t.Context(), version, []string{"--check", dir})
 		require.NoError(t, err)
 		require.Equal(t, 0, code)
 	})
@@ -45,12 +45,12 @@ func TestExecuteExitCodes(t *testing.T) {
 		dir := t.TempDir()
 		writeGoMod(t, filepath.Join(dir, "go.mod"), "1.22")
 
-		_, err := govendor.Execute(t.Context(), version, []string{dir})
+		_, err := cli.Execute(t.Context(), version, []string{dir})
 		require.NoError(t, err)
 
 		induceDrift(t, dir)
 
-		code, err := govendor.Execute(t.Context(), version, []string{"--check", dir})
+		code, err := cli.Execute(t.Context(), version, []string{"--check", dir})
 		require.Error(t, err)
 		require.Equal(t, 1, code)
 	})
@@ -59,19 +59,19 @@ func TestExecuteExitCodes(t *testing.T) {
 		dir := t.TempDir()
 		writeGoMod(t, filepath.Join(dir, "go.mod"), "1.22")
 
-		code, err := govendor.Execute(t.Context(), version, []string{"--check", dir})
+		code, err := cli.Execute(t.Context(), version, []string{"--check", dir})
 		require.Error(t, err)
 		require.Equal(t, 1, code)
 	})
 
 	t.Run("2_BadFlagCombination", func(t *testing.T) {
-		code, err := govendor.Execute(t.Context(), version, []string{"--workspace"})
+		code, err := cli.Execute(t.Context(), version, []string{"--workspace"})
 		require.Error(t, err)
 		require.Equal(t, 2, code)
 	})
 
 	t.Run("2_UnknownFlag", func(t *testing.T) {
-		code, err := govendor.Execute(t.Context(), version, []string{"--definitely-not-a-real-flag"})
+		code, err := cli.Execute(t.Context(), version, []string{"--definitely-not-a-real-flag"})
 		require.Error(t, err)
 		require.Equal(t, 2, code)
 	})
@@ -80,7 +80,7 @@ func TestExecuteExitCodes(t *testing.T) {
 		dir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("this is not valid go.mod content\n"), 0o644))
 
-		code, err := govendor.Execute(t.Context(), version, []string{"--check", dir})
+		code, err := cli.Execute(t.Context(), version, []string{"--check", dir})
 		require.Error(t, err)
 		require.Equal(t, 2, code)
 	})
@@ -88,14 +88,14 @@ func TestExecuteExitCodes(t *testing.T) {
 	t.Run("2_MixedSeverityReportsMostSevere", func(t *testing.T) {
 		driftDir := t.TempDir()
 		writeGoMod(t, filepath.Join(driftDir, "go.mod"), "1.22")
-		_, err := govendor.Execute(t.Context(), version, []string{driftDir})
+		_, err := cli.Execute(t.Context(), version, []string{driftDir})
 		require.NoError(t, err)
 		induceDrift(t, driftDir)
 
 		errorDir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(errorDir, "go.mod"), []byte("this is not valid go.mod content\n"), 0o644))
 
-		code, err := govendor.Execute(t.Context(), version, []string{"--check", driftDir, errorDir})
+		code, err := cli.Execute(t.Context(), version, []string{"--check", driftDir, errorDir})
 		require.Error(t, err)
 		require.Equal(t, 2, code)
 	})
@@ -109,7 +109,7 @@ func TestExecuteWritesNoEscapeSequencesWhenStdoutIsNotATerminal(t *testing.T) {
 	os.Stdout = out
 	t.Cleanup(func() { os.Stdout = stdout })
 
-	_, err = govendor.Execute(t.Context(), cli.VersionInfo{}, []string{"--check", filepath.Join(t.TempDir(), "missing")})
+	_, err = cli.Execute(t.Context(), xcli.VersionInfo{}, []string{"--check", filepath.Join(t.TempDir(), "missing")})
 	require.Error(t, err)
 	os.Stdout = stdout
 

@@ -1,14 +1,14 @@
-package goscrape
+package cli
 
 import (
-	"github.com/purpleclay/go-overlay/internal/cli/goscrape/godev"
-	"github.com/purpleclay/go-overlay/internal/cli/goscrape/modproxy"
-	"github.com/purpleclay/x/cli"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/godev"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/modproxy"
+	xcli "github.com/purpleclay/x/cli"
 	"github.com/purpleclay/x/theme"
 	"github.com/spf13/cobra"
 )
 
-func Execute(version cli.VersionInfo) error {
+func Execute(version xcli.VersionInfo) error {
 	cmd := &cobra.Command{
 		Use:   "goscrape",
 		Short: "Tools for scraping Go releases and generating Nix manifests",
@@ -23,8 +23,8 @@ func Execute(version cli.VersionInfo) error {
 
 	cmd.AddCommand(godev.NewCmd(), modproxy.NewCmd())
 
-	return cli.Execute(cmd,
-		cli.WithVersionFlag(version),
-		cli.WithTheme(theme.PurpleClayCLI()),
+	return xcli.Execute(cmd,
+		xcli.WithVersionFlag(version),
+		xcli.WithTheme(theme.PurpleClayCLI()),
 	)
 }

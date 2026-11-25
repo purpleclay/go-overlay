@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/purpleclay/go-overlay/internal/cli/govendor"
-	"github.com/purpleclay/x/cli"
+	"github.com/purpleclay/go-overlay/cmd/govendor/internal/cli"
+	xcli "github.com/purpleclay/x/cli"
 )
 
 var (
@@ -21,7 +21,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	version := cli.VersionInfo{
+	version := xcli.VersionInfo{
 		Version:   Version,
 		GitCommit: Commit,
 		BuildDate: BuildDate,
@@ -31,7 +31,7 @@ func main() {
 
 	// cli.Execute already renders the error to stderr via the configured
 	// error handler before returning it here.
-	if code, err := govendor.Execute(ctx, version, os.Args[1:]); err != nil {
+	if code, err := cli.Execute(ctx, version, os.Args[1:]); err != nil {
 		os.Exit(code)
 	}
 }

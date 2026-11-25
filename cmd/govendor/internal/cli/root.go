@@ -1,4 +1,4 @@
-package govendor
+package cli
 
 import (
 	"context"
@@ -7,12 +7,12 @@ import (
 	"io"
 
 	"charm.land/lipgloss/v2"
-	"github.com/purpleclay/go-overlay/internal/generate"
+	"github.com/purpleclay/go-overlay/cmd/govendor/internal/generate"
+	"github.com/purpleclay/go-overlay/cmd/govendor/internal/ui"
 	"github.com/purpleclay/go-overlay/internal/gocmd"
 	"github.com/purpleclay/go-overlay/internal/progress"
 	"github.com/purpleclay/go-overlay/internal/resolve"
-	"github.com/purpleclay/go-overlay/internal/ui"
-	"github.com/purpleclay/x/cli"
+	xcli "github.com/purpleclay/x/cli"
 	"github.com/purpleclay/x/theme"
 	"github.com/spf13/cobra"
 )
@@ -51,7 +51,7 @@ func resultsExitCode(results []generate.Result) int {
 	return exitError
 }
 
-func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, error) {
+func Execute(ctx context.Context, version xcli.VersionInfo, args []string) (int, error) {
 	var (
 		check            bool
 		recursive        bool
@@ -164,25 +164,25 @@ func Execute(ctx context.Context, version cli.VersionInfo, args []string) (int, 
 	// Should be removed in a future release, when the flag is deprecated
 	cmd.Flags().MarkHidden("include-platform")
 
-	cli.ExitCodes(
+	xcli.ExitCodes(
 		cmd,
-		cli.ExitCode{Code: exitOK, Desc: "manifests up to date/generated"},
-		cli.ExitCode{Code: exitDrift, Desc: "drift or missing manifest detected (--check)"},
-		cli.ExitCode{Code: exitError, Desc: "execution error (toolchain failure, parse error, bad flags)"},
+		xcli.ExitCode{Code: exitOK, Desc: "manifests up to date/generated"},
+		xcli.ExitCode{Code: exitDrift, Desc: "drift or missing manifest detected (--check)"},
+		xcli.ExitCode{Code: exitError, Desc: "execution error (toolchain failure, parse error, bad flags)"},
 	)
 
-	err := cli.Execute(
+	err := xcli.Execute(
 		cmd,
-		cli.WithContext(ctx),
-		cli.WithVersionFlag(version),
-		cli.WithTheme(theme.PurpleClayCLI()),
-		cli.WithErrorHandler(func(w io.Writer, t cli.Theme, err error) {
+		xcli.WithContext(ctx),
+		xcli.WithVersionFlag(version),
+		xcli.WithTheme(theme.PurpleClayCLI()),
+		xcli.WithErrorHandler(func(w io.Writer, t xcli.Theme, err error) {
 			// The results table already reports per-result failures; printing
 			// the generic sentinel underneath it adds nothing new.
 			if tableRendered && errors.Is(err, generate.ErrVendorFailed) {
 				return
 			}
-			cli.DefaultErrorHandler(w, t, err)
+			xcli.DefaultErrorHandler(w, t, err)
 		}),
 	)
 

@@ -5,8 +5,8 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/purpleclay/go-overlay/internal/cli/goscrape"
-	"github.com/purpleclay/x/cli"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/cli"
+	xcli "github.com/purpleclay/x/cli"
 )
 
 var (
@@ -16,7 +16,7 @@ var (
 )
 
 func main() {
-	version := cli.VersionInfo{
+	version := xcli.VersionInfo{
 		Version:   Version,
 		GitCommit: Commit,
 		BuildDate: BuildDate,
@@ -24,7 +24,7 @@ func main() {
 		Platform:  runtime.GOOS + "/" + runtime.GOARCH,
 	}
 
-	if err := goscrape.Execute(version); err != nil {
+	if err := cli.Execute(version); err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}

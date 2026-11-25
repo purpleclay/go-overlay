@@ -3,7 +3,7 @@ package godev
 import (
 	"context"
 
-	"github.com/purpleclay/go-overlay/internal/scrape"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/scrape"
 	"github.com/spf13/cobra"
 )
 

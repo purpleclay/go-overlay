@@ -3,8 +3,8 @@ package modproxy
 import (
 	"fmt"
 
-	"github.com/purpleclay/go-overlay/internal/proxy"
-	"github.com/purpleclay/go-overlay/internal/version"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/proxy"
+	"github.com/purpleclay/go-overlay/cmd/goscrape/internal/version"
 	"github.com/spf13/cobra"
 )
 

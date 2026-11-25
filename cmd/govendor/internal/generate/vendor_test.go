@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/purpleclay/go-overlay/internal/generate"
+	"github.com/purpleclay/go-overlay/cmd/govendor/internal/generate"
 	"github.com/purpleclay/go-overlay/internal/gocmd"
 	"github.com/purpleclay/go-overlay/internal/gomod"
 	"github.com/purpleclay/go-overlay/internal/manifest"

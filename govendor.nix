@@ -14,10 +14,10 @@ in
     subPackages = ["cmd/govendor"];
     CGO_ENABLED = 0;
 
-    # Integration tests in internal/generate and internal/resolve shell out to
-    # `go mod download`, which needs network access. The Nix sandbox enforces
-    # GOPROXY=off, so these tests cannot run here. CI runs the full suite via
-    # `go test` outside the sandbox.
+    # Integration tests in cmd/govendor/internal/generate and internal/resolve
+    # shell out to `go mod download`, which needs network access. The Nix
+    # sandbox enforces GOPROXY=off, so these tests cannot run here. CI runs the
+    # full suite via `go test` outside the sandbox.
     doCheck = false;
     ldflags = [
       "-s"
