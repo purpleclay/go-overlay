@@ -6,6 +6,7 @@ on:
     paths:
       - "goscrape.nix"
       - "govendor.nix"
+      - "go-cli.nix"
       - "cmd/**"
       - "internal/**"
       - "go.mod"
@@ -18,6 +19,7 @@ on:
     paths:
       - "goscrape.nix"
       - "govendor.nix"
+      - "go-cli.nix"
       - "cmd/**"
       - "internal/**"
       - "go.mod"
@@ -58,6 +60,7 @@ jobs:
         with:
           filters: |
             shared:
+              - 'go-cli.nix'
               - 'go.mod'
               - 'go.sum'
               - 'govendor.toml'

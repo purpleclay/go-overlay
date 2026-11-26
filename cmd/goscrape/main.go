@@ -11,14 +11,12 @@ import (
 
 var (
 	Version   = "dev"
-	Commit    = "unknown"
 	BuildDate = "unknown"
 )
 
 func main() {
 	version := xcli.VersionInfo{
 		Version:   Version,
-		GitCommit: Commit,
 		BuildDate: BuildDate,
 		GoVersion: runtime.Version(),
 		Platform:  runtime.GOOS + "/" + runtime.GOARCH,

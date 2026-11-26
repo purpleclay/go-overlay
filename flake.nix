@@ -171,12 +171,10 @@
               goscrape = import ./goscrape.nix {
                 inherit (pkgs) lib buildGoApplication;
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
-                commit = self.rev or "unknown";
               };
               govendor = import ./govendor.nix {
                 inherit (pkgs) lib buildGoApplication;
                 go = pkgs.go-bin.fromGoModStrict ./go.mod;
-                commit = self.rev or "unknown";
               };
               goversions = pkgs.callPackage ./goversions.nix {
                 records = pkgs.go-bin.versionInfo;

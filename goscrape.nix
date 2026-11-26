@@ -2,36 +2,12 @@
   lib,
   buildGoApplication,
   go,
-  commit ? "unknown",
 }: let
   pname = "goscrape";
   version = "v0.6.1";
   buildDate = "2026-11-04T00:00:00Z";
 in
-  buildGoApplication {
-    inherit pname version go;
-    src = ./.;
-    subPackages = ["cmd/goscrape"];
-    CGO_ENABLED = 0;
-
-    # Integration tests in cmd/goscrape/internal/modproxy shell out to
-    # `go mod download`, which needs network access. The Nix sandbox enforces
-    # GOPROXY=off, so these tests cannot run here. CI runs the full suite via
-    # `go test` outside the sandbox.
-    doCheck = false;
-    ldflags = [
-      "-s"
-      "-w"
-      "-X main.Version=${version}"
-      "-X main.Commit=${commit}"
-      "-X main.BuildDate=${buildDate}"
-    ];
-
-    meta = with lib; {
-      homepage = "https://github.com/purpleclay/go-overlay";
-      description = "Tools for scraping Go releases and generating Nix manifests";
-      mainProgram = pname;
-      license = licenses.mit;
-      maintainers = with maintainers; [purpleclay];
-    };
+  import ./go-cli.nix {
+    inherit lib buildGoApplication go pname version buildDate;
+    description = "Tools for scraping Go releases and generating Nix manifests";
   }
