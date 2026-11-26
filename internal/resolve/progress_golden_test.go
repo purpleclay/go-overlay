@@ -1,9 +1,9 @@
 package resolve
 
 import (
-	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,81 +16,92 @@ import (
 	"gotest.tools/v3/golden"
 )
 
-func TestPlainProgressOutput(t *testing.T) {
+func TestStreamEvents(t *testing.T) {
 	tests := []struct {
-		name     string
-		fixture  string
-		manifest progress.Manifest
-		err      error
+		name    string
+		fixture string
+		target  progress.Target
+		err     error
 	}{
-		{name: "cold download", fixture: "cold-download.stderr", manifest: "go.mod"},
-		{name: "local replace relative", fixture: "local-replace-relative.stderr", manifest: "go.mod"},
-		{name: "local replace absolute", fixture: "local-replace-absolute.stderr", manifest: "go.mod"},
-		{name: "remote replace with trailer", fixture: "remote-replace.stderr", manifest: "go.mod"},
-		{name: "workspace", fixture: "workspace.stderr", manifest: "go.work"},
+		{name: "cold download", fixture: "cold-download.stderr", target: "go.mod"},
+		{name: "local replace relative", fixture: "local-replace-relative.stderr", target: "go.mod"},
+		{name: "local replace absolute", fixture: "local-replace-absolute.stderr", target: "go.mod"},
+		{name: "remote replace with trailer", fixture: "remote-replace.stderr", target: "go.mod"},
+		{name: "workspace", fixture: "workspace.stderr", target: "go.work"},
 		{
-			name:     "failure",
-			fixture:  "failure.stderr",
-			manifest: "go.mod",
+			name:    "failure",
+			fixture: "failure.stderr",
+			target:  "go.mod",
 			// A real vendor failure's error is an *ExecError carrying the
 			// full captured stderr — the same text already streamed line by
-			// line as Note events above. Using that real shape here, rather
-			// than a short synthetic error, is what exposed the duplicated,
-			// unprefixed second dump of it that PlainReporter used to print.
+			// line as Note events above.
 			err: &gocmd.ExecError{Err: errors.New("exit status 1"), Stderr: mustReadFile(t, "failure.stderr")},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var buf bytes.Buffer
-			reporter := progress.NewPlainReporter(&buf, progress.WithInterval(0))
+			reporter := &recordingReporter{}
 
-			reporter.Report(progress.Started{Manifest: tt.manifest})
-			h := newVendorStreamHandler(tt.manifest, reporter, nil)
+			reporter.Report(progress.Started{Target: tt.target})
+			h := newVendorStreamHandler(tt.target, reporter, nil)
 			for _, line := range readLines(t, tt.fixture) {
 				h.line(line)
 			}
 			h.close()
-			reporter.Report(progress.Finished{Manifest: tt.manifest, Err: tt.err})
+			reporter.Report(progress.Finished{Target: tt.target, Err: tt.err})
 
-			golden.Assert(t, buf.String(), goldenName(tt.fixture))
+			golden.Assert(t, eventLog(reporter.events), goldenName(tt.fixture))
 		})
 	}
 }
 
-func TestPlainProgressRateLimitedOutput(t *testing.T) {
-	var buf bytes.Buffer
-	reporter := progress.NewPlainReporter(&buf)
+func TestStreamEventsForAHashFailure(t *testing.T) {
+	reporter := &recordingReporter{}
 
-	const m progress.Manifest = "go.mod"
-	reporter.Report(progress.Started{Manifest: m})
-	h := newVendorStreamHandler(m, reporter, nil)
-	for _, line := range readLines(t, "cold-download.stderr") {
-		h.line(line)
-	}
-	h.close()
-	reporter.Report(progress.Finished{Manifest: m})
-
-	golden.Assert(t, buf.String(), "stream/cold-download-ratelimited.golden")
-}
-
-func TestPlainProgressOutputForAHashFailure(t *testing.T) {
-	var buf bytes.Buffer
-	reporter := progress.NewPlainReporter(&buf, progress.WithInterval(0))
-
-	const m progress.Manifest = "go.mod"
+	const target progress.Target = "go.mod"
 	key := contentKey{path: "example.com/foo", version: "v1.0.0"}
 	hasher := &countingHasher{err: errors.New("disk on fire")}
-	s := newHashScheduler(context.Background(), pool.New(), hasher, reporter, m, nil, fakeDirResolver(map[contentKey]string{key: "/cache/foo"}))
+	s := newHashScheduler(context.Background(), pool.New(), hasher, reporter, target, nil, fakeDirResolver(map[contentKey]string{key: "/cache/foo"}))
 
-	reporter.Report(progress.Started{Manifest: m})
+	reporter.Report(progress.Started{Target: target})
 	s.submit(key)
 	s.wait()
 	result, _ := s.result(key)
-	reporter.Report(progress.Finished{Manifest: m, Err: result.err})
+	reporter.Report(progress.Finished{Target: target, Err: result.err})
 
-	golden.Assert(t, buf.String(), "stream/hash-failure.golden")
+	golden.Assert(t, eventLog(reporter.events), "stream/hash-failure.events.golden")
+}
+
+// eventLog renders events one per line, tab-separated, in the format
+// govendor's ui tests replay through the plain reporter. Hashed.Took and
+// the text of Finished.Err are left out: the first is wall-clock time, and
+// the reporter only checks whether the second is set.
+func eventLog(events []progress.Event) string {
+	var b strings.Builder
+	for _, e := range events {
+		var fields []string
+		switch ev := e.(type) {
+		case progress.Started:
+			fields = []string{"Started", string(ev.Target), fmt.Sprint(ev.Expected), fmt.Sprint(ev.Cold)}
+		case progress.Downloading:
+			fields = []string{"Downloading", string(ev.Target), ev.Path, ev.Version}
+		case progress.Vendored:
+			fields = []string{"Vendored", string(ev.Target), ev.Path, ev.Version, fmt.Sprint(ev.Pkgs)}
+		case progress.HashStarted:
+			fields = []string{"HashStarted", string(ev.Target), ev.Path, ev.Version}
+		case progress.Hashed:
+			fields = []string{"Hashed", string(ev.Target), ev.Path, ev.Version, fmt.Sprint(ev.Reused)}
+		case progress.Note:
+			fields = []string{"Note", string(ev.Target), ev.Text}
+		case progress.Finished:
+			fields = []string{"Finished", string(ev.Target), fmt.Sprint(ev.Err != nil)}
+		default:
+			panic(fmt.Sprintf("eventLog: unhandled event %T", e))
+		}
+		b.WriteString(strings.Join(fields, "\t") + "\n")
+	}
+	return b.String()
 }
 
 func readLines(t *testing.T, fixture string) []string {
@@ -106,5 +117,5 @@ func mustReadFile(t *testing.T, fixture string) string {
 }
 
 func goldenName(fixture string) string {
-	return "stream/" + strings.TrimSuffix(fixture, ".stderr") + ".golden"
+	return "stream/" + strings.TrimSuffix(fixture, ".stderr") + ".events.golden"
 }

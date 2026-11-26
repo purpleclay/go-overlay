@@ -1,17 +1,19 @@
-package progress
+package ui
 
 import (
 	"fmt"
 	"io"
 	"sync"
 	"time"
+
+	"github.com/purpleclay/go-overlay/internal/progress"
 )
 
 // summaryInterval is the default minimum gap between per-module progress
 // summaries (Downloading, Vendored, HashStarted, Hashed) for a single
-// manifest. Phase-level events (Started, PhaseChanged, Note, Finished) are
-// never rate-limited — they're rare enough that suppressing them would only
-// lose information, not reduce noise.
+// target. Milestone lines (Started, Note, Finished and "vendoring") are never
+// rate-limited — they're rare enough that suppressing them would only lose
+// information, not reduce noise.
 const summaryInterval = 500 * time.Millisecond
 
 // tally identifies which running count a summary belongs to.
@@ -41,18 +43,18 @@ type PlainReporter struct {
 	now      func() time.Time
 	interval time.Duration
 
-	// mu guards state and serialises writes to w, so concurrent manifests
+	// mu guards state and serialises writes to w, so concurrent targets
 	// can't interleave halves of a line.
 	mu    sync.Mutex
-	state map[Manifest]*manifestState
+	state map[progress.Target]*targetState
 }
 
-type manifestState struct {
+type targetState struct {
 	// pending holds each tally's most recently computed summary that hasn't
 	// been written yet. Vendoring and hashing now happen concurrently per
 	// module (issue 7's overlap), so two tallies can each have something
 	// outstanding at once — a single shared slot would lose one of them.
-	// lastSummary is when any tally for this manifest was last flushed,
+	// lastSummary is when any tally for this target was last flushed,
 	// shared across all of them, so an interleaved switch between tallies
 	// doesn't itself reset the rate-limit window.
 	pending     map[tally]string
@@ -91,7 +93,7 @@ func NewPlainReporter(w io.Writer, opts ...Option) *PlainReporter {
 		w:        w,
 		now:      time.Now,
 		interval: summaryInterval,
-		state:    make(map[Manifest]*manifestState),
+		state:    make(map[progress.Target]*targetState),
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -99,34 +101,35 @@ func NewPlainReporter(w io.Writer, opts ...Option) *PlainReporter {
 	return r
 }
 
-func (r *PlainReporter) Report(e Event) {
+func (r *PlainReporter) Report(e progress.Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	m := e.Source()
 
 	switch ev := e.(type) {
-	case Started:
+	case progress.Started:
 		r.print(m, startedText(ev))
-	case PhaseChanged:
-		// A phase boundary closes out any pending tally, so counts never
-		// appear after the phase that produced them.
-		r.flush(m)
-		r.print(m, ev.Phase.String())
-	case Downloading:
+	case progress.Downloading:
 		st := r.stateFor(m)
 		st.downloaded++
 		r.summarize(m, st, downloads,
 			fmt.Sprintf("downloading modules (%d so far)", st.downloaded))
-	case Vendored:
+	case progress.Vendored:
 		st := r.stateFor(m)
+		if st.vendored == 0 {
+			// The first vendored module marks the end of loading. Close out the
+			// download count first so it never appears after this line.
+			r.flush(m)
+			r.print(m, "vendoring")
+		}
 		st.vendored++
 		st.packages += ev.Pkgs
 		r.summarize(m, st, vendoring,
 			fmt.Sprintf("vendored %s, %s", plural(st.vendored, "module"), plural(st.packages, "package")))
-	case HashStarted:
+	case progress.HashStarted:
 		// No output on its own; Hashed carries the running tally.
-	case Hashed:
+	case progress.Hashed:
 		st := r.stateFor(m)
 		st.hashed++
 		if ev.Reused {
@@ -134,9 +137,9 @@ func (r *PlainReporter) Report(e Event) {
 		}
 		r.summarize(m, st, hashing,
 			fmt.Sprintf("hashing %s (%d reused)", plural(st.hashed, "module"), st.reused))
-	case Note:
+	case progress.Note:
 		r.print(m, ev.Text)
-	case Finished:
+	case progress.Finished:
 		// Flush before reporting the outcome so the log ends on the true
 		// final counts, including on failure, where how far it got matters.
 		r.flush(m)
@@ -153,10 +156,10 @@ func (r *PlainReporter) Report(e Event) {
 	}
 }
 
-func (r *PlainReporter) stateFor(m Manifest) *manifestState {
+func (r *PlainReporter) stateFor(m progress.Target) *targetState {
 	st, ok := r.state[m]
 	if !ok {
-		st = &manifestState{pending: make(map[tally]string, len(tallyOrder))}
+		st = &targetState{pending: make(map[tally]string, len(tallyOrder))}
 		r.state[m] = st
 	}
 	return st
@@ -170,7 +173,7 @@ func (r *PlainReporter) stateFor(m Manifest) *manifestState {
 // vendoring and hashing now interleave per module (issue 7's overlap), so
 // treating every switch as its own trigger would flush on almost every
 // event and defeat the rate limit entirely.
-func (r *PlainReporter) summarize(m Manifest, st *manifestState, t tally, text string) {
+func (r *PlainReporter) summarize(m progress.Target, st *targetState, t tally, text string) {
 	st.pending[t] = text
 
 	if r.interval <= 0 {
@@ -189,7 +192,7 @@ func (r *PlainReporter) summarize(m Manifest, st *manifestState, t tally, text s
 
 // flush writes every tally's pending summary for m, in a fixed order, and
 // clears them.
-func (r *PlainReporter) flush(m Manifest) {
+func (r *PlainReporter) flush(m progress.Target) {
 	st, ok := r.state[m]
 	if !ok {
 		return
@@ -202,11 +205,11 @@ func (r *PlainReporter) flush(m Manifest) {
 	}
 }
 
-func (r *PlainReporter) print(m Manifest, text string) {
+func (r *PlainReporter) print(m progress.Target, text string) {
 	fmt.Fprintf(r.w, "%s: %s\n", m, text)
 }
 
-func startedText(ev Started) string {
+func startedText(ev progress.Started) string {
 	switch {
 	case ev.Expected == 0:
 		return "resolving dependency graph"

@@ -1,0 +1,5 @@
+Started	go.work	0	0
+Downloading	go.work	github.com/google/uuid	v1.6.0
+Vendored	go.work	example.com/shared	v0.0.0	0
+Vendored	go.work	github.com/google/uuid	v1.6.0	1
+Finished	go.work	false

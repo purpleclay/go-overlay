@@ -82,22 +82,22 @@ func New(exec gocmd.Executor, opts ...Option) *Resolver {
 // and a Reporter that saw Finished before either began would stop reporting
 // exactly when the user most needs to know the process isn't wedged.
 func (r *Resolver) ResolveModule(ctx context.Context, goMod *gomod.File, existingMods map[string]manifest.Module) ([]manifest.Module, error) {
-	manifestPath := progress.Manifest(filepath.Join(goMod.Dir, gomod.Filename))
-	r.reporter.Report(progress.Started{Manifest: manifestPath})
+	target := progress.Target(filepath.Join(goMod.Dir, gomod.Filename))
+	r.reporter.Report(progress.Started{Target: target})
 
-	modules, err := r.resolveModule(ctx, manifestPath, goMod, existingMods)
-	r.reporter.Report(progress.Finished{Manifest: manifestPath, Err: err})
+	modules, err := r.resolveModule(ctx, target, goMod, existingMods)
+	r.reporter.Report(progress.Finished{Target: target, Err: err})
 	return modules, err
 }
 
-func (r *Resolver) resolveModule(ctx context.Context, manifestPath progress.Manifest, goMod *gomod.File, existingMods map[string]manifest.Module) ([]manifest.Module, error) {
+func (r *Resolver) resolveModule(ctx context.Context, target progress.Target, goMod *gomod.File, existingMods map[string]manifest.Module) ([]manifest.Module, error) {
 	// The hash scheduler resolves each module's cache directory directly
 	// (see moduleCache) rather than waiting on a concurrent `go mod
 	// download`, so nothing here runs before vendoring at all.
 	cache := newModuleCache(r.exec, goMod.Dir)
-	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, manifestPath, existingMods, cachedModuleDir(cache))
+	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, target, existingMods, cachedModuleDir(cache))
 
-	vendored, err := r.vendorModules(ctx, manifestPath, goMod.Dir, []string{"GOWORK=off"}, "mod", scheduler)
+	vendored, err := r.vendorModules(ctx, target, goMod.Dir, []string{"GOWORK=off"}, "mod", scheduler)
 	if err != nil {
 		return nil, err
 	}
@@ -126,25 +126,25 @@ func (r *Resolver) resolveModule(ctx context.Context, manifestPath progress.Mani
 // existingMods is the parsed existing manifest's module map; pass nil for a
 // cold run.
 func (r *Resolver) ResolveWorkspace(ctx context.Context, goWork *gomod.WorkFile, members []gomod.WorkspaceMember, existingMods map[string]manifest.Module) ([]manifest.Module, error) {
-	manifestPath := progress.Manifest(filepath.Join(goWork.Dir, gomod.WorkFilename))
-	r.reporter.Report(progress.Started{Manifest: manifestPath})
+	target := progress.Target(filepath.Join(goWork.Dir, gomod.WorkFilename))
+	r.reporter.Report(progress.Started{Target: target})
 
-	modules, err := r.resolveWorkspace(ctx, manifestPath, goWork, members, existingMods)
-	r.reporter.Report(progress.Finished{Manifest: manifestPath, Err: err})
+	modules, err := r.resolveWorkspace(ctx, target, goWork, members, existingMods)
+	r.reporter.Report(progress.Finished{Target: target, Err: err})
 	return modules, err
 }
 
-func (r *Resolver) resolveWorkspace(ctx context.Context, manifestPath progress.Manifest, goWork *gomod.WorkFile, members []gomod.WorkspaceMember, existingMods map[string]manifest.Module) ([]manifest.Module, error) {
+func (r *Resolver) resolveWorkspace(ctx context.Context, target progress.Target, goWork *gomod.WorkFile, members []gomod.WorkspaceMember, existingMods map[string]manifest.Module) ([]manifest.Module, error) {
 	workspaceMembers := make(map[string]string, len(members))
 	for _, m := range members {
 		workspaceMembers[m.ModulePath] = m.RelDir
 	}
 
 	cache := newModuleCache(r.exec, goWork.Dir)
-	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, manifestPath, existingMods, cachedModuleDir(cache))
+	scheduler := newHashScheduler(ctx, r.hashPool, r.hasher, r.reporter, target, existingMods, cachedModuleDir(cache))
 
 	// Single vendor pass from the workspace root with GOWORK active.
-	vendored, err := r.vendorModules(ctx, manifestPath, goWork.Dir, nil, "work", scheduler)
+	vendored, err := r.vendorModules(ctx, target, goWork.Dir, nil, "work", scheduler)
 	if err != nil {
 		return nil, err
 	}
@@ -345,14 +345,14 @@ func sortModules(modules []manifest.Module) {
 // task for a module the stream already saw may be blocked on a cache-miss
 // download (see cachedModuleDir) that would otherwise delay — or, if
 // stalled, withhold — the vendor error.
-func (r *Resolver) vendorModules(ctx context.Context, manifestPath progress.Manifest, dir string, env []string, verb string, scheduler *hashScheduler) ([]modulestxt.Module, error) {
+func (r *Resolver) vendorModules(ctx context.Context, target progress.Target, dir string, env []string, verb string, scheduler *hashScheduler) ([]modulestxt.Module, error) {
 	tmpdir, err := os.MkdirTemp("", "govendor-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp vendor dir: %w", err)
 	}
 	defer os.RemoveAll(tmpdir)
 
-	handler := newVendorStreamHandler(manifestPath, r.reporter, scheduler)
+	handler := newVendorStreamHandler(target, r.reporter, scheduler)
 	_, err = r.exec.Run(ctx, gocmd.Command{
 		Args:     []string{"go", verb, "vendor", "-v", "-o", tmpdir},
 		Dir:      dir,

@@ -271,17 +271,13 @@ github.com/mattn/go-colorable`,
 	require.Equal(t, []string{
 		"progress.Downloading",
 		"progress.Downloading",
-		"progress.PhaseChanged",
 		"progress.Vendored",
 		"progress.Vendored",
 	}, reporter.kinds())
 
-	phase := reporter.events[2].(progress.PhaseChanged)
-	assert.Equal(t, progress.Vendor, phase.Phase)
-
-	first := reporter.events[3].(progress.Vendored)
+	first := reporter.events[2].(progress.Vendored)
 	assert.Equal(t, "github.com/fatih/color", first.Path)
-	second := reporter.events[4].(progress.Vendored)
+	second := reporter.events[3].(progress.Vendored)
 	assert.Equal(t, "github.com/mattn/go-colorable", second.Path)
 }
 
@@ -304,7 +300,7 @@ func TestResolveModuleReportsFinishedWithErrorOnFailure(t *testing.T) {
 	require.Equal(t, []string{"progress.Started", "progress.Finished"}, reporter.kinds())
 	finished := reporter.events[1].(progress.Finished)
 	assert.Error(t, finished.Err)
-	assert.Equal(t, progress.Manifest(filepath.Join(dir, "go.mod")), finished.Source())
+	assert.Equal(t, progress.Target(filepath.Join(dir, "go.mod")), finished.Source())
 }
 
 func TestResolveModuleBracketsEvents(t *testing.T) {
@@ -340,14 +336,13 @@ github.com/fatih/color`,
 
 	require.Equal(t, []string{
 		"progress.Started",
-		"progress.PhaseChanged", // Vendor
 		"progress.Vendored",
 		"progress.HashStarted",
 		"progress.Hashed",
 		"progress.Finished",
 	}, reporter.kinds(), "Finished must be reported only after download and hashing complete, not from inside vendorModules")
 
-	hashed := reporter.events[4].(progress.Hashed)
+	hashed := reporter.events[3].(progress.Hashed)
 	assert.Equal(t, "github.com/fatih/color", hashed.Path)
 	assert.False(t, hashed.Reused, "a cold run hashes rather than reusing")
 

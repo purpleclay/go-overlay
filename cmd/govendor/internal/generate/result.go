@@ -62,8 +62,3 @@ func resultMissing(path string) Result {
 func resultError(path string, err error) Result {
 	return Result{Path: path, Status: StatusError, Message: err.Error()}
 }
-
-func resultNotFound(path string) Result {
-	ft := fileType(path)
-	return Result{Path: path, Status: StatusError, Message: fmt.Sprintf("%s does not exist, check path", ft)}
-}

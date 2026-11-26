@@ -15,10 +15,9 @@ import (
 // trailer line), a workspace, and failure cases — can be unit-tested
 // independently of the process-execution plumbing in vendorModules.
 type vendorStreamHandler struct {
-	manifest      progress.Manifest
-	reporter      progress.Reporter
-	stream        modulestxt.Stream
-	inVendorPhase bool
+	target   progress.Target
+	reporter progress.Reporter
+	stream   modulestxt.Stream
 
 	// scheduler dispatches a hash task for each remote module the instant
 	// its header completes, rather than waiting for the whole vendor command
@@ -28,8 +27,8 @@ type vendorStreamHandler struct {
 	scheduler *hashScheduler
 }
 
-func newVendorStreamHandler(manifest progress.Manifest, reporter progress.Reporter, scheduler *hashScheduler) *vendorStreamHandler {
-	h := &vendorStreamHandler{manifest: manifest, reporter: reporter, scheduler: scheduler}
+func newVendorStreamHandler(target progress.Target, reporter progress.Reporter, scheduler *hashScheduler) *vendorStreamHandler {
+	h := &vendorStreamHandler{target: target, reporter: reporter, scheduler: scheduler}
 	h.stream.Emit = h.vendored
 	return h
 }
@@ -39,18 +38,11 @@ func newVendorStreamHandler(manifest progress.Manifest, reporter progress.Report
 // the moment `go mod vendor -v` has committed to the module, well before the
 // command itself exits.
 func (h *vendorStreamHandler) vendored(m modulestxt.Module) {
-	// The first modules.txt line to arrive marks the transition out of the
-	// load phase (spawn + download + package-graph resolution, all silent
-	// on stderr) into the vendor/copy phase.
-	if !h.inVendorPhase {
-		h.inVendorPhase = true
-		h.reporter.Report(progress.PhaseChanged{Manifest: h.manifest, Phase: progress.Vendor})
-	}
 	h.reporter.Report(progress.Vendored{
-		Manifest: h.manifest,
-		Path:     m.Path,
-		Version:  m.Version,
-		Pkgs:     len(m.Packages),
+		Target:  h.target,
+		Path:    m.Path,
+		Version: m.Version,
+		Pkgs:    len(m.Packages),
 	})
 
 	if h.scheduler != nil {
@@ -66,7 +58,7 @@ func (h *vendorStreamHandler) line(line string) {
 	case strings.HasPrefix(line, "go: downloading "):
 		rest := strings.TrimPrefix(line, "go: downloading ")
 		if path, version, ok := strings.Cut(rest, " "); ok {
-			h.reporter.Report(progress.Downloading{Manifest: h.manifest, Path: path, Version: version})
+			h.reporter.Report(progress.Downloading{Target: h.target, Path: path, Version: version})
 			return
 		}
 		h.note(line)
@@ -85,7 +77,7 @@ func (h *vendorStreamHandler) line(line string) {
 }
 
 func (h *vendorStreamHandler) note(line string) {
-	h.reporter.Report(progress.Note{Manifest: h.manifest, Text: line})
+	h.reporter.Report(progress.Note{Target: h.target, Text: line})
 }
 
 // looksLikeUnexpectedNoise reports whether line is something other than a
