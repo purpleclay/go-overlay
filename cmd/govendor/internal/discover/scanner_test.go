@@ -1,11 +1,11 @@
-package generate_test
+package discover_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/purpleclay/go-overlay/cmd/govendor/internal/generate"
+	"github.com/purpleclay/go-overlay/cmd/govendor/internal/discover"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +23,7 @@ func TestScanFrom(t *testing.T) {
 	writeModFile(t, dir, "cmd/cli/go.mod")
 	writeModFile(t, dir, "internal/core/go.mod")
 
-	scanner := generate.NewFileTreeScanner()
+	scanner := discover.NewFileTreeScanner()
 	paths, err := scanner.ScanFrom(dir)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{
@@ -36,7 +36,7 @@ func TestScanFrom(t *testing.T) {
 func TestScanFromReturnsEmptyWhenNoModFilesFound(t *testing.T) {
 	dir := t.TempDir()
 
-	scanner := generate.NewFileTreeScanner()
+	scanner := discover.NewFileTreeScanner()
 	paths, err := scanner.ScanFrom(dir)
 	require.NoError(t, err)
 	assert.Empty(t, paths)
@@ -50,7 +50,7 @@ func TestScanFromSkipsKnownDirectories(t *testing.T) {
 	writeModFile(t, dir, "node_modules/go.mod")
 	writeModFile(t, dir, "testdata/go.mod")
 
-	scanner := generate.NewFileTreeScanner()
+	scanner := discover.NewFileTreeScanner()
 	paths, err := scanner.ScanFrom(dir)
 	require.NoError(t, err)
 	assert.Equal(t, []string{filepath.Join(dir, "api", "go.mod")}, paths)
@@ -61,7 +61,7 @@ func TestScanFromWithMaxDepth(t *testing.T) {
 	writeModFile(t, dir, "api/go.mod")     // 1 directory deep — found with MaxDepth=2
 	writeModFile(t, dir, "cmd/cli/go.mod") // 2 directories deep — not found with MaxDepth=2
 
-	scanner := generate.NewFileTreeScanner(generate.WithMaxDepth(2))
+	scanner := discover.NewFileTreeScanner(discover.WithMaxDepth(2))
 	paths, err := scanner.ScanFrom(dir)
 	require.NoError(t, err)
 	assert.Equal(t, []string{filepath.Join(dir, "api", "go.mod")}, paths)
@@ -79,7 +79,7 @@ func TestFindWorkspaceManifestReturnsEmptyIfNotFound(t *testing.T) {
 		require.NoError(t, os.Chdir(origDir))
 	}()
 
-	result, err := generate.FindWorkspaceManifest(filepath.Join("cmd", "api", "go.mod"))
+	result, err := discover.FindWorkspaceManifest(filepath.Join("cmd", "api", "go.mod"))
 	require.NoError(t, err)
 	assert.Empty(t, result)
 }
@@ -99,7 +99,7 @@ func TestFindWorkspaceManifestTraversesUp(t *testing.T) {
 		require.NoError(t, os.Chdir(origDir))
 	}()
 
-	result, err := generate.FindWorkspaceManifest(filepath.Join("cmd", "api", "go.mod"))
+	result, err := discover.FindWorkspaceManifest(filepath.Join("cmd", "api", "go.mod"))
 	require.NoError(t, err)
 	expected, err := filepath.EvalSymlinks(manifestFile)
 	require.NoError(t, err)
@@ -122,7 +122,7 @@ func TestFindWorkspaceManifestRespectsDepthLimit(t *testing.T) {
 
 	// a/go.mod → path component count = 1 → maxDepth = 1
 	// Manifest is 2 levels up (root → tmpDir), which exceeds the depth limit
-	result, err := generate.FindWorkspaceManifest("a/go.mod")
+	result, err := discover.FindWorkspaceManifest("a/go.mod")
 	require.NoError(t, err)
 	assert.Empty(t, result)
 }
@@ -143,10 +143,10 @@ func TestFindWorkspaceManifestStripsFilename(t *testing.T) {
 
 	// go.mod suffix is stripped before computing depth — result should be the same
 	// whether the caller passes a directory or a path with a filename
-	withFile, err := generate.FindWorkspaceManifest("theme/go.mod")
+	withFile, err := discover.FindWorkspaceManifest("theme/go.mod")
 	require.NoError(t, err)
 
-	withDir, err := generate.FindWorkspaceManifest("theme")
+	withDir, err := discover.FindWorkspaceManifest("theme")
 	require.NoError(t, err)
 
 	expected, err := filepath.EvalSymlinks(manifestFile)

@@ -86,7 +86,7 @@ type hashScheduler struct {
 	pool     *pool.Pool
 	hasher   Hasher
 	reporter progress.Reporter
-	manifest progress.Manifest
+	target   progress.Target
 	dirFor   dirResolver
 
 	// existing indexes the previous manifest by content identity — the
@@ -105,7 +105,7 @@ type hashScheduler struct {
 // newHashScheduler indexes existingMods by content identity and returns a
 // scheduler ready to accept submissions. p is a shared pool owned by the
 // caller; the scheduler submits tasks to it but never waits on it directly.
-func newHashScheduler(ctx context.Context, p *pool.Pool, hasher Hasher, reporter progress.Reporter, manifestPath progress.Manifest, existingMods map[string]manifest.Module, dirFor dirResolver) *hashScheduler {
+func newHashScheduler(ctx context.Context, p *pool.Pool, hasher Hasher, reporter progress.Reporter, target progress.Target, existingMods map[string]manifest.Module, dirFor dirResolver) *hashScheduler {
 	existing := make(map[contentKey]manifest.Module, len(existingMods))
 	for _, entry := range existingMods {
 		if entry.Local != "" || entry.Hash == "" {
@@ -125,7 +125,7 @@ func newHashScheduler(ctx context.Context, p *pool.Pool, hasher Hasher, reporter
 		pool:      p,
 		hasher:    hasher,
 		reporter:  reporter,
-		manifest:  manifestPath,
+		target:    target,
 		dirFor:    dirFor,
 		existing:  existing,
 		submitted: make(map[contentKey]struct{}),
@@ -253,12 +253,12 @@ func (s *hashScheduler) resolveAsync(key contentKey) {
 }
 
 func (s *hashScheduler) reportStarted(key contentKey) {
-	s.reporter.Report(progress.HashStarted{Manifest: s.manifest, Path: key.path, Version: key.version})
+	s.reporter.Report(progress.HashStarted{Target: s.target, Path: key.path, Version: key.version})
 }
 
 func (s *hashScheduler) reportHashed(key contentKey, result hashResult, took time.Duration) {
 	s.reporter.Report(progress.Hashed{
-		Manifest: s.manifest, Path: key.path, Version: key.version,
+		Target: s.target, Path: key.path, Version: key.version,
 		Reused: result.reused, Took: took,
 	})
 }

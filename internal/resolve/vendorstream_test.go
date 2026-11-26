@@ -126,16 +126,12 @@ func TestVendorStreamHandlerParsesRealWorldModulesTxtShapes(t *testing.T) {
 			h.close()
 
 			var got []modulestxt.Module
-			phaseChanges := 0
 			for _, e := range reporter.events {
 				switch ev := e.(type) {
 				case progress.Vendored:
 					got = append(got, modulestxt.Module{
 						Path: ev.Path, Version: ev.Version,
 					})
-				case progress.PhaseChanged:
-					phaseChanges++
-					assert.Equal(t, progress.Vendor, ev.Phase)
 				}
 			}
 
@@ -144,7 +140,6 @@ func TestVendorStreamHandlerParsesRealWorldModulesTxtShapes(t *testing.T) {
 				assert.Equal(t, want.Path, got[i].Path)
 				assert.Equal(t, want.Version, got[i].Version)
 			}
-			assert.Equal(t, 1, phaseChanges, "phase should change exactly once, on the first header")
 		})
 	}
 }
@@ -169,14 +164,13 @@ func TestVendorStreamHandlerTreatsUnprefixedContinuationLinesAsNotes(t *testing.
 
 			// The noise line is reported as a Note immediately (the module
 			// header it followed is still open in the stream); Close then
-			// flushes that module, producing PhaseChanged followed by
-			// Vendored. This proves the noise line was never appended to
+			// flushes that module, producing Vendored. This proves the noise line was never appended to
 			// the module's package list.
-			require.Len(t, reporter.events, 3, "expected Note, then PhaseChanged, then Vendored")
+			require.Len(t, reporter.events, 2, "expected Note, then Vendored")
 			_, ok := reporter.events[0].(progress.Note)
 			require.True(t, ok, "noise line should be reported as a Note")
 
-			vendored, ok := reporter.events[2].(progress.Vendored)
+			vendored, ok := reporter.events[1].(progress.Vendored)
 			require.True(t, ok)
 			assert.Equal(t, "github.com/fatih/color", vendored.Path)
 		})

@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"charm.land/lipgloss/v2"
+	"github.com/purpleclay/go-overlay/cmd/govendor/internal/discover"
 	"github.com/purpleclay/go-overlay/cmd/govendor/internal/generate"
 	"github.com/purpleclay/go-overlay/cmd/govendor/internal/ui"
 	"github.com/purpleclay/go-overlay/internal/gocmd"
@@ -31,7 +32,7 @@ const (
 )
 
 // resultsExitCode returns the most severe exit code implied by results.
-// Callers only invoke this when VendorFiles has already returned a non-nil
+// Callers only invoke this when generate.Run has already returned a non-nil
 // error, which it only does when at least one result is a failure — the
 // exitError fallback below guards that invariant rather than mislabelling an
 // unexpected all-success set as drift.
@@ -109,36 +110,36 @@ func Execute(ctx context.Context, version xcli.VersionInfo, args []string) (int,
 				return fmt.Errorf("--workspace requires --check")
 			}
 
-			var opts []generate.Option
-
-			if len(args) > 0 {
-				opts = append(opts, generate.WithPaths(args...))
-			}
-
-			if check {
-				opts = append(opts, generate.WithDriftDetection())
-			}
-
+			var discoverOpts []discover.Option
 			if recursive {
-				opts = append(opts, generate.WithRecursive(depth))
+				discoverOpts = append(discoverOpts, discover.WithRecursive(depth))
 			}
 
 			if workspace {
-				opts = append(opts, generate.WithWorkspace())
+				discoverOpts = append(discoverOpts, discover.WithWorkspace())
+			}
+
+			var generateOpts []generate.Option
+			if check {
+				generateOpts = append(generateOpts, generate.WithDriftDetection())
 			}
 
 			if len(includePlatforms) > 0 {
 				return fmt.Errorf("--include-platform is no longer supported: resolution is now platform-independent (AnyTags) and covers all platforms unconditionally; remove the flag and regenerate your manifest")
 			}
 
-			var reporter progress.Reporter = progress.NewPlainReporter(cmd.ErrOrStderr())
+			var reporter progress.Reporter = ui.NewPlainReporter(cmd.ErrOrStderr())
 			if noProgress {
 				reporter = progress.NopReporter{}
 			}
 
+			targets, err := discover.Targets(args, discoverOpts...)
+			if err != nil {
+				return err
+			}
+
 			resolver := resolve.New(gocmd.OSExecutor{}, resolve.WithReporter(reporter))
-			v := generate.NewVendor(resolver, opts...)
-			results, err := v.VendorFiles(cmd.Context())
+			results, err := generate.Run(cmd.Context(), resolver, targets, generateOpts...)
 			if len(results) > 0 {
 				tableRendered = true
 				// lipgloss v2 always emits colour; the writer downsamples it to
@@ -179,7 +180,7 @@ func Execute(ctx context.Context, version xcli.VersionInfo, args []string) (int,
 		xcli.WithErrorHandler(func(w io.Writer, t xcli.Theme, err error) {
 			// The results table already reports per-result failures; printing
 			// the generic sentinel underneath it adds nothing new.
-			if tableRendered && errors.Is(err, generate.ErrVendorFailed) {
+			if tableRendered && errors.Is(err, generate.ErrFailed) {
 				return
 			}
 			xcli.DefaultErrorHandler(w, t, err)

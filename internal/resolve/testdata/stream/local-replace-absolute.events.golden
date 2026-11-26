@@ -1,0 +1,3 @@
+Started	go.mod	0	0
+Vendored	go.mod	example.com/lib	v1.0.0	1
+Finished	go.mod	false

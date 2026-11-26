@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/purpleclay/go-overlay/cmd/govendor/internal/discover"
 	"github.com/purpleclay/go-overlay/cmd/govendor/internal/generate"
 	"github.com/purpleclay/go-overlay/internal/gocmd"
 	"github.com/purpleclay/go-overlay/internal/gomod"
@@ -142,7 +143,7 @@ func TestVendorWorkspace(t *testing.T) {
 
 // fakeResolver satisfies generate.Resolver and returns a fixed set of
 // dependencies, ignoring the actual go.mod/go.work content. This lets
-// processSource and VendorFiles be exercised without network calls.
+// Run be exercised without network calls.
 type fakeResolver struct {
 	deps []manifest.Module
 }
@@ -167,9 +168,9 @@ func setupModDir(t *testing.T, extra map[string]string) string {
 
 func vendorResults(t *testing.T, dir string, r generate.Resolver, opts ...generate.Option) []generate.Result {
 	t.Helper()
-	opts = append([]generate.Option{generate.WithPaths(dir)}, opts...)
-	v := generate.NewVendor(r, opts...)
-	results, _ := v.VendorFiles(context.Background())
+	targets, err := discover.Targets([]string{dir})
+	require.NoError(t, err)
+	results, _ := generate.Run(context.Background(), r, targets, opts...)
 	return results
 }
 
@@ -303,7 +304,7 @@ func setupWorkspaceAndModule(t *testing.T) (string, string) {
 	return filepath.Join(root, "ws"), filepath.Join(root, "plain")
 }
 
-func TestVendorFilesChecksEveryPathForAWorkspace(t *testing.T) {
+func TestRunChecksEveryPathForAWorkspace(t *testing.T) {
 	tests := []struct {
 		name           string
 		workspaceFirst bool
@@ -320,8 +321,9 @@ func TestVendorFilesChecksEveryPathForAWorkspace(t *testing.T) {
 				paths = []string{ws, plain}
 			}
 
-			v := generate.NewVendor(&fakeResolver{}, generate.WithPaths(paths...))
-			results, err := v.VendorFiles(context.Background())
+			targets, err := discover.Targets(paths)
+			require.NoError(t, err)
+			results, err := generate.Run(context.Background(), &fakeResolver{}, targets)
 			require.NoError(t, err)
 
 			require.Len(t, results, 2)
@@ -333,13 +335,14 @@ func TestVendorFilesChecksEveryPathForAWorkspace(t *testing.T) {
 	}
 }
 
-func TestVendorFilesReportsABadWorkspaceWithoutAbortingOtherPaths(t *testing.T) {
+func TestRunReportsABadWorkspaceWithoutAbortingOtherPaths(t *testing.T) {
 	ws, plain := setupWorkspaceAndModule(t)
 	require.NoError(t, os.WriteFile(filepath.Join(ws, "go.work"), []byte("not a go.work file\n"), 0o644))
 
-	v := generate.NewVendor(&fakeResolver{}, generate.WithPaths(ws, plain))
-	results, err := v.VendorFiles(context.Background())
-	require.ErrorIs(t, err, generate.ErrVendorFailed)
+	targets, err := discover.Targets([]string{ws, plain})
+	require.NoError(t, err)
+	results, err := generate.Run(context.Background(), &fakeResolver{}, targets)
+	require.ErrorIs(t, err, generate.ErrFailed)
 
 	require.Len(t, results, 2)
 	assert.Equal(t, filepath.Join(plain, "go.mod"), results[0].Path)

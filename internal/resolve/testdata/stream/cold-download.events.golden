@@ -1,0 +1,8 @@
+Started	go.mod	0	0
+Downloading	go.mod	github.com/davecgh/go-spew	v1.1.1
+Downloading	go.mod	github.com/google/uuid	v1.6.0
+Downloading	go.mod	github.com/pmezard/go-difflib	v1.0.0
+Vendored	go.mod	github.com/davecgh/go-spew	v1.1.1	1
+Vendored	go.mod	github.com/google/uuid	v1.6.0	1
+Vendored	go.mod	github.com/pmezard/go-difflib	v1.0.0	1
+Finished	go.mod	false
