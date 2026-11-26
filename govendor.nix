@@ -2,36 +2,12 @@
   lib,
   buildGoApplication,
   go,
-  commit ? "unknown",
 }: let
   pname = "govendor";
   version = "v1.6.2";
   buildDate = "2026-11-04T00:00:00Z";
 in
-  buildGoApplication {
-    inherit pname version go;
-    src = ./.;
-    subPackages = ["cmd/govendor"];
-    CGO_ENABLED = 0;
-
-    # Integration tests in cmd/govendor/internal/generate and internal/resolve
-    # shell out to `go mod download`, which needs network access. The Nix
-    # sandbox enforces GOPROXY=off, so these tests cannot run here. CI runs the
-    # full suite via `go test` outside the sandbox.
-    doCheck = false;
-    ldflags = [
-      "-s"
-      "-w"
-      "-X main.Version=${version}"
-      "-X main.Commit=${commit}"
-      "-X main.BuildDate=${buildDate}"
-    ];
-
-    meta = with lib; {
-      homepage = "https://github.com/purpleclay/go-overlay";
-      description = "Generate a vendor manifest for building Go applications with Nix";
-      mainProgram = pname;
-      license = licenses.mit;
-      maintainers = with maintainers; [purpleclay];
-    };
+  import ./go-cli.nix {
+    inherit lib buildGoApplication go pname version buildDate;
+    description = "Generate a vendor manifest for building Go applications with Nix";
   }
