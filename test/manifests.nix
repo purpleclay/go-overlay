@@ -298,8 +298,14 @@ in {
   fromGoMod-with-toolchain = assertEq "fromGoMod-with-toolchain" "1.21.6" (go-bin.fromGoMod ./fixtures/go-with-toolchain.mod).version;
   fromGoMod-exact = assertEq "fromGoMod-exact" "1.21.4" (go-bin.fromGoMod ./fixtures/go-exact.mod).version;
   fromGoMod-minor-only = assertEq "fromGoMod-minor-only" true (pkgs.lib.hasPrefix "1.21." (go-bin.fromGoMod ./fixtures/go-minor-only.mod).version);
+  fromGoMod-go-comment = assertEq "fromGoMod-go-comment" "1.21.4" (go-bin.fromGoMod ./fixtures/go-comment.mod).version;
+  # Built here rather than committed, so git's line-ending conversion can't
+  # quietly turn the fixture back into LF.
+  fromGoMod-crlf = assertEq "fromGoMod-crlf" "1.21.4" (go-bin.fromGoMod (builtins.toFile "go-crlf.mod" "module example\r\n\r\ngo 1.21.4\r\n")).version;
+  fromGoMod-toolchain-comment = assertEq "fromGoMod-toolchain-comment" "1.21.6" (go-bin.fromGoMod ./fixtures/toolchain-comment.mod).version;
 
   # fromGoModStrict
   fromGoModStrict-with-toolchain = assertEq "fromGoModStrict-with-toolchain" "1.21.6" (go-bin.fromGoModStrict ./fixtures/go-with-toolchain.mod).version;
   fromGoModStrict-exact = assertEq "fromGoModStrict-exact" "1.21.4" (go-bin.fromGoModStrict ./fixtures/go-exact.mod).version;
+  fromGoModStrict-toolchain-comment = assertEq "fromGoModStrict-toolchain-comment" "1.21.6" (go-bin.fromGoModStrict ./fixtures/toolchain-comment.mod).version;
 }
